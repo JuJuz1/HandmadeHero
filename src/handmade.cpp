@@ -33,8 +33,25 @@ LRESULT CALLBACK MainWindowCallback(
             OutputDebugStringA("WM_SIZE\n");
             break;
         }
+        case WM_PAINT: {
+            OutputDebugStringA("WM_PAINT\n");
+
+            PAINTSTRUCT paint;
+            const HDC deviceContext{ BeginPaint(hWnd, &paint) };
+            const int left{ paint.rcPaint.left };
+            const int top{ paint.rcPaint.top };
+            const int w{ paint.rcPaint.right - paint.rcPaint.left };
+            const int h{ paint.rcPaint.bottom - paint.rcPaint.top };
+
+            static DWORD operation{ WHITENESS };
+            PatBlt(deviceContext, left, top, w, h, operation);
+            operation = (operation == WHITENESS) ? BLACKNESS : WHITENESS;
+            EndPaint(hWnd, &paint);
+
+            break;
+        }
         default: {
-            OutputDebugStringA("DEFAULT\n");
+            //OutputDebugStringA("DEFAULT\n");
             result = DefWindowProc(hWnd, Msg, wParam, lParam);
             break;
         }

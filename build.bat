@@ -7,8 +7,8 @@ mkdir build
 pushd build
 
 rem /TP /EHsc /O2 /Ob2 /Fe:test.exe
-rem link the User32.lib to create UI
-cl /Zi /W4 ../src/handmade.cpp User32.lib
+rem link the User32.lib, Gdi32.lib to create UI
+cl /Zi /W4 ../src/handmade.cpp User32.lib Gdi32.lib
 
 rem not actually needed?
 rem popd
