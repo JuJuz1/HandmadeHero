@@ -1,5 +1,4 @@
 #include <windows.h>
-#include <stdio.h>
 
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
 int WINAPI WinMain(
@@ -8,12 +7,8 @@ int WINAPI WinMain(
     PSTR lpCmdLine, // Command line arguments
     int nCmdShow // Window visibility option
 ) {
-    printf("WinMain\n"); // Doesn't print?
+    https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox#requirements
+    MessageBoxA(0, "It works!", "Handmade Hero", MB_OK);
     OutputDebugStringA("This will be printed\n");
-    return 0;
-}
-
-int main() {
-    printf("main!\n");
     return 0;
 }
