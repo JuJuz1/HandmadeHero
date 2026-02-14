@@ -41,24 +41,17 @@ DrawGradient(u32 xOffset, u32 yOffset) {
 
     // Drawing
     for (u32 y{ 0 }; y < bmHeight; ++y) {
-        // pixel is the start of the current row
-        u8* pixel{ SCAST<u8 *>(row) };
+        u32* pixel{ reinterpret_cast<u32*>(row) };
         for (u32 x{ 0 }; x < bmWidth; ++x) {
             // Windows flipped the order of rbg
-            // BB GG RR xx
+            // Memory: BB GG RR xx
+            // !little endianness!
 
-            *pixel = SCAST<u8>(x) + xOffset;
-            ++pixel;
+            u8 blue{ SCAST<u8>(x + xOffset) };
+            u8 green{ SCAST<u8>(y + yOffset) };
 
-            *pixel = SCAST<u8>(y) + yOffset;
-            ++pixel;
-
-            *pixel = 0;
-            ++pixel;
-
-            // Padding
-            *pixel = 0;
-            ++pixel;
+            // Register: xx RR GG BB
+            *pixel++ = ((green << 8) | blue);
         }
 
         row += pitch;
@@ -76,7 +69,7 @@ Win32ResizeDIBSection(u32 w, u32 h) {
 
     bmInfo.bmiHeader.biSize = sizeof(bmInfo.bmiHeader);
     bmInfo.bmiHeader.biWidth = bmWidth;
-    bmInfo.bmiHeader.biHeight = -bmHeight; // top-down by assigning negative
+    bmInfo.bmiHeader.biHeight = -SCAST<i32>(bmHeight); // top-down by assigning negative
     bmInfo.bmiHeader.biPlanes = 1;
     bmInfo.bmiHeader.biBitCount = 32; // 8 padding
     bmInfo.bmiHeader.biCompression = BI_RGB;
@@ -85,13 +78,14 @@ Win32ResizeDIBSection(u32 w, u32 h) {
     // Allocate the memory for use immediately (MEM_COMMIT)
     bmMemory = VirtualAlloc(0, bmMemorySize, MEM_COMMIT, PAGE_READWRITE);
 
-    DrawGradient(128, 0);
+    // TODO: clear to black probably
 }
 
+// TODO: cleanup functions and other things
 INTERNAL void
-Win32UpdateWindow(HDC deviceContext, RECT* windowRect, u32 left, u32 top, u32 w, u32 h) {
-    const i32 wndW{ windowRect->right - windowRect->left };
-    const i32 wndH{ windowRect->bottom - windowRect->top };
+Win32UpdateWindow(HDC deviceContext, RECT* clientRect, u32 left, u32 top, u32 w, u32 h) {
+    const i32 wndW{ clientRect->right - clientRect->left };
+    const i32 wndH{ clientRect->bottom - clientRect->top };
     StretchDIBits(
         deviceContext,
         0, 0, bmWidth, bmHeight, // dest
@@ -211,16 +205,36 @@ WinMain(
 
         if (windowHandle) {
             running = true;
-            // Windows message queue, everything has to go through the OS
+
+            // Animating
+            u32 xOffset{};
+            u32 yOffset{};
+
             while (running) {
+                // Windows message queue, everything has to go through the OS
                 MSG message;
-                if (GetMessageA(&message, 0, 0, 0) > 0) {
+                while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
+                    if (message.message == WM_QUIT) {
+                        running = false;
+                    }
+
                     TranslateMessage(&message);
                     DispatchMessageA(&message);
                 }
-                else {
-                    break;
-                }
+                // If no messages or all are finished
+
+                RECT clientRect;
+                GetClientRect(windowHandle, &clientRect);
+                const i32 w{ clientRect.right - clientRect.left };
+                const i32 h{ clientRect.bottom - clientRect.top };
+
+                const HDC deviceContext{ GetDC(windowHandle) };
+                Win32UpdateWindow(deviceContext, &clientRect, 0, 0, w, h);
+                ReleaseDC(windowHandle, deviceContext);
+
+                DrawGradient(xOffset, yOffset);
+                ++xOffset;
+                ++yOffset;
             }
         }
         else {
