@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <stdint.h>
 
 // Ensure we are compiling as 64-bit
 // NOTE: is this a good way?
@@ -9,51 +10,92 @@ static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 #define GLOBAL static
 #define LOCAL_PERSIST static
 
+#define SCAST static_cast
+
+// Typedefs for common types
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
 // NOTE: Global for now
 GLOBAL bool running{ false };
 
 // Bitmap
 GLOBAL BITMAPINFO bmInfo{};
 GLOBAL void* bmMemory;
-GLOBAL HBITMAP bmHandle;
-GLOBAL HDC bmDeviceContext;
+GLOBAL u32 bmWidth;
+GLOBAL u32 bmHeight;
+GLOBAL u32 bytesPerPixel{ 4 };
 
 INTERNAL void
-Win32ResizeDIBSection(int w, int h) {
-    // Windows API is a bit of a hassle...
+DrawGradient(u32 xOffset, u32 yOffset) {
+    // Pitch (length width-wise)
+    const u32 pitch{ bmWidth * bytesPerPixel };
+    u8* row{ SCAST<u8 *>(bmMemory) };
 
-    // NOTE: think about the order of freeing and creating?
-    if (bmHandle) {
-        DeleteObject(bmHandle);
+    // Drawing
+    for (u32 y{ 0 }; y < bmHeight; ++y) {
+        // pixel is the start of the current row
+        u8* pixel{ SCAST<u8 *>(row) };
+        for (u32 x{ 0 }; x < bmWidth; ++x) {
+            // Windows flipped the order of rbg
+            // BB GG RR xx
+
+            *pixel = SCAST<u8>(x) + xOffset;
+            ++pixel;
+
+            *pixel = SCAST<u8>(y) + yOffset;
+            ++pixel;
+
+            *pixel = 0;
+            ++pixel;
+
+            // Padding
+            *pixel = 0;
+            ++pixel;
+        }
+
+        row += pitch;
     }
-    if (!bmDeviceContext) {
-        bmDeviceContext = CreateCompatibleDC(0);
-    }
-
-    bmInfo.bmiHeader.biSize = sizeof(bmInfo.bmiHeader);
-    bmInfo.bmiHeader.biWidth = w;
-    bmInfo.bmiHeader.biHeight = h;
-    bmInfo.bmiHeader.biPlanes = 1;
-    bmInfo.bmiHeader.biBitCount = 32;
-    bmInfo.bmiHeader.biCompression = BI_RGB;
-
-    // Create the device-independent bitmap
-    bmHandle = CreateDIBSection(
-        bmDeviceContext,
-        &bmInfo,
-        DIB_RGB_COLORS,
-        &bmMemory,
-        0,
-        0
-    );
 }
 
 INTERNAL void
-Win32UpdateWindow(HDC deviceContext, int left, int top, int w, int h) {
+Win32ResizeDIBSection(u32 w, u32 h) {
+    if (bmMemory) {
+        VirtualFree(bmMemory, 0, MEM_RELEASE);
+    }
+
+    bmWidth = w;
+    bmHeight = h;
+
+    bmInfo.bmiHeader.biSize = sizeof(bmInfo.bmiHeader);
+    bmInfo.bmiHeader.biWidth = bmWidth;
+    bmInfo.bmiHeader.biHeight = -bmHeight; // top-down by assigning negative
+    bmInfo.bmiHeader.biPlanes = 1;
+    bmInfo.bmiHeader.biBitCount = 32; // 8 padding
+    bmInfo.bmiHeader.biCompression = BI_RGB;
+
+    const u32 bmMemorySize{ bmWidth * bmHeight * bytesPerPixel };
+    // Allocate the memory for use immediately (MEM_COMMIT)
+    bmMemory = VirtualAlloc(0, bmMemorySize, MEM_COMMIT, PAGE_READWRITE);
+
+    DrawGradient(128, 0);
+}
+
+INTERNAL void
+Win32UpdateWindow(HDC deviceContext, RECT* windowRect, u32 left, u32 top, u32 w, u32 h) {
+    const i32 wndW{ windowRect->right - windowRect->left };
+    const i32 wndH{ windowRect->bottom - windowRect->top };
     StretchDIBits(
         deviceContext,
-        left, top, w, h, // dest
-        left, top, w, h, // src
+        0, 0, bmWidth, bmHeight, // dest
+        0, 0, wndW, wndH, // src
         bmMemory,
         &bmInfo,
         DIB_RGB_COLORS,
@@ -96,10 +138,11 @@ Win32MainWindowCallback(
         }
         case WM_SIZE: {
             OutputDebugStringA("WM_SIZE\n");
+
             RECT clientRect;
             GetClientRect(wnd, &clientRect);
-            const int w{ clientRect.right - clientRect.left };
-            const int h{ clientRect.bottom - clientRect.top };
+            const i32 w{ clientRect.right - clientRect.left };
+            const i32 h{ clientRect.bottom - clientRect.top };
             Win32ResizeDIBSection(w, h);
             break;
         }
@@ -108,11 +151,15 @@ Win32MainWindowCallback(
 
             PAINTSTRUCT paint;
             const HDC deviceContext{ BeginPaint(wnd, &paint) };
-            const int left{ paint.rcPaint.left };
-            const int top{ paint.rcPaint.top };
-            const int w{ paint.rcPaint.right - paint.rcPaint.left };
-            const int h{ paint.rcPaint.bottom - paint.rcPaint.top };
-            Win32UpdateWindow(deviceContext, left, top, w, h);
+            const i32 left{ paint.rcPaint.left };
+            const i32 top{ paint.rcPaint.top };
+            const i32 w{ paint.rcPaint.right - paint.rcPaint.left };
+            const i32 h{ paint.rcPaint.bottom - paint.rcPaint.top };
+
+            RECT clientRect;
+            GetClientRect(wnd, &clientRect);
+
+            Win32UpdateWindow(deviceContext, &clientRect, left, top, w, h);
             EndPaint(wnd, &paint);
 
             break;
@@ -149,7 +196,7 @@ WinMain(
     windowClass.lpszClassName = name;
 
     if (RegisterClass(&windowClass)) {
-        HWND windowHandle = CreateWindowEx(
+        const HWND windowHandle = CreateWindowEx(
             0,
             name,
             name,
