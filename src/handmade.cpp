@@ -31,6 +31,7 @@ struct Win32OffScreenBuffer {
     i32 width;
     i32 height;
     u32 bytesPerPixel;
+    u32 pitch;
 };
 
 struct WindowDimension {
@@ -39,8 +40,8 @@ struct WindowDimension {
 };
 
 
-GLOBAL bool running{ false };
-GLOBAL Win32OffScreenBuffer g_buff{};
+GLOBAL bool gRunning{ false };
+GLOBAL Win32OffScreenBuffer gBuff{};
 
 
 INTERNAL WindowDimension
@@ -58,7 +59,6 @@ DrawGradient(const Win32OffScreenBuffer buff, u32 xOffset, u32 yOffset) {
     // TODO: see what the optimizer does to buff (passing by value vs pointer)
 
     // Pitch (length width-wise)
-    const u32 pitch{ buff.width * buff.bytesPerPixel };
     u8* row{ static_cast<u8 *>(buff.memory) };
 
     // Drawing
@@ -76,7 +76,7 @@ DrawGradient(const Win32OffScreenBuffer buff, u32 xOffset, u32 yOffset) {
             *pixel++ = ((green << 8) | blue);
         }
 
-        row += pitch;
+        row += buff.pitch;
     }
 }
 
@@ -100,6 +100,7 @@ Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
     const u32 bmMemorySize{ buff->width * buff->height * buff->bytesPerPixel };
     // Allocate the memory for use immediately (MEM_COMMIT)
     buff->memory = VirtualAlloc(0, bmMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    buff->pitch = buff->width * buff->bytesPerPixel;
 
     // TODO: clear to black probably
 }
@@ -109,13 +110,14 @@ INTERNAL void
 Win32DisplayBufferWindow(
     const HDC deviceContext,
     const Win32OffScreenBuffer buff,
-    i32 w,
-    i32 h
+    i32 wndWidth,
+    i32 wndHeight
 ) {
+    // TODO: aspect ratio correction
     StretchDIBits(
         deviceContext,
-        0, 0, buff.width, buff.height, // dest
-        0, 0, w, h, // src
+        0, 0, wndWidth, wndHeight, // dest
+        0, 0, buff.width, buff.height, // src
         buff.memory,
         &buff.info,
         DIB_RGB_COLORS,
@@ -139,13 +141,13 @@ Win32MainWindowCallback(
             OutputDebugStringA("WM_CLOSE\n");
             // Post a message to quit to the queue
             //PostQuitMessage(0);
-            running = false;
+            gRunning = false;
             break;
         }
         case WM_DESTROY: {
             // NOTE: This might happen as an error?
             OutputDebugStringA("WM_DESTROY\n");
-            running = false;
+            gRunning = false;
             break;
         }
         case WM_ACTIVATEAPP: {
@@ -158,10 +160,6 @@ Win32MainWindowCallback(
         }
         case WM_SIZE: {
             OutputDebugStringA("WM_SIZE\n");
-
-            auto wndDimension{ Win32GetWindowDimensions(wnd) };
-            Win32ResizeDIBSection(&g_buff, wndDimension.width, wndDimension.height);
-
             break;
         }
         case WM_PAINT: {
@@ -169,20 +167,16 @@ Win32MainWindowCallback(
 
             PAINTSTRUCT paint;
             const HDC deviceContext{ BeginPaint(wnd, &paint) };
-            //const i32 left{ paint.rcPaint.left };
-            //const i32 top{ paint.rcPaint.top };
-            //const i32 w{ paint.rcPaint.right - paint.rcPaint.left };
-            //const i32 h{ paint.rcPaint.bottom - paint.rcPaint.top };
 
             auto wndDimension{ Win32GetWindowDimensions(wnd) };
-            Win32DisplayBufferWindow(deviceContext, g_buff, wndDimension.width, wndDimension.height);
-            EndPaint(wnd, &paint);
+            Win32DisplayBufferWindow(deviceContext, gBuff, wndDimension.width, wndDimension.height);
 
+            EndPaint(wnd, &paint);
             break;
         }
         default: {
             //OutputDebugStringA("DEFAULT\n");
-            result = DefWindowProc(wnd, msg, wParam, lParam);
+            result = DefWindowProcA(wnd, msg, wParam, lParam);
             break;
         }
     }
@@ -200,6 +194,10 @@ WinMain(
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
+    constexpr i32 startingWidth{ 1280 };
+    constexpr i32 startingHeight{ 720 };
+    Win32ResizeDIBSection(&gBuff, startingWidth, startingHeight);
+
     WNDCLASS windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = Win32MainWindowCallback;
@@ -211,7 +209,7 @@ WinMain(
     windowClass.lpszClassName = name;
 
     if (RegisterClass(&windowClass)) {
-        const HWND windowHandle = CreateWindowEx(
+        const HWND windowHandle = CreateWindowExA(
             0,
             name,
             name,
@@ -225,18 +223,18 @@ WinMain(
         );
 
         if (windowHandle) {
-            running = true;
+            gRunning = true;
 
             // Animating
             u32 xOffset{};
             u32 yOffset{};
 
-            while (running) {
+            while (gRunning) {
                 // Windows message queue, everything has to go through the OS
                 MSG message;
                 while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
                     if (message.message == WM_QUIT) {
-                        running = false;
+                        gRunning = false;
                     }
 
                     TranslateMessage(&message);
@@ -247,10 +245,10 @@ WinMain(
 
                 const HDC deviceContext{ GetDC(windowHandle) };
                 auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
-                Win32DisplayBufferWindow(deviceContext, g_buff, wndDimension.width, wndDimension.height);
+                Win32DisplayBufferWindow(deviceContext, gBuff, wndDimension.width, wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
 
-                DrawGradient(g_buff, xOffset, yOffset);
+                DrawGradient(gBuff, xOffset, yOffset);
                 // Overflows to zero
                 ++xOffset;
                 ++yOffset;
