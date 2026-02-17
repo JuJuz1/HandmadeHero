@@ -5,12 +5,12 @@
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 
+
 // Defines for static
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
 
-#define SCAST static_cast
 
 // Typedefs for common types
 typedef int8_t i8;
@@ -23,32 +23,54 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-// NOTE: Global for now
-GLOBAL bool running{ false };
 
-// Bitmap
-GLOBAL BITMAPINFO bmInfo{};
-GLOBAL void* bmMemory;
-GLOBAL u32 bmWidth;
-GLOBAL u32 bmHeight;
-GLOBAL u32 bytesPerPixel{ 4 };
+// Struct to hold buffer info
+struct Win32OffScreenBuffer {
+    BITMAPINFO info;
+    void* memory;
+    i32 width;
+    i32 height;
+    u32 bytesPerPixel;
+};
+
+struct WindowDimension {
+    i32 width;
+    i32 height;
+};
+
+
+GLOBAL bool running{ false };
+GLOBAL Win32OffScreenBuffer g_buff{};
+
+
+INTERNAL WindowDimension
+Win32GetWindowDimensions(HWND wnd) {
+    RECT clientRect;
+    GetClientRect(wnd, &clientRect);
+    const i32 w{ clientRect.right - clientRect.left };
+    const i32 h{ clientRect.bottom - clientRect.top };
+
+    return WindowDimension{ w, h };
+}
 
 INTERNAL void
-DrawGradient(u32 xOffset, u32 yOffset) {
+DrawGradient(const Win32OffScreenBuffer buff, u32 xOffset, u32 yOffset) {
+    // TODO: see what the optimizer does to buff (passing by value vs pointer)
+
     // Pitch (length width-wise)
-    const u32 pitch{ bmWidth * bytesPerPixel };
-    u8* row{ SCAST<u8 *>(bmMemory) };
+    const u32 pitch{ buff.width * buff.bytesPerPixel };
+    u8* row{ static_cast<u8 *>(buff.memory) };
 
     // Drawing
-    for (u32 y{ 0 }; y < bmHeight; ++y) {
-        u32* pixel{ reinterpret_cast<u32*>(row) };
-        for (u32 x{ 0 }; x < bmWidth; ++x) {
+    for (i32 y{ 0 }; y < buff.height; ++y) {
+        u32* pixel{ reinterpret_cast<u32 *>(row) };
+        for (i32 x{ 0 }; x < buff.width; ++x) {
             // Windows flipped the order of rbg
             // Memory: BB GG RR xx
             // !little endianness!
 
-            u8 blue{ SCAST<u8>(x + xOffset) };
-            u8 green{ SCAST<u8>(y + yOffset) };
+            u8 blue{ static_cast<u8>(x + xOffset) };
+            u8 green{ static_cast<u8>(y + yOffset) };
 
             // Register: xx RR GG BB
             *pixel++ = ((green << 8) | blue);
@@ -59,39 +81,43 @@ DrawGradient(u32 xOffset, u32 yOffset) {
 }
 
 INTERNAL void
-Win32ResizeDIBSection(u32 w, u32 h) {
-    if (bmMemory) {
-        VirtualFree(bmMemory, 0, MEM_RELEASE);
+Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
+    if (buff->memory) {
+        VirtualFree(buff->memory, 0, MEM_RELEASE);
     }
 
-    bmWidth = w;
-    bmHeight = h;
+    buff->width = w;
+    buff->height = h;
+    buff->bytesPerPixel = 4;
 
-    bmInfo.bmiHeader.biSize = sizeof(bmInfo.bmiHeader);
-    bmInfo.bmiHeader.biWidth = bmWidth;
-    bmInfo.bmiHeader.biHeight = -SCAST<i32>(bmHeight); // top-down by assigning negative
-    bmInfo.bmiHeader.biPlanes = 1;
-    bmInfo.bmiHeader.biBitCount = 32; // 8 padding
-    bmInfo.bmiHeader.biCompression = BI_RGB;
+    buff->info.bmiHeader.biSize = sizeof(buff->info.bmiHeader);
+    buff->info.bmiHeader.biWidth = buff->width;
+    buff->info.bmiHeader.biHeight = -buff->height; // top-down by assigning negative
+    buff->info.bmiHeader.biPlanes = 1;
+    buff->info.bmiHeader.biBitCount = 32; // 8 padding
+    buff->info.bmiHeader.biCompression = BI_RGB;
 
-    const u32 bmMemorySize{ bmWidth * bmHeight * bytesPerPixel };
+    const u32 bmMemorySize{ buff->width * buff->height * buff->bytesPerPixel };
     // Allocate the memory for use immediately (MEM_COMMIT)
-    bmMemory = VirtualAlloc(0, bmMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    buff->memory = VirtualAlloc(0, bmMemorySize, MEM_COMMIT, PAGE_READWRITE);
 
     // TODO: clear to black probably
 }
 
 // TODO: cleanup functions and other things
 INTERNAL void
-Win32UpdateWindow(HDC deviceContext, RECT* clientRect, u32 left, u32 top, u32 w, u32 h) {
-    const i32 wndW{ clientRect->right - clientRect->left };
-    const i32 wndH{ clientRect->bottom - clientRect->top };
+Win32DisplayBufferWindow(
+    const HDC deviceContext,
+    const Win32OffScreenBuffer buff,
+    i32 w,
+    i32 h
+) {
     StretchDIBits(
         deviceContext,
-        0, 0, bmWidth, bmHeight, // dest
-        0, 0, wndW, wndH, // src
-        bmMemory,
-        &bmInfo,
+        0, 0, buff.width, buff.height, // dest
+        0, 0, w, h, // src
+        buff.memory,
+        &buff.info,
         DIB_RGB_COLORS,
         SRCCOPY
     );
@@ -133,11 +159,9 @@ Win32MainWindowCallback(
         case WM_SIZE: {
             OutputDebugStringA("WM_SIZE\n");
 
-            RECT clientRect;
-            GetClientRect(wnd, &clientRect);
-            const i32 w{ clientRect.right - clientRect.left };
-            const i32 h{ clientRect.bottom - clientRect.top };
-            Win32ResizeDIBSection(w, h);
+            auto wndDimension{ Win32GetWindowDimensions(wnd) };
+            Win32ResizeDIBSection(&g_buff, wndDimension.width, wndDimension.height);
+
             break;
         }
         case WM_PAINT: {
@@ -145,15 +169,13 @@ Win32MainWindowCallback(
 
             PAINTSTRUCT paint;
             const HDC deviceContext{ BeginPaint(wnd, &paint) };
-            const i32 left{ paint.rcPaint.left };
-            const i32 top{ paint.rcPaint.top };
-            const i32 w{ paint.rcPaint.right - paint.rcPaint.left };
-            const i32 h{ paint.rcPaint.bottom - paint.rcPaint.top };
+            //const i32 left{ paint.rcPaint.left };
+            //const i32 top{ paint.rcPaint.top };
+            //const i32 w{ paint.rcPaint.right - paint.rcPaint.left };
+            //const i32 h{ paint.rcPaint.bottom - paint.rcPaint.top };
 
-            RECT clientRect;
-            GetClientRect(wnd, &clientRect);
-
-            Win32UpdateWindow(deviceContext, &clientRect, left, top, w, h);
+            auto wndDimension{ Win32GetWindowDimensions(wnd) };
+            Win32DisplayBufferWindow(deviceContext, g_buff, wndDimension.width, wndDimension.height);
             EndPaint(wnd, &paint);
 
             break;
@@ -179,8 +201,7 @@ WinMain(
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
     WNDCLASS windowClass{};
-    // Check if redraws are needed anymore
-    windowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+    windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = Win32MainWindowCallback;
     // GetModuleHandle(0) returns hInstance
     windowClass.hInstance = hInstance;
@@ -223,21 +244,20 @@ WinMain(
                 }
                 // If no messages or all are finished
 
-                RECT clientRect;
-                GetClientRect(windowHandle, &clientRect);
-                const i32 w{ clientRect.right - clientRect.left };
-                const i32 h{ clientRect.bottom - clientRect.top };
 
                 const HDC deviceContext{ GetDC(windowHandle) };
-                Win32UpdateWindow(deviceContext, &clientRect, 0, 0, w, h);
+                auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
+                Win32DisplayBufferWindow(deviceContext, g_buff, wndDimension.width, wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
 
-                DrawGradient(xOffset, yOffset);
+                DrawGradient(g_buff, xOffset, yOffset);
+                // Overflows to zero
                 ++xOffset;
                 ++yOffset;
             }
         }
         else {
+            // NOTE: Log?
             OutputDebugStringA("Failed to create windowHandle!\n");
         }
     }
