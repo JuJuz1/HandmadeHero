@@ -1,4 +1,6 @@
 #include <windows.h>
+#include <dsound.h>
+
 #include <stdint.h>
 #include <cassert>
 
@@ -46,9 +48,9 @@ GLOBAL Win32OffScreenBuffer gBuff{};
 
 
 INTERNAL WindowDimension
-Win32GetWindowDimensions(HWND wnd) {
+Win32GetWindowDimensions(HWND windowHandle) {
     RECT clientRect;
-    GetClientRect(wnd, &clientRect);
+    GetClientRect(windowHandle, &clientRect);
     const i32 w{ clientRect.right - clientRect.left };
     const i32 h{ clientRect.bottom - clientRect.top };
 
@@ -247,6 +249,72 @@ Win32MainWindowCallback(
     return result;
 }
 
+// Make use of runtime dynamic library linking
+// Make a function pointer type for DirectSoundCreate (a function inside the dll)
+// Feels like magic but really it's not when you understand it
+#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
+typedef DIRECT_SOUND_CREATE(direct_sound_create);
+
+// TODO: consider cleaning up, starting to become a mess
+INTERNAL void
+Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
+    HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
+    if (dSoundLib) {
+        direct_sound_create* dSoundCreate = reinterpret_cast<direct_sound_create *>
+            (GetProcAddress(dSoundLib, "DirectSoundCreate"));
+        LPDIRECTSOUND dSound;
+
+        // For both buffers
+        WAVEFORMATEX waveFormat{};
+        waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+        waveFormat.nChannels = 2;
+        waveFormat.nSamplesPerSec = samplesPerSecond;
+        waveFormat.wBitsPerSample = 16;
+        waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
+        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;;
+        waveFormat.cbSize = 0;
+
+        if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
+            if (SUCCEEDED(dSound->SetCooperativeLevel(windowHandle, DSSCL_PRIORITY))) {
+                DSBUFFERDESC primaryBuffDescription{};
+                primaryBuffDescription.dwSize = sizeof(DSBUFFERDESC);
+                primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+                LPDIRECTSOUNDBUFFER primaryBuff;
+                if (SUCCEEDED(dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
+                    if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
+                        OutputDebugStringA("Primary buffer format was set\n");
+                    } else {
+                        // log, setting format failed
+                    }
+                } else {
+                    // log, creating primary sound buffer failed
+                }
+            } else {
+                // log, couldn't set cooperative
+            }
+
+            // Secondary buffer
+            DSBUFFERDESC secondaryBuffDescription{};
+            secondaryBuffDescription.dwSize = sizeof(DSBUFFERDESC);
+            secondaryBuffDescription.dwFlags = 0;
+            secondaryBuffDescription.dwBufferBytes = buffSize;
+            secondaryBuffDescription.lpwfxFormat = &waveFormat;
+
+            LPDIRECTSOUNDBUFFER secondaryBuff;
+            if (SUCCEEDED(dSound->CreateSoundBuffer(&secondaryBuffDescription, &secondaryBuff, 0))) {
+                OutputDebugStringA("Secondary buffer format created\n");
+            } else {
+                // log, creating secondary sound buffer failed
+            }
+        } else {
+            // log, couldn't create dsound
+        }
+    } else {
+        // TODO: log, couldn't load dll
+    }
+}
+
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
 int WINAPI
 WinMain(
@@ -286,12 +354,16 @@ WinMain(
         );
 
         if (windowHandle) {
-            gRunning = true;
+            constexpr u32 samplesPerSecond{ 48000 };
+            constexpr u32 buffSize{ samplesPerSecond * sizeof(u16) * 2 };
+            Win32InitDSound(windowHandle, samplesPerSecond, buffSize);
 
-            // Animating
+            // Animating gradient
             u32 xOffset{};
             u32 yOffset{};
 
+            // The main loop!
+            gRunning = true;
             while (gRunning) {
                 // Windows message queue, everything has to go through the OS
                 MSG message;
