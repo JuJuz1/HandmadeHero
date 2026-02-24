@@ -55,16 +55,16 @@ Win32GetWindowDimensions(HWND wnd) {
 }
 
 INTERNAL void
-DrawGradient(const Win32OffScreenBuffer buff, u32 xOffset, u32 yOffset) {
+DrawGradient(const Win32OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
     // TODO: see what the optimizer does to buff (passing by value vs pointer)
 
     // Pitch (length width-wise)
-    u8* row{ static_cast<u8 *>(buff.memory) };
+    u8* row{ static_cast<u8 *>(buff->memory) };
 
     // Drawing
-    for (i32 y{ 0 }; y < buff.height; ++y) {
+    for (i32 y{ 0 }; y < buff->height; ++y) {
         u32* pixel{ reinterpret_cast<u32 *>(row) };
-        for (i32 x{ 0 }; x < buff.width; ++x) {
+        for (i32 x{ 0 }; x < buff->width; ++x) {
             // Windows flipped the order of rbg
             // Memory: BB GG RR xx
             // !little endianness!
@@ -76,7 +76,7 @@ DrawGradient(const Win32OffScreenBuffer buff, u32 xOffset, u32 yOffset) {
             *pixel++ = ((green << 8) | blue);
         }
 
-        row += buff.pitch;
+        row += buff->pitch;
     }
 }
 
@@ -109,7 +109,7 @@ Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
 INTERNAL void
 Win32DisplayBufferWindow(
     const HDC deviceContext,
-    const Win32OffScreenBuffer buff,
+    const Win32OffScreenBuffer* buff,
     i32 wndWidth,
     i32 wndHeight
 ) {
@@ -117,9 +117,9 @@ Win32DisplayBufferWindow(
     StretchDIBits(
         deviceContext,
         0, 0, wndWidth, wndHeight, // dest
-        0, 0, buff.width, buff.height, // src
-        buff.memory,
-        &buff.info,
+        0, 0, buff->width, buff->height, // src
+        buff->memory,
+        &buff->info,
         DIB_RGB_COLORS,
         SRCCOPY
     );
@@ -142,26 +142,88 @@ Win32MainWindowCallback(
             // Post a message to quit to the queue
             //PostQuitMessage(0);
             gRunning = false;
-            break;
-        }
+        } break;
         case WM_DESTROY: {
             // NOTE: This might happen as an error?
             OutputDebugStringA("WM_DESTROY\n");
             gRunning = false;
-            break;
-        }
+        } break;
         case WM_ACTIVATEAPP: {
             OutputDebugStringA("WM_ACTIVATEAPP\n");
-            break;
-        }
+        } break;
         case WM_MOVE: {
             OutputDebugStringA("WM_MOVE\n");
-            break;
-        }
+        } break;
         case WM_SIZE: {
             OutputDebugStringA("WM_SIZE\n");
-            break;
-        }
+        } break;
+
+        // Key presses
+        case WM_SYSKEYDOWN: {
+
+        } break;
+        case WM_SYSKEYUP: {
+
+        } break;
+        case WM_KEYDOWN: {
+            // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+            u32 vkCode{ static_cast<u32>(wParam) };
+            bool wasDown{ (lParam & (1 << 30)) != 0 };
+            bool isDown{ (lParam & (1 << 31)) == 0 };
+
+            // If continuously pressing
+            if (wasDown == isDown) {
+                break;
+            }
+
+            if (vkCode == 'W') {
+                OutputDebugStringA("W\n");
+            }
+            else if (vkCode == 'S') {
+                OutputDebugStringA("S\n");
+            }
+            else if (vkCode == 'A') {
+                OutputDebugStringA("A\n");
+            }
+            else if (vkCode == 'D') {
+                OutputDebugStringA("D\n");
+            }
+            else if (vkCode == 'Q') {
+                OutputDebugStringA("Q\n");
+            }
+            else if (vkCode == 'E') {
+                OutputDebugStringA("E\n");
+            }
+            else if (vkCode == VK_UP) {
+                OutputDebugStringA("VK_UP\n");
+            }
+            else if (vkCode == VK_DOWN) {
+                OutputDebugStringA("VK_DOWN\n");
+            }
+            else if (vkCode == VK_LEFT) {
+                OutputDebugStringA("VK_LEFT\n");
+            }
+            else if (vkCode == VK_RIGHT) {
+                OutputDebugStringA("VK_RIGHT\n");
+            }
+            else if (vkCode == VK_ESCAPE) {
+                OutputDebugStringA("VK_ESCAPE ");
+                if (isDown) {
+                    OutputDebugStringA("IS DOWN");
+                }
+                if (wasDown) {
+                    OutputDebugStringA("WAS DOWN");
+                }
+                OutputDebugStringA("\n");
+            }
+            else if (vkCode == VK_SPACE) {
+                OutputDebugStringA("VK_SPACE\n");
+            }
+        } break;
+        case WM_KEYUP: {
+
+        } break;
+
         case WM_PAINT: {
             OutputDebugStringA("WM_PAINT\n");
 
@@ -169,16 +231,14 @@ Win32MainWindowCallback(
             const HDC deviceContext{ BeginPaint(wnd, &paint) };
 
             auto wndDimension{ Win32GetWindowDimensions(wnd) };
-            Win32DisplayBufferWindow(deviceContext, gBuff, wndDimension.width, wndDimension.height);
+            Win32DisplayBufferWindow(deviceContext, &gBuff, wndDimension.width, wndDimension.height);
 
             EndPaint(wnd, &paint);
-            break;
-        }
+        } break;
         default: {
             //OutputDebugStringA("DEFAULT\n");
             result = DefWindowProcA(wnd, msg, wParam, lParam);
-            break;
-        }
+        } break;
     }
 
     return result;
@@ -198,7 +258,7 @@ WinMain(
     constexpr i32 startingHeight{ 720 };
     Win32ResizeDIBSection(&gBuff, startingWidth, startingHeight);
 
-    WNDCLASS windowClass{};
+    WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = Win32MainWindowCallback;
     // GetModuleHandle(0) returns hInstance
@@ -245,10 +305,10 @@ WinMain(
 
                 const HDC deviceContext{ GetDC(windowHandle) };
                 auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
-                Win32DisplayBufferWindow(deviceContext, gBuff, wndDimension.width, wndDimension.height);
+                Win32DisplayBufferWindow(deviceContext, &gBuff, wndDimension.width, wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
 
-                DrawGradient(gBuff, xOffset, yOffset);
+                DrawGradient(&gBuff, xOffset, yOffset);
                 // Overflows to zero
                 ++xOffset;
                 ++yOffset;
