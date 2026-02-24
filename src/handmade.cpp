@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdint.h>
+#include <cassert>
 
 // Ensure we are compiling as 64-bit
 // NOTE: is this a good way?
@@ -105,7 +106,6 @@ Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
     // TODO: clear to black probably
 }
 
-// TODO: cleanup functions and other things
 INTERNAL void
 Win32DisplayBufferWindow(
     const HDC deviceContext,
@@ -139,8 +139,6 @@ Win32MainWindowCallback(
         case WM_CLOSE: {
             // TODO: show a message for closing
             OutputDebugStringA("WM_CLOSE\n");
-            // Post a message to quit to the queue
-            //PostQuitMessage(0);
             gRunning = false;
         } break;
         case WM_DESTROY: {
@@ -151,6 +149,7 @@ Win32MainWindowCallback(
         case WM_ACTIVATEAPP: {
             OutputDebugStringA("WM_ACTIVATEAPP\n");
         } break;
+
         case WM_MOVE: {
             OutputDebugStringA("WM_MOVE\n");
         } break;
@@ -159,15 +158,30 @@ Win32MainWindowCallback(
         } break;
 
         // Key presses
-        case WM_SYSKEYDOWN: {
 
+        // SYSKEYDOWN is called whenever the key press includes alt
+        // all other keypresses go to the non-sys versions below
+        // This forces us to hanlde alt + f4 here...
+        case WM_SYSKEYDOWN: {
+            u32 vkCode{ static_cast<u32>(wParam) };
+            if (vkCode == VK_F4) {
+                OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
+                // Should always be true here
+                bool altPressed{ (lParam & (1 << 29)) != 0 };
+                if (altPressed) {
+                    gRunning = false;
+                } else {
+                    assert(false && "SYSKEYDOWN did not have the alt key pressed");
+                }
+            }
         } break;
         case WM_SYSKEYUP: {
-
         } break;
         case WM_KEYDOWN: {
             // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
             u32 vkCode{ static_cast<u32>(wParam) };
+            // lParam contains additional information about keystrokes
+            // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
             bool wasDown{ (lParam & (1 << 30)) != 0 };
             bool isDown{ (lParam & (1 << 31)) == 0 };
 
@@ -178,35 +192,25 @@ Win32MainWindowCallback(
 
             if (vkCode == 'W') {
                 OutputDebugStringA("W\n");
-            }
-            else if (vkCode == 'S') {
+            } else if (vkCode == 'S') {
                 OutputDebugStringA("S\n");
-            }
-            else if (vkCode == 'A') {
+            } else if (vkCode == 'A') {
                 OutputDebugStringA("A\n");
-            }
-            else if (vkCode == 'D') {
+            } else if (vkCode == 'D') {
                 OutputDebugStringA("D\n");
-            }
-            else if (vkCode == 'Q') {
+            } else if (vkCode == 'Q') {
                 OutputDebugStringA("Q\n");
-            }
-            else if (vkCode == 'E') {
+            } else if (vkCode == 'E') {
                 OutputDebugStringA("E\n");
-            }
-            else if (vkCode == VK_UP) {
+            } else if (vkCode == VK_UP) {
                 OutputDebugStringA("VK_UP\n");
-            }
-            else if (vkCode == VK_DOWN) {
+            } else if (vkCode == VK_DOWN) {
                 OutputDebugStringA("VK_DOWN\n");
-            }
-            else if (vkCode == VK_LEFT) {
+            } else if (vkCode == VK_LEFT) {
                 OutputDebugStringA("VK_LEFT\n");
-            }
-            else if (vkCode == VK_RIGHT) {
+            } else if (vkCode == VK_RIGHT) {
                 OutputDebugStringA("VK_RIGHT\n");
-            }
-            else if (vkCode == VK_ESCAPE) {
+            } else if (vkCode == VK_ESCAPE) {
                 OutputDebugStringA("VK_ESCAPE ");
                 if (isDown) {
                     OutputDebugStringA("IS DOWN");
@@ -221,7 +225,6 @@ Win32MainWindowCallback(
             }
         } break;
         case WM_KEYUP: {
-
         } break;
 
         case WM_PAINT: {
@@ -301,7 +304,6 @@ WinMain(
                     DispatchMessageA(&message);
                 }
                 // If no messages or all are finished
-
 
                 const HDC deviceContext{ GetDC(windowHandle) };
                 auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
