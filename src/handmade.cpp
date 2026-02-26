@@ -391,10 +391,11 @@ Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD byte
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
 int WINAPI
 WinMain(
+    // commenting out removed C4100 warnings for unreferenced parameters
     HINSTANCE hInstance, // A handle to the current instance of the application
-    HINSTANCE hPrevInstance, // Not in use anymore
-    PSTR lpCmdLine, // Command line arguments
-    int nCmdShow // Window visibility option
+    HINSTANCE, //hPrevInstance, Not in use anymore
+    PSTR, //lpCmdLine, Command line arguments
+    int //nCmdShow Window visibility option
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
@@ -469,18 +470,13 @@ WinMain(
                     // NOTE: a way to log variables
                     //OutputDebugStringA("-----\n");
                     //char buf[256];
-                    //sprintf(buf, "playCursor=%lu, writeCursor=%lu, byteToLock=%lu, runningIndex=%lu\n",
+                    //sprintf_s(buf, "playCursor=%u, writeCursor=%u, byteToLock=%u, runningIndex=%u\n",
                     //    playCursor, writeCursor, byteToLock, soundOutput.runningSampleIndex);
                     //OutputDebugStringA(buf);
 
                     // TODO: change to a lower latency offset
-                    if (byteToLock == playCursor) {
-                        if (!isSoundPlaying) {
-                            bytesToWrite = soundOutput.buffSize;
-                        }
-                    }
                     // To the end and wrap behind playCursor
-                    else if (byteToLock > playCursor) {
+                    if (byteToLock > playCursor) {
                         bytesToWrite = soundOutput.buffSize - byteToLock;
                         bytesToWrite += playCursor;
                     } else {
