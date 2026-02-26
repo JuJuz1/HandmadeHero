@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 #include <cassert>
+#include <math.h>
+
+#include <cstdio>
+
 
 // Ensure we are compiling as 64-bit
 // NOTE: is this a good way?
@@ -14,6 +18,7 @@ static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 #define GLOBAL static
 #define LOCAL_PERSIST static
 
+#define PI32 3.14159265359f
 
 // Typedefs for common types
 typedef int8_t i8;
@@ -25,6 +30,9 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+
+typedef float f32;
+typedef double f64;
 
 
 // Struct to hold buffer info
@@ -166,7 +174,7 @@ Win32MainWindowCallback(
 
         // SYSKEYDOWN is called whenever the key press includes alt
         // all other keypresses go to the non-sys versions below
-        // This forces us to hanlde alt + f4 here...
+        // This forces us to handle alt + f4 here...
         case WM_SYSKEYDOWN: {
             u32 vkCode{ static_cast<u32>(wParam) };
             if (vkCode == VK_F4) {
@@ -318,6 +326,68 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     }
 }
 
+// Secondary buffer values
+struct Win32SoundOutput {
+    u32 samplesPerSecond{ 48000 };
+    u32 toneHz{ 256 }; // Pitch
+    i32 toneVolume{ 6000 }; // Amplitude
+    u32 wavePeriod{ samplesPerSecond / toneHz };
+    u32 bytesPerSample{ sizeof(u16) * 2 };
+    u32 buffSize{ samplesPerSecond * bytesPerSample };
+    u32 runningSampleIndex;
+};
+
+INTERNAL void
+Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite) {
+    LPVOID region1;
+    DWORD region1Size;
+    LPVOID region2;
+    DWORD region2Size;
+    if (SUCCEEDED(gSecondaryBuff->Lock(
+        byteToLock, bytesToWrite,
+        &region1, &region1Size,
+        &region2, &region2Size,
+        0
+    ))) {
+        // TODO: assert regionSizes
+        //assert(false && "regionSizes are invalid!");
+
+        const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
+        i16* sampleOut{ static_cast<i16 *>(region1) };
+
+        // TODO: collapse loops to one
+        for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
+            // Sine wave
+            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) / static_cast<f32>(soundOutput->wavePeriod)
+                * 2 * PI32 };
+            const f32 sineValue{ sinf(t) };
+            const i16 sampleValue{ static_cast<i16>(sineValue * soundOutput->toneVolume) };
+
+            *sampleOut++ = sampleValue;
+            *sampleOut++ = sampleValue;
+            ++soundOutput->runningSampleIndex;
+        }
+
+        const DWORD region2SampleCount{ region2Size / soundOutput->bytesPerSample };
+        sampleOut = static_cast<i16 *>(region2);
+
+        for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
+            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) / static_cast<f32>(soundOutput->wavePeriod)
+                * 2 * PI32 };
+            const f32 sineValue{ sinf(t) };
+            const i16 sampleValue{ static_cast<i16>(sineValue * soundOutput->toneVolume) };
+
+            *sampleOut++ = sampleValue;
+            *sampleOut++ = sampleValue;
+            ++soundOutput->runningSampleIndex;
+        }
+
+        gSecondaryBuff->Unlock(region1, region1Size, region2, region2Size);
+    } else {
+        // log, couldnt lock
+    }
+}
+
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
 int WINAPI
 WinMain(
@@ -352,17 +422,10 @@ WinMain(
         );
 
         if (windowHandle) {
-            // Secondary buffer values
-            constexpr u32 samplesPerSecond{ 48000 };
-            constexpr u32 toneHz{ 256 }; // Pitch
-            constexpr i32 toneVolume{ 6000 }; // Amplitude
-            constexpr u32 squareWavePeriod{ samplesPerSecond / toneHz };
-            constexpr u32 bytesPerSample{ sizeof(u16) * 2 };
-            constexpr u32 buffSize{ samplesPerSecond * bytesPerSample };
-            u32 runningSampleIndex{};
-
-            Win32InitDSound(windowHandle, samplesPerSecond, buffSize);
-            gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
+            Win32SoundOutput soundOutput{};
+            Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
+            Win32FillSoundBuffer(&soundOutput, 0, soundOutput.buffSize);
+            bool isSoundPlaying{ false };
 
             // Animating gradient
             u32 xOffsetGradient{};
@@ -381,7 +444,6 @@ WinMain(
                     TranslateMessage(&message);
                     DispatchMessageA(&message);
                 }
-                // If no messages left
 
                 DrawGradient(&gScreenBuff, xOffsetGradient, yOffsetGradient);
                 // Overflows to zero
@@ -389,77 +451,50 @@ WinMain(
                 ++yOffsetGradient;
 
 
-                // NOTE: DirectSound output
+                // NOTE: DirectSound output test
                 // Circular buffer so we might get two regions to write to
 
                 // A single sample is one LEFT and RIGHT together
                 //  i16  i16 ...
-                // [LEFT RIGHT] LEFT RIGHT
+                // [LEFT RIGHT] LEFT RIGHT ...
 
                 DWORD playCursor;
                 DWORD writeCursor;
 
                 if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
-                    const DWORD byteToLock{ runningSampleIndex * bytesPerSample % buffSize };
-                    DWORD bytesToWrite;
+                    const DWORD byteToLock{ (soundOutput.runningSampleIndex * soundOutput.bytesPerSample)
+                        % soundOutput.buffSize };
+                    DWORD bytesToWrite{};
 
+                    // NOTE: a way to log variables
+                    //OutputDebugStringA("-----\n");
+                    //char buf[256];
+                    //sprintf(buf, "playCursor=%lu, writeCursor=%lu, byteToLock=%lu, runningIndex=%lu\n",
+                    //    playCursor, writeCursor, byteToLock, soundOutput.runningSampleIndex);
+                    //OutputDebugStringA(buf);
+
+                    // TODO: change to a lower latency offset
                     if (byteToLock == playCursor) {
-                        bytesToWrite = buffSize;
+                        if (!isSoundPlaying) {
+                            bytesToWrite = soundOutput.buffSize;
+                        }
                     }
                     // To the end and wrap behind playCursor
                     else if (byteToLock > playCursor) {
-                        bytesToWrite = buffSize - byteToLock;
+                        bytesToWrite = soundOutput.buffSize - byteToLock;
                         bytesToWrite += playCursor;
                     } else {
                         bytesToWrite = playCursor - byteToLock;
                     }
 
-                    LPVOID region1;
-                    DWORD region1Size;
-                    LPVOID region2;
-                    DWORD region2Size;
-                    if (SUCCEEDED(gSecondaryBuff->Lock(
-                        byteToLock,
-                        bytesToWrite,
-                        &region1,
-                        &region1Size,
-                        &region2,
-                        &region2Size,
-                        0
-                    ))) {
-                        // TODO: assert regionSizes
-                        //assert(false && "regionSizes are invalid!");
-
-                        const DWORD region1SampleCount{ region1Size / bytesPerSample };
-                        i16* sampleOut{ static_cast<i16 *>(region1) };
-
-                        for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
-                            // Get the half period and divide the running index with it to check if it's even or not
-                            // This results in a square wave
-                            const i16 sampleValue{ ((runningSampleIndex / (squareWavePeriod / 2)) % 2)
-                                ? toneVolume : -toneVolume };
-                            *sampleOut++ = sampleValue;
-                            *sampleOut++ = sampleValue;
-                            ++runningSampleIndex;
-                        }
-
-                        const DWORD region2SampleCount{ region2Size / bytesPerSample };
-                        sampleOut = static_cast<i16 *>(region2);
-
-                        for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
-                            const i16 sampleValue{ ((runningSampleIndex / (squareWavePeriod / 2)) % 2)
-                                ? toneVolume : -toneVolume };
-                            *sampleOut++ = sampleValue;
-                            *sampleOut++ = sampleValue;
-                            ++runningSampleIndex;
-                        }
-
-                        gSecondaryBuff->Unlock(&region1, region1Size, &region2, region2Size);
-                    } else {
-                        // log, couldnt lock
-                    }
+                    Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite);
                 } else {
                     // log, couldnt get curr pos
+                }
+
+                if (!isSoundPlaying) {
+                    isSoundPlaying = true;
+                    gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
                 }
 
                 const HDC deviceContext{ GetDC(windowHandle) };

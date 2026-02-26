@@ -6,7 +6,11 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliar
 mkdir build
 pushd build
 
-rem /TP /EHsc /O2 /Ob2 /Fe:test.exe
+rem /TP /EHsc- /O2 /Ob2 /Fe:test.exe
+rem /TP compile all files as c++
+rem /EHsc- disable exception handling for c++ and extern "C"
+rem /GR- disable RTTI
+
 rem link the User32.lib, Gdi32.lib to create UI
 cl /Zi /FC /W4 /Bt /std:c++20 ../src/handmade.cpp User32.lib Gdi32.lib
 
@@ -15,6 +19,7 @@ rem popd
 
 set NOW=%TIME:~0,8%
 
+echo.
 rem print out build status with colors just for fun :)
 if %errorlevel% NEQ 0 (
     rem ANSI escape sequences
@@ -23,3 +28,5 @@ if %errorlevel% NEQ 0 (
 ) else (
     echo [32m[1mBuild succeeded[0m[1m %DATE% %NOW%
 )
+
+echo.
