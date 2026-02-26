@@ -465,7 +465,7 @@ WinMain(
                 if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
                     const DWORD byteToLock{ (soundOutput.runningSampleIndex * soundOutput.bytesPerSample)
                         % soundOutput.buffSize };
-                    DWORD bytesToWrite{};
+                    DWORD bytesToWrite;
 
                     // NOTE: a way to log variables
                     //OutputDebugStringA("-----\n");
