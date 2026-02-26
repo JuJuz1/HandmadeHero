@@ -19,7 +19,7 @@ rem print out build status with colors just for fun :)
 if %errorlevel% NEQ 0 (
     rem ANSI escape sequences
     rem https://gist.githubusercontent.com/mlocati/fdabcaeb8071d5c75a2d51712db24011/raw/b710612d6320df7e146508094e84b92b34c77d48/win10colors.cmd
-    echo [31mBuild failed[0m at %NOW%
+    echo [31m[1mBuild failed[0m[1m %DATE% %NOW%
 ) else (
-    echo [32mBuild succeeded[0m at %NOW%
+    echo [32m[1mBuild succeeded[0m[1m %DATE% %NOW%
 )

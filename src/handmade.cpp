@@ -44,7 +44,9 @@ struct WindowDimension {
 
 
 GLOBAL bool gRunning{ false };
-GLOBAL Win32OffScreenBuffer gBuff{};
+GLOBAL Win32OffScreenBuffer gScreenBuff;
+
+GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 
 
 INTERNAL WindowDimension
@@ -59,7 +61,8 @@ Win32GetWindowDimensions(HWND windowHandle) {
 
 INTERNAL void
 DrawGradient(const Win32OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
-    // TODO: see what the optimizer does to buff (passing by value vs pointer)
+    // NOTE: maybe see what the optimizer does to buff (passing by value vs pointer)
+    // remember to not get fixated on micro-optimizations before actually doing optimization though...
 
     // Pitch (length width-wise)
     u8* row{ static_cast<u8 *>(buff->memory) };
@@ -102,7 +105,7 @@ Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
 
     const u32 bmMemorySize{ buff->width * buff->height * buff->bytesPerPixel };
     // Allocate the memory for use immediately (MEM_COMMIT)
-    buff->memory = VirtualAlloc(0, bmMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    buff->memory = VirtualAlloc(0, bmMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     buff->pitch = buff->width * buff->bytesPerPixel;
 
     // TODO: clear to black probably
@@ -188,6 +191,7 @@ Win32MainWindowCallback(
             bool isDown{ (lParam & (1 << 31)) == 0 };
 
             // If continuously pressing
+            // TODO: should change to handle that case also instead of breaking?
             if (wasDown == isDown) {
                 break;
             }
@@ -236,7 +240,7 @@ Win32MainWindowCallback(
             const HDC deviceContext{ BeginPaint(wnd, &paint) };
 
             auto wndDimension{ Win32GetWindowDimensions(wnd) };
-            Win32DisplayBufferWindow(deviceContext, &gBuff, wndDimension.width, wndDimension.height);
+            Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
 
             EndPaint(wnd, &paint);
         } break;
@@ -264,7 +268,7 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
             (GetProcAddress(dSoundLib, "DirectSoundCreate"));
         LPDIRECTSOUND dSound;
 
-        // For both buffers
+        // For "both" buffers
         WAVEFORMATEX waveFormat{};
         waveFormat.wFormatTag = WAVE_FORMAT_PCM;
         waveFormat.nChannels = 2;
@@ -277,7 +281,7 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
         if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
             if (SUCCEEDED(dSound->SetCooperativeLevel(windowHandle, DSSCL_PRIORITY))) {
                 DSBUFFERDESC primaryBuffDescription{};
-                primaryBuffDescription.dwSize = sizeof(DSBUFFERDESC);
+                primaryBuffDescription.dwSize = sizeof(primaryBuffDescription);
                 primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
 
                 LPDIRECTSOUNDBUFFER primaryBuff;
@@ -294,15 +298,14 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
                 // log, couldn't set cooperative
             }
 
-            // Secondary buffer
+            // Secondary buffer, this is where we write to!
             DSBUFFERDESC secondaryBuffDescription{};
-            secondaryBuffDescription.dwSize = sizeof(DSBUFFERDESC);
+            secondaryBuffDescription.dwSize = sizeof(secondaryBuffDescription);
             secondaryBuffDescription.dwFlags = 0;
             secondaryBuffDescription.dwBufferBytes = buffSize;
             secondaryBuffDescription.lpwfxFormat = &waveFormat;
 
-            LPDIRECTSOUNDBUFFER secondaryBuff;
-            if (SUCCEEDED(dSound->CreateSoundBuffer(&secondaryBuffDescription, &secondaryBuff, 0))) {
+            if (SUCCEEDED(dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
                 OutputDebugStringA("Secondary buffer format created\n");
             } else {
                 // log, creating secondary sound buffer failed
@@ -327,7 +330,7 @@ WinMain(
 
     constexpr i32 startingWidth{ 1280 };
     constexpr i32 startingHeight{ 720 };
-    Win32ResizeDIBSection(&gBuff, startingWidth, startingHeight);
+    Win32ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
@@ -341,26 +344,29 @@ WinMain(
 
     if (RegisterClass(&windowClass)) {
         const HWND windowHandle = CreateWindowExA(
-            0,
-            name,
-            name,
+            0, name, name,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             // Window size and position
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            0,
-            0,
-            hInstance,
-            0
+            0, 0, hInstance, 0
         );
 
         if (windowHandle) {
+            // Secondary buffer values
             constexpr u32 samplesPerSecond{ 48000 };
-            constexpr u32 buffSize{ samplesPerSecond * sizeof(u16) * 2 };
+            constexpr u32 toneHz{ 256 }; // Pitch
+            constexpr i32 toneVolume{ 6000 }; // Amplitude
+            constexpr u32 squareWavePeriod{ samplesPerSecond / toneHz };
+            constexpr u32 bytesPerSample{ sizeof(u16) * 2 };
+            constexpr u32 buffSize{ samplesPerSecond * bytesPerSample };
+            u32 runningSampleIndex{};
+
             Win32InitDSound(windowHandle, samplesPerSecond, buffSize);
+            gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
 
             // Animating gradient
-            u32 xOffset{};
-            u32 yOffset{};
+            u32 xOffsetGradient{};
+            u32 yOffsetGradient{};
 
             // The main loop!
             gRunning = true;
@@ -375,17 +381,91 @@ WinMain(
                     TranslateMessage(&message);
                     DispatchMessageA(&message);
                 }
-                // If no messages or all are finished
+                // If no messages left
+
+                DrawGradient(&gScreenBuff, xOffsetGradient, yOffsetGradient);
+                // Overflows to zero
+                ++xOffsetGradient;
+                ++yOffsetGradient;
+
+
+                // NOTE: DirectSound output
+                // Circular buffer so we might get two regions to write to
+
+                // A single sample is one LEFT and RIGHT together
+                //  i16  i16 ...
+                // [LEFT RIGHT] LEFT RIGHT
+
+                DWORD playCursor;
+                DWORD writeCursor;
+
+                if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
+                    const DWORD byteToLock{ runningSampleIndex * bytesPerSample % buffSize };
+                    DWORD bytesToWrite;
+
+                    if (byteToLock == playCursor) {
+                        bytesToWrite = buffSize;
+                    }
+                    // To the end and wrap behind playCursor
+                    else if (byteToLock > playCursor) {
+                        bytesToWrite = buffSize - byteToLock;
+                        bytesToWrite += playCursor;
+                    } else {
+                        bytesToWrite = playCursor - byteToLock;
+                    }
+
+                    LPVOID region1;
+                    DWORD region1Size;
+                    LPVOID region2;
+                    DWORD region2Size;
+                    if (SUCCEEDED(gSecondaryBuff->Lock(
+                        byteToLock,
+                        bytesToWrite,
+                        &region1,
+                        &region1Size,
+                        &region2,
+                        &region2Size,
+                        0
+                    ))) {
+                        // TODO: assert regionSizes
+                        //assert(false && "regionSizes are invalid!");
+
+                        const DWORD region1SampleCount{ region1Size / bytesPerSample };
+                        i16* sampleOut{ static_cast<i16 *>(region1) };
+
+                        for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
+                            // Get the half period and divide the running index with it to check if it's even or not
+                            // This results in a square wave
+                            const i16 sampleValue{ ((runningSampleIndex / (squareWavePeriod / 2)) % 2)
+                                ? toneVolume : -toneVolume };
+                            *sampleOut++ = sampleValue;
+                            *sampleOut++ = sampleValue;
+                            ++runningSampleIndex;
+                        }
+
+                        const DWORD region2SampleCount{ region2Size / bytesPerSample };
+                        sampleOut = static_cast<i16 *>(region2);
+
+                        for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
+                            const i16 sampleValue{ ((runningSampleIndex / (squareWavePeriod / 2)) % 2)
+                                ? toneVolume : -toneVolume };
+                            *sampleOut++ = sampleValue;
+                            *sampleOut++ = sampleValue;
+                            ++runningSampleIndex;
+                        }
+
+                        gSecondaryBuff->Unlock(&region1, region1Size, &region2, region2Size);
+                    } else {
+                        // log, couldnt lock
+                    }
+                } else {
+                    // log, couldnt get curr pos
+                }
 
                 const HDC deviceContext{ GetDC(windowHandle) };
                 auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
-                Win32DisplayBufferWindow(deviceContext, &gBuff, wndDimension.width, wndDimension.height);
+                Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
-
-                DrawGradient(&gBuff, xOffset, yOffset);
-                // Overflows to zero
-                ++xOffset;
-                ++yOffset;
             }
         }
         else {
