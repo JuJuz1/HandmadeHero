@@ -1,17 +1,14 @@
-#include <windows.h>
 #include <dsound.h>
+#include <windows.h>
 
-#include <stdint.h>
 #include <cassert>
-#include <math.h>
-
 #include <cstdio>
-
+#include <math.h>
+#include <stdint.h>
 
 // Ensure we are compiling as 64-bit
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
-
 
 // Defines for static
 #define INTERNAL static
@@ -33,7 +30,6 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-
 // Struct to hold buffer info
 struct Win32OffScreenBuffer {
     BITMAPINFO info;
@@ -48,7 +44,6 @@ struct WindowDimension {
     i32 width;
     i32 height;
 };
-
 
 GLOBAL bool32 gIsGameRunning{ false };
 GLOBAL Win32OffScreenBuffer gScreenBuff;
@@ -70,14 +65,15 @@ Win32GetWindowDimensions(HWND windowHandle) {
 INTERNAL void
 DrawGradient(const Win32OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
     // NOTE: maybe see what the optimizer does to buff (passing by value vs pointer)
-    // remember to not get fixated on micro-optimizations before actually doing optimization though...
+    // remember to not get fixated on micro-optimizations before actually doing optimization
+    // though...
 
     // Pitch (length width-wise)
-    u8* row{ static_cast<u8 *>(buff->memory) };
+    u8* row{ static_cast<u8*>(buff->memory) };
 
     // Drawing
     for (i32 y{ 0 }; y < buff->height; ++y) {
-        u32* pixel{ reinterpret_cast<u32 *>(row) };
+        u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ 0 }; x < buff->width; ++x) {
             // Windows flipped the order of rbg
             // Memory: BB GG RR xx
@@ -120,142 +116,127 @@ Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
 }
 
 INTERNAL void
-Win32DisplayBufferWindow(
-    const HDC deviceContext,
-    const Win32OffScreenBuffer* buff,
-    i32 wndWidth,
-    i32 wndHeight
-) {
+Win32DisplayBufferWindow(const HDC deviceContext, const Win32OffScreenBuffer* buff, i32 wndWidth,
+                         i32 wndHeight) {
     // TODO: aspect ratio correction
-    StretchDIBits(
-        deviceContext,
-        0, 0, wndWidth, wndHeight, // dest
-        0, 0, buff->width, buff->height, // src
-        buff->memory,
-        &buff->info,
-        DIB_RGB_COLORS,
-        SRCCOPY
-    );
+    StretchDIBits(deviceContext, 0, 0, wndWidth, wndHeight, // dest
+                  0, 0, buff->width, buff->height,          // src
+                  buff->memory, &buff->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 // Callback for messages
 LRESULT CALLBACK
-Win32MainWindowCallback(
-    HWND    wnd,
-    UINT    msg,
-    WPARAM  wParam,
-    LPARAM  lParam
-) {
+Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     LRESULT result{ 0 };
 
     switch (msg) {
-        case WM_CLOSE: {
-            // TODO: show a message for closing
-            OutputDebugStringA("WM_CLOSE\n");
-            gIsGameRunning = false;
-        } break;
-        case WM_DESTROY: {
-            // NOTE: This might happen as an error?
-            OutputDebugStringA("WM_DESTROY\n");
-            gIsGameRunning = false;
-        } break;
-        case WM_ACTIVATEAPP: {
-            OutputDebugStringA("WM_ACTIVATEAPP\n");
-        } break;
+    case WM_CLOSE: {
+        // TODO: show a message for closing
+        OutputDebugStringA("WM_CLOSE\n");
+        gIsGameRunning = false;
+    } break;
+    case WM_DESTROY: {
+        // NOTE: This might happen as an error?
+        OutputDebugStringA("WM_DESTROY\n");
+        gIsGameRunning = false;
+    } break;
+    case WM_ACTIVATEAPP: {
+        OutputDebugStringA("WM_ACTIVATEAPP\n");
+    } break;
 
-        case WM_MOVE: {
-            OutputDebugStringA("WM_MOVE\n");
-        } break;
-        case WM_SIZE: {
-            OutputDebugStringA("WM_SIZE\n");
-        } break;
+    case WM_MOVE: {
+        OutputDebugStringA("WM_MOVE\n");
+    } break;
+    case WM_SIZE: {
+        OutputDebugStringA("WM_SIZE\n");
+    } break;
 
-        // Key presses
+    // Key presses
 
-        // SYSKEYDOWN is called whenever the key press includes alt
-        // all other keypresses go to the non-sys versions below
-        // This forces us to handle alt + f4 here...
-        case WM_SYSKEYDOWN: {
-            u32 vkCode{ static_cast<u32>(wParam) };
-            if (vkCode == VK_F4) {
-                OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
-                // Should always be true here
-                bool32 altPressed{ (lParam & (1 << 29)) != 0 };
-                if (altPressed) {
-                    gIsGameRunning = false;
-                } else {
-                    assert(false && "SYSKEYDOWN did not have the alt key pressed");
-                }
+    // SYSKEYDOWN is called whenever the key press includes alt
+    // all other keypresses go to the non-sys versions below
+    // This forces us to handle alt + f4 here...
+    case WM_SYSKEYDOWN: {
+        u32 vkCode{ static_cast<u32>(wParam) };
+        if (vkCode == VK_F4) {
+            OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
+            // Should always be true here
+            bool32 altPressed{ (lParam & (1 << 29)) != 0 };
+            if (altPressed) {
+                gIsGameRunning = false;
+            } else {
+                assert(false && "SYSKEYDOWN did not have the alt key pressed");
             }
-        } break;
-        case WM_SYSKEYUP: {
-        } break;
-        case WM_KEYDOWN: {
-            // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-            u32 vkCode{ static_cast<u32>(wParam) };
-            // lParam contains additional information about keystrokes
-            // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-            bool32 wasDown{ (lParam & (1 << 30)) != 0 };
-            bool32 isDown{ (lParam & (1 << 31)) == 0 };
+        }
+    } break;
+    case WM_SYSKEYUP: {
+    } break;
+    case WM_KEYDOWN: {
+        // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+        u32 vkCode{ static_cast<u32>(wParam) };
+        // lParam contains additional information about keystrokes
+        // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
+        bool32 wasDown{ (lParam & (1 << 30)) != 0 };
+        bool32 isDown{ (lParam & (1 << 31)) == 0 };
 
-            // If continuously pressing
-            // TODO: should change to handle that case also instead of breaking?
-            if (wasDown == isDown) {
-                break;
+        // If continuously pressing
+        // TODO: should change to handle that case also instead of breaking?
+        if (wasDown == isDown) {
+            break;
+        }
+
+        if (vkCode == 'W') {
+            OutputDebugStringA("W\n");
+        } else if (vkCode == 'S') {
+            OutputDebugStringA("S\n");
+        } else if (vkCode == 'A') {
+            OutputDebugStringA("A\n");
+        } else if (vkCode == 'D') {
+            OutputDebugStringA("D\n");
+        } else if (vkCode == 'Q') {
+            OutputDebugStringA("Q\n");
+        } else if (vkCode == 'E') {
+            OutputDebugStringA("E\n");
+        } else if (vkCode == VK_UP) {
+            OutputDebugStringA("VK_UP\n");
+        } else if (vkCode == VK_DOWN) {
+            OutputDebugStringA("VK_DOWN\n");
+        } else if (vkCode == VK_LEFT) {
+            OutputDebugStringA("VK_LEFT\n");
+        } else if (vkCode == VK_RIGHT) {
+            OutputDebugStringA("VK_RIGHT\n");
+        } else if (vkCode == VK_ESCAPE) {
+            OutputDebugStringA("VK_ESCAPE ");
+            if (isDown) {
+                OutputDebugStringA("IS DOWN");
             }
-
-            if (vkCode == 'W') {
-                OutputDebugStringA("W\n");
-            } else if (vkCode == 'S') {
-                OutputDebugStringA("S\n");
-            } else if (vkCode == 'A') {
-                OutputDebugStringA("A\n");
-            } else if (vkCode == 'D') {
-                OutputDebugStringA("D\n");
-            } else if (vkCode == 'Q') {
-                OutputDebugStringA("Q\n");
-            } else if (vkCode == 'E') {
-                OutputDebugStringA("E\n");
-            } else if (vkCode == VK_UP) {
-                OutputDebugStringA("VK_UP\n");
-            } else if (vkCode == VK_DOWN) {
-                OutputDebugStringA("VK_DOWN\n");
-            } else if (vkCode == VK_LEFT) {
-                OutputDebugStringA("VK_LEFT\n");
-            } else if (vkCode == VK_RIGHT) {
-                OutputDebugStringA("VK_RIGHT\n");
-            } else if (vkCode == VK_ESCAPE) {
-                OutputDebugStringA("VK_ESCAPE ");
-                if (isDown) {
-                    OutputDebugStringA("IS DOWN");
-                }
-                if (wasDown) {
-                    OutputDebugStringA("WAS DOWN");
-                }
-                OutputDebugStringA("\n");
+            if (wasDown) {
+                OutputDebugStringA("WAS DOWN");
             }
-            else if (vkCode == VK_SPACE) {
-                OutputDebugStringA("VK_SPACE\n");
-            }
-        } break;
-        case WM_KEYUP: {
-        } break;
+            OutputDebugStringA("\n");
+        } else if (vkCode == VK_SPACE) {
+            OutputDebugStringA("VK_SPACE\n");
+        }
+    } break;
+    case WM_KEYUP: {
+    } break;
 
-        case WM_PAINT: {
-            OutputDebugStringA("WM_PAINT\n");
+    case WM_PAINT: {
+        OutputDebugStringA("WM_PAINT\n");
 
-            PAINTSTRUCT paint;
-            const HDC deviceContext{ BeginPaint(wnd, &paint) };
+        PAINTSTRUCT paint;
+        const HDC deviceContext{ BeginPaint(wnd, &paint) };
 
-            auto wndDimension{ Win32GetWindowDimensions(wnd) };
-            Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
+        auto wndDimension{ Win32GetWindowDimensions(wnd) };
+        Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
+                                 wndDimension.height);
 
-            EndPaint(wnd, &paint);
-        } break;
-        default: {
-            //OutputDebugStringA("DEFAULT\n");
-            result = DefWindowProcA(wnd, msg, wParam, lParam);
-        } break;
+        EndPaint(wnd, &paint);
+    } break;
+    default: {
+        //OutputDebugStringA("DEFAULT\n");
+        result = DefWindowProcA(wnd, msg, wParam, lParam);
+    } break;
     }
 
     return result;
@@ -264,16 +245,18 @@ Win32MainWindowCallback(
 // Make use of runtime dynamic library linking
 // Make a function pointer type for DirectSoundCreate (a function inside the dll)
 // Feels like magic but really it's not when you understand it
+// clang-format off
 #define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
 typedef DIRECT_SOUND_CREATE(direct_sound_create);
+// clang-format on
 
-// TODO: consider cleaning up, starting to become a mess
+//TODO: consider cleaning up, starting to become a mess
 INTERNAL void
 Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
     if (dSoundLib) {
-        direct_sound_create* dSoundCreate = reinterpret_cast<direct_sound_create *>
-            (GetProcAddress(dSoundLib, "DirectSoundCreate"));
+        direct_sound_create* dSoundCreate =
+            reinterpret_cast<direct_sound_create*>(GetProcAddress(dSoundLib, "DirectSoundCreate"));
         LPDIRECTSOUND dSound;
 
         // For "both" buffers
@@ -283,7 +266,8 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
         waveFormat.nSamplesPerSec = samplesPerSecond;
         waveFormat.wBitsPerSample = 16;
         waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
-        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;;
+        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
+        ;
         waveFormat.cbSize = 0;
 
         if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
@@ -293,7 +277,8 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
                 primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
 
                 LPDIRECTSOUNDBUFFER primaryBuff;
-                if (SUCCEEDED(dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
+                if (SUCCEEDED(
+                        dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
                     if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
                         OutputDebugStringA("Primary buffer format was set\n");
                     } else {
@@ -313,7 +298,8 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
             secondaryBuffDescription.dwBufferBytes = buffSize;
             secondaryBuffDescription.lpwfxFormat = &waveFormat;
 
-            if (SUCCEEDED(dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
+            if (SUCCEEDED(
+                    dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
                 OutputDebugStringA("Secondary buffer format created\n");
             } else {
                 // log, creating secondary sound buffer failed
@@ -329,7 +315,7 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
 // Secondary buffer values
 struct Win32SoundOutput {
     u32 samplesPerSecond{ 48000 };
-    u32 toneHz{ 256 }; // Pitch
+    u32 toneHz{ 256 };      // Pitch
     i32 toneVolume{ 6000 }; // Amplitude
     u32 wavePeriod{ samplesPerSecond / toneHz };
     u32 bytesPerSample{ sizeof(u16) * 2 };
@@ -343,23 +329,19 @@ Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD byte
     DWORD region1Size;
     LPVOID region2;
     DWORD region2Size;
-    if (SUCCEEDED(gSecondaryBuff->Lock(
-        byteToLock, bytesToWrite,
-        &region1, &region1Size,
-        &region2, &region2Size,
-        0
-    ))) {
+    if (SUCCEEDED(gSecondaryBuff->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2,
+                                       &region2Size, 0))) {
         // TODO: assert regionSizes
         //assert(false && "regionSizes are invalid!");
 
         const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
-        i16* sampleOut{ static_cast<i16 *>(region1) };
+        i16* sampleOut{ static_cast<i16*>(region1) };
 
         // TODO: collapse loops to one
         for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
             // Sine wave
-            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) / static_cast<f32>(soundOutput->wavePeriod)
-                * 2 * PI32 };
+            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) /
+                         static_cast<f32>(soundOutput->wavePeriod) * 2 * PI32 };
             const f32 sineValue{ sinf(t) };
             const i16 sampleValue{ static_cast<i16>(sineValue * soundOutput->toneVolume) };
 
@@ -369,11 +351,11 @@ Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD byte
         }
 
         const DWORD region2SampleCount{ region2Size / soundOutput->bytesPerSample };
-        sampleOut = static_cast<i16 *>(region2);
+        sampleOut = static_cast<i16*>(region2);
 
         for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
-            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) / static_cast<f32>(soundOutput->wavePeriod)
-                * 2 * PI32 };
+            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) /
+                         static_cast<f32>(soundOutput->wavePeriod) * 2 * PI32 };
             const f32 sineValue{ sinf(t) };
             const i16 sampleValue{ static_cast<i16>(sineValue * soundOutput->toneVolume) };
 
@@ -393,9 +375,9 @@ int WINAPI
 WinMain(
     // commenting out removed C4100 warnings for unreferenced parameters
     HINSTANCE hInstance, // A handle to the current instance of the application
-    HINSTANCE, //hPrevInstance, Not in use anymore
-    PSTR, //lpCmdLine, Command line arguments
-    int //nCmdShow Window visibility option
+    HINSTANCE,           // hPrevInstance, Not in use anymore
+    PSTR,                // lpCmdLine, Command line arguments
+    int                  // nCmdShow Window visibility option
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
@@ -406,7 +388,7 @@ WinMain(
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = Win32MainWindowCallback;
-    // GetModuleHandle(0) returns hInstance
+    //GetModuleHandle(0) returns hInstance
     windowClass.hInstance = hInstance;
     //HICON     hIcon;
 
@@ -414,13 +396,10 @@ WinMain(
     windowClass.lpszClassName = name;
 
     if (RegisterClass(&windowClass)) {
-        const HWND windowHandle = CreateWindowExA(
-            0, name, name,
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            // Window size and position
-            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            0, 0, hInstance, 0
-        );
+        const HWND windowHandle = CreateWindowExA(0, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                                  // Window size and position
+                                                  CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                                  CW_USEDEFAULT, 0, 0, hInstance, 0);
 
         if (windowHandle) {
             Win32SoundOutput soundOutput{};
@@ -451,7 +430,6 @@ WinMain(
                 ++xOffsetGradient;
                 ++yOffsetGradient;
 
-
                 // NOTE: DirectSound output test
                 // Circular buffer so we might get two regions to write to
 
@@ -463,15 +441,17 @@ WinMain(
                 DWORD writeCursor;
 
                 if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
-                    const DWORD byteToLock{ (soundOutput.runningSampleIndex * soundOutput.bytesPerSample)
-                        % soundOutput.buffSize };
+                    const DWORD byteToLock{ (soundOutput.runningSampleIndex *
+                                             soundOutput.bytesPerSample) %
+                                            soundOutput.buffSize };
                     DWORD bytesToWrite;
 
                     // NOTE: a way to log variables
                     //OutputDebugStringA("-----\n");
                     //char buf[256];
-                    //sprintf_s(buf, "playCursor=%u, writeCursor=%u, byteToLock=%u, runningIndex=%u\n",
-                    //    playCursor, writeCursor, byteToLock, soundOutput.runningSampleIndex);
+                    //sprintf_s(buf, "playCursor=%u, writeCursor=%u, byteToLock=%u,
+                    //runningIndex=%u\n",
+                    //   playCursor, writeCursor, byteToLock, soundOutput.runningSampleIndex);
                     //OutputDebugStringA(buf);
 
                     // TODO: change to a lower latency offset
@@ -495,16 +475,15 @@ WinMain(
 
                 const HDC deviceContext{ GetDC(windowHandle) };
                 auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
-                Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
+                Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
+                                         wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
             }
-        }
-        else {
+        } else {
             // NOTE: Log?
             OutputDebugStringA("Failed to create windowHandle!\n");
         }
-    }
-    else {
+    } else {
         // NOTE: Log?
         OutputDebugStringA("Failed to register windowClass!\n");
     }
