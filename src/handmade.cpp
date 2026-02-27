@@ -18,13 +18,12 @@ static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 #define GLOBAL static
 #define LOCAL_PERSIST static
 
-#define PI32 3.14159265359f
-
 // Typedefs for common types
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
+typedef i32 bool32;
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -51,11 +50,12 @@ struct WindowDimension {
 };
 
 
-GLOBAL bool gRunning{ false };
+GLOBAL bool32 gIsGameRunning{ false };
 GLOBAL Win32OffScreenBuffer gScreenBuff;
 
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 
+GLOBAL constexpr f32 PI32{ 3.14159265359f };
 
 INTERNAL WindowDimension
 Win32GetWindowDimensions(HWND windowHandle) {
@@ -152,12 +152,12 @@ Win32MainWindowCallback(
         case WM_CLOSE: {
             // TODO: show a message for closing
             OutputDebugStringA("WM_CLOSE\n");
-            gRunning = false;
+            gIsGameRunning = false;
         } break;
         case WM_DESTROY: {
             // NOTE: This might happen as an error?
             OutputDebugStringA("WM_DESTROY\n");
-            gRunning = false;
+            gIsGameRunning = false;
         } break;
         case WM_ACTIVATEAPP: {
             OutputDebugStringA("WM_ACTIVATEAPP\n");
@@ -180,9 +180,9 @@ Win32MainWindowCallback(
             if (vkCode == VK_F4) {
                 OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
                 // Should always be true here
-                bool altPressed{ (lParam & (1 << 29)) != 0 };
+                bool32 altPressed{ (lParam & (1 << 29)) != 0 };
                 if (altPressed) {
-                    gRunning = false;
+                    gIsGameRunning = false;
                 } else {
                     assert(false && "SYSKEYDOWN did not have the alt key pressed");
                 }
@@ -195,8 +195,8 @@ Win32MainWindowCallback(
             u32 vkCode{ static_cast<u32>(wParam) };
             // lParam contains additional information about keystrokes
             // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-            bool wasDown{ (lParam & (1 << 30)) != 0 };
-            bool isDown{ (lParam & (1 << 31)) == 0 };
+            bool32 wasDown{ (lParam & (1 << 30)) != 0 };
+            bool32 isDown{ (lParam & (1 << 31)) == 0 };
 
             // If continuously pressing
             // TODO: should change to handle that case also instead of breaking?
@@ -426,20 +426,20 @@ WinMain(
             Win32SoundOutput soundOutput{};
             Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
             Win32FillSoundBuffer(&soundOutput, 0, soundOutput.buffSize);
-            bool isSoundPlaying{ false };
+            bool32 isSoundPlaying{ false };
 
             // Animating gradient
             u32 xOffsetGradient{};
             u32 yOffsetGradient{};
 
             // The main loop!
-            gRunning = true;
-            while (gRunning) {
+            gIsGameRunning = true;
+            while (gIsGameRunning) {
                 // Windows message queue, everything has to go through the OS
                 MSG message;
                 while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
                     if (message.message == WM_QUIT) {
-                        gRunning = false;
+                        gIsGameRunning = false;
                     }
 
                     TranslateMessage(&message);
