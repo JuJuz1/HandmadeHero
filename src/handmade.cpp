@@ -2,9 +2,9 @@
 #include <windows.h>
 
 #include <cassert>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
-#include <math.h>
-#include <stdint.h>
 
 // Ensure we are compiling as 64-bit
 // NOTE: is this a good way?
@@ -402,6 +402,7 @@ WinMain(
                                                   CW_USEDEFAULT, 0, 0, hInstance, 0);
 
         if (windowHandle) {
+            // DirectSound
             Win32SoundOutput soundOutput{};
             Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
             Win32FillSoundBuffer(&soundOutput, 0, soundOutput.buffSize);
@@ -411,8 +412,18 @@ WinMain(
             u32 xOffsetGradient{};
             u32 yOffsetGradient{};
 
+            // Performance statistics
+            LARGE_INTEGER freqCounter;
+            QueryPerformanceFrequency(&freqCounter);
+            i64 perfCounterFreq{ freqCounter.QuadPart };
+            LARGE_INTEGER lastCounter;
+            QueryPerformanceCounter(&lastCounter);
+            // RDTSC
+            u64 lastCycleCount{ __rdtsc() };
+
             // The main loop!
             gIsGameRunning = true;
+
             while (gIsGameRunning) {
                 // Windows message queue, everything has to go through the OS
                 MSG message;
@@ -426,7 +437,7 @@ WinMain(
                 }
 
                 DrawGradient(&gScreenBuff, xOffsetGradient, yOffsetGradient);
-                // Overflows to zero
+                // Overflows to zero eventually
                 ++xOffsetGradient;
                 ++yOffsetGradient;
 
@@ -445,15 +456,6 @@ WinMain(
                                              soundOutput.bytesPerSample) %
                                             soundOutput.buffSize };
                     DWORD bytesToWrite;
-
-                    // NOTE: a way to log variables
-                    //OutputDebugStringA("-----\n");
-                    //char buf[256];
-                    //sprintf_s(buf, "playCursor=%u, writeCursor=%u, byteToLock=%u,
-                    //runningIndex=%u\n",
-                    //   playCursor, writeCursor, byteToLock, soundOutput.runningSampleIndex);
-                    //OutputDebugStringA(buf);
-
                     // TODO: change to a lower latency offset
                     // To the end and wrap behind playCursor
                     if (byteToLock > playCursor) {
@@ -478,6 +480,29 @@ WinMain(
                 Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                          wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
+
+                // Performance
+
+                // We only query the performance once per frame so that we don't leave out the time
+                // between the frame's end and start
+                LARGE_INTEGER endCounter;
+                QueryPerformanceCounter(&endCounter);
+                const u64 endCycleCount{ __rdtsc() };
+
+                const i64 counterElapsed{ endCounter.QuadPart - lastCounter.QuadPart };
+                lastCounter = endCounter;
+                const f64 cycleElapsedM{ static_cast<f64>(endCycleCount - lastCycleCount) /
+                                         (1000.0 * 1000.0) };
+                lastCycleCount = endCycleCount;
+
+                // Multiply by 1000 so that the integer divide doesn't always result in 0, assuming
+                // the frame took less than 1 second
+                const f64 ms{ (1000.0 * counterElapsed) / perfCounterFreq };
+                const f64 FPS{ 1000.0 / ms };
+                char buf[64]; // yikes...
+                sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS,
+                          cycleElapsedM);
+                OutputDebugStringA(buf);
             }
         } else {
             // NOTE: Log?

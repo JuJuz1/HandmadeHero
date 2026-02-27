@@ -1,11 +1,12 @@
 # clang-format -style=llvm -dump-config > .clang-format
+
 # Modified:
+# AlwaysBreakAfterDefinitionReturnType: All
 # ColumnLimit:     100
 # Cpp11BracedListStyle: Block
 # IndentWidth:     4
+# InsertBraces:    true
 # PointerAlignment: Left
-# AlwaysBreakAfterDefinitionReturnType: All
-
 
 ---
 Language:        Cpp
@@ -194,7 +195,7 @@ IndentPPDirectives: None
 IndentRequiresClause: true
 IndentWidth:     4
 IndentWrappedFunctionNames: false
-InsertBraces:    false
+InsertBraces:    true
 InsertNewlineAtEOF: false
 InsertTrailingCommas: None
 IntegerLiteralSeparator:
