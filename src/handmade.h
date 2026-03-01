@@ -1,6 +1,7 @@
 #ifndef HANDMADE_H
 #define HANDMADE_H
 
+#include <cmath> // TODO: write own sinf
 #include <cstdint>
 
 // Ensure we are compiling as 64-bit for now...
@@ -30,12 +31,17 @@ typedef double f64;
 GLOBAL constexpr f32 PI32{ 3.14159265359f };
 
 // Struct to hold buffer info
-struct OffScreenBuffer {
+struct GameOffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
-    u32 bytesPerPixel;
     u32 pitch;
+};
+
+struct GameSoundOutputBuffer {
+    u32 samplesPerSecond;
+    u32 sampleCount;
+    i16* samples;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
@@ -46,7 +52,10 @@ struct OffScreenBuffer {
 
 /// Services that the game provides to the platform layer ///
 
+INTERNAL void GameOutputSound(const GameSoundOutputBuffer* buff);
+
 // Input, bitmap buffer, sound buffer and timing
-void GameUpdateAndRender(OffScreenBuffer* buff, u32 xOffset, u32 yOffset);
+INTERNAL void GameUpdateAndRender(const GameOffScreenBuffer* buff, u32 xOffset, u32 yOffset,
+                                  const GameSoundOutputBuffer* soundBuff);
 
 #endif // HANDMADE_H

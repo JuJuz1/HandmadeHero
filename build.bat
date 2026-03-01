@@ -7,13 +7,14 @@ mkdir build
 pushd build
 rem We are now inside build
 
-rem /TP /EHsc- /O2 /Ob2 /Fe:test.exe
+rem /TP /EHsc- /GR- /O2 /Ob2 /Fe:test.exe
 rem /TP compile all files as c++
 rem /EHsc- disable exception handling for c++ and extern "C"
 rem /GR- disable RTTI
+rem /Bt better output info
 
 rem link the User32.lib, Gdi32.lib to create UI
-cl /Zi /FC /W4 /Bt /std:c++20 /I ../src ../src/win32/win32_handmade.cpp User32.lib Gdi32.lib
+cl /Zi /FC /W4 /std:c++20 /I ../src ../src/win32/win32_handmade.cpp User32.lib Gdi32.lib
 
 rem not actually needed, to pop the build directory?
 rem popd

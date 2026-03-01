@@ -9,7 +9,6 @@ This is not a final platform layer!
 #include <windows.h>
 
 #include <cassert>
-#include <cmath> // TODO: write own sinf
 #include <cstdio>
 
 struct Win32OffScreenBuffer {
@@ -210,14 +209,13 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
         LPDIRECTSOUND dSound;
 
         // For "both" buffers
-        WAVEFORMATEX waveFormat{};
+        WAVEFORMATEX waveFormat;
         waveFormat.wFormatTag = WAVE_FORMAT_PCM;
         waveFormat.nChannels = 2;
         waveFormat.nSamplesPerSec = samplesPerSecond;
         waveFormat.wBitsPerSample = 16;
         waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
         waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
-        ;
         waveFormat.cbSize = 0;
 
         if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
@@ -270,11 +268,39 @@ struct Win32SoundOutput {
     u32 wavePeriod{ samplesPerSecond / toneHz };
     u32 bytesPerSample{ sizeof(u16) * 2 };
     u32 buffSize{ samplesPerSecond * bytesPerSample };
+    u32 latencySampleCount{ samplesPerSecond / 15 };
     u32 runningSampleIndex;
 };
 
 INTERNAL void
-Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite) {
+Win32ClearSoundBuffer(Win32SoundOutput* soundOutput) {
+    LPVOID region1;
+    DWORD region1Size;
+    LPVOID region2;
+    DWORD region2Size;
+    if (SUCCEEDED(gSecondaryBuff->Lock(0, soundOutput->buffSize, &region1, &region1Size, &region2,
+                                       &region2Size, 0))) {
+        u8* destSample{ static_cast<u8*>(region1) };
+
+        for (DWORD i{ 0 }; i < region1Size; ++i) {
+            *destSample++ = 0;
+        }
+
+        destSample = static_cast<u8*>(region2);
+
+        for (DWORD i{ 0 }; i < region2Size; ++i) {
+            *destSample++ = 0;
+        }
+
+        gSecondaryBuff->Unlock(region1, region1Size, region2, region2Size);
+    } else {
+        // log, couldnt lock while clearing
+    }
+}
+
+INTERNAL void
+Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
+                     const GameSoundOutputBuffer* sourceBuff) {
     LPVOID region1;
     DWORD region1Size;
     LPVOID region2;
@@ -285,32 +311,22 @@ Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD byte
         //assert(false && "regionSizes are invalid!");
 
         const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
-        i16* sampleOut{ static_cast<i16*>(region1) };
+        i16* destSample{ static_cast<i16*>(region1) };
+        i16* srcSample{ sourceBuff->samples };
 
         // TODO: collapse loops to one
         for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
-            // Sine wave
-            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) /
-                         static_cast<f32>(soundOutput->wavePeriod) * 2 * PI32 };
-            const f32 sineValue{ sinf(t) };
-            const i16 sampleValue{ static_cast<i16>(sineValue * soundOutput->toneVolume) };
-
-            *sampleOut++ = sampleValue;
-            *sampleOut++ = sampleValue;
+            *destSample++ = *srcSample++;
+            *destSample++ = *srcSample++;
             ++soundOutput->runningSampleIndex;
         }
 
         const DWORD region2SampleCount{ region2Size / soundOutput->bytesPerSample };
-        sampleOut = static_cast<i16*>(region2);
+        destSample = static_cast<i16*>(region2);
 
         for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
-            const f32 t{ static_cast<f32>(soundOutput->runningSampleIndex) /
-                         static_cast<f32>(soundOutput->wavePeriod) * 2 * PI32 };
-            const f32 sineValue{ sinf(t) };
-            const i16 sampleValue{ static_cast<i16>(sineValue * soundOutput->toneVolume) };
-
-            *sampleOut++ = sampleValue;
-            *sampleOut++ = sampleValue;
+            *destSample++ = *srcSample++;
+            *destSample++ = *srcSample++;
             ++soundOutput->runningSampleIndex;
         }
 
@@ -355,8 +371,11 @@ WinMain(
             // DirectSound
             Win32SoundOutput soundOutput{};
             Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
-            Win32FillSoundBuffer(&soundOutput, 0, soundOutput.buffSize);
-            bool32 isSoundPlaying{ false };
+            Win32ClearSoundBuffer(&soundOutput);
+            gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
+
+            i16* samples{ static_cast<i16*>(
+                VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
 
             // Animating gradient
             u32 xOffsetGradient{};
@@ -385,52 +404,60 @@ WinMain(
                     TranslateMessage(&message);
                     DispatchMessageA(&message);
                 }
-                // Call non-platform specific code
-                OffScreenBuffer buff;
-                buff.memory = gScreenBuff.memory;
-                buff.width = gScreenBuff.width;
-                buff.height = gScreenBuff.height;
-                buff.bytesPerPixel = gScreenBuff.bytesPerPixel;
-                buff.pitch = gScreenBuff.pitch;
-                GameUpdateAndRender(&buff, xOffsetGradient, yOffsetGradient);
 
-                //DrawGradient(&gScreenBuff, xOffsetGradient, yOffsetGradient);
-                // Overflows to zero eventually
-                ++xOffsetGradient;
-                ++yOffsetGradient;
-
-                // NOTE: DirectSound output test
+                // Directsound
                 // Circular buffer so we might get two regions to write to
-
                 // A single sample is one LEFT and RIGHT together
                 //  i16  i16 ...
                 // [LEFT RIGHT] LEFT RIGHT ...
-
+                DWORD byteToLock{};
+                DWORD targetCursor;
+                DWORD bytesToWrite{};
                 DWORD playCursor;
                 DWORD writeCursor;
+                bool32 isSoundValid{ false };
 
                 if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
-                    const DWORD byteToLock{ (soundOutput.runningSampleIndex *
-                                             soundOutput.bytesPerSample) %
-                                            soundOutput.buffSize };
-                    DWORD bytesToWrite;
-                    // TODO: change to a lower latency offset
+                    byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
+                                 soundOutput.buffSize;
+
+                    targetCursor = ((playCursor +
+                                     soundOutput.latencySampleCount * soundOutput.bytesPerSample) %
+                                    soundOutput.buffSize);
                     // To the end and wrap behind playCursor
-                    if (byteToLock > playCursor) {
+                    if (byteToLock > targetCursor) {
                         bytesToWrite = soundOutput.buffSize - byteToLock;
-                        bytesToWrite += playCursor;
+                        bytesToWrite += targetCursor;
                     } else {
-                        bytesToWrite = playCursor - byteToLock;
+                        bytesToWrite = targetCursor - byteToLock;
                     }
 
-                    Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite);
+                    isSoundValid = true;
                 } else {
                     // log, couldnt get curr pos
                 }
 
-                if (!isSoundPlaying) {
-                    isSoundPlaying = true;
-                    gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
+                // Call non-platform specific code
+                GameOffScreenBuffer buff;
+                buff.memory = gScreenBuff.memory;
+                buff.width = gScreenBuff.width;
+                buff.height = gScreenBuff.height;
+                buff.pitch = gScreenBuff.pitch;
+
+                GameSoundOutputBuffer soundBuff;
+                soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
+                soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
+                soundBuff.samples = samples;
+
+                GameUpdateAndRender(&buff, xOffsetGradient, yOffsetGradient, &soundBuff);
+
+                // Overflows to zero eventually
+                ++xOffsetGradient;
+                ++yOffsetGradient;
+
+                if (isSoundValid) {
+                    // soundBuff now contains game generated output
+                    Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
                 }
 
                 const HDC deviceContext{ GetDC(windowHandle) };
