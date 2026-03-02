@@ -11,23 +11,16 @@ This is not a final platform layer!
 #include <cassert>
 #include <cstdio>
 
-struct Win32OffScreenBuffer {
-    BITMAPINFO info;
-    void* memory;
-    i32 width;
-    i32 height;
-    u32 bytesPerPixel;
-    u32 pitch;
-};
-
-struct WindowDimension {
-    i32 width;
-    i32 height;
-};
+#include "win32_handmade.h"
 
 GLOBAL bool32 gIsGameRunning{ false };
 GLOBAL Win32OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
+
+// TODO: will be refactored in episode 17
+// as it currently doesn't support multiple key pressed per (Windows) poll time
+// Currently the polling goes through Win32MainWindowCallback, which is not good!
+GLOBAL game::Input gInput{};
 
 INTERNAL WindowDimension
 Win32GetWindowDimensions(HWND windowHandle) {
@@ -125,23 +118,28 @@ Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         u32 vkCode{ static_cast<u32>(wParam) };
         // lParam contains additional information about keystrokes
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-        bool32 wasDown{ (lParam & (1 << 30)) != 0 };
         bool32 isDown{ (lParam & (1 << 31)) == 0 };
+        bool32 wasDown{ (lParam & (1 << 30)) != 0 };
+
+        //char buf[32];
+        //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
+        //OutputDebugStringA(buf);
 
         // If continuously pressing
         // TODO: should change to handle that case also instead of breaking?
-        if (wasDown == isDown) {
-            break;
-        }
-
+        //if (wasDown != isDown) {
         if (vkCode == 'W') {
             OutputDebugStringA("W\n");
+            gInput.playerInputs->up.endedDown = isDown;
         } else if (vkCode == 'S') {
             OutputDebugStringA("S\n");
+            gInput.playerInputs->down.endedDown = isDown;
         } else if (vkCode == 'A') {
             OutputDebugStringA("A\n");
+            gInput.playerInputs->left.endedDown = isDown;
         } else if (vkCode == 'D') {
             OutputDebugStringA("D\n");
+            gInput.playerInputs->right.endedDown = isDown;
         } else if (vkCode == 'Q') {
             OutputDebugStringA("Q\n");
         } else if (vkCode == 'E') {
@@ -155,17 +153,11 @@ Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         } else if (vkCode == VK_RIGHT) {
             OutputDebugStringA("VK_RIGHT\n");
         } else if (vkCode == VK_ESCAPE) {
-            OutputDebugStringA("VK_ESCAPE ");
-            if (isDown) {
-                OutputDebugStringA("IS DOWN");
-            }
-            if (wasDown) {
-                OutputDebugStringA("WAS DOWN");
-            }
-            OutputDebugStringA("\n");
+            OutputDebugStringA("VK_ESCAPE\n");
         } else if (vkCode == VK_SPACE) {
             OutputDebugStringA("VK_SPACE\n");
         }
+        //}
     } break;
     case WM_KEYUP: {
     } break;
@@ -259,18 +251,6 @@ Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
         // TODO: log, couldn't load dll
     }
 }
-
-// Secondary buffer values
-struct Win32SoundOutput {
-    u32 samplesPerSecond{ 48000 };
-    u32 toneHz{ 256 };      // Pitch
-    i32 toneVolume{ 3000 }; // Amplitude (volume)
-    u32 wavePeriod{ samplesPerSecond / toneHz };
-    u32 bytesPerSample{ sizeof(u16) * 2 };
-    u32 buffSize{ samplesPerSecond * bytesPerSample };
-    u32 latencySampleCount{ samplesPerSecond / 15 };
-    u32 runningSampleIndex;
-};
 
 INTERNAL void
 Win32ClearSoundBuffer(Win32SoundOutput* soundOutput) {
@@ -378,10 +358,6 @@ WinMain(
             i16* samples{ static_cast<i16*>(
                 VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
 
-            // Animating gradient
-            u32 xOffsetGradient{};
-            u32 yOffsetGradient{};
-
             // Performance statistics
             LARGE_INTEGER freqCounter;
             QueryPerformanceFrequency(&freqCounter);
@@ -395,6 +371,9 @@ WinMain(
             gIsGameRunning = true;
 
             while (gIsGameRunning) {
+                // Clear input
+                gInput = game::Input{};
+
                 // Windows message queue, everything has to go through the OS
                 MSG message;
                 while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
@@ -439,22 +418,18 @@ WinMain(
                 }
 
                 // Call non-platform specific code
-                game::OffScreenBuffer buff;
-                buff.memory = gScreenBuff.memory;
-                buff.width = gScreenBuff.width;
-                buff.height = gScreenBuff.height;
-                buff.pitch = gScreenBuff.pitch;
+                game::OffScreenBuffer screenBuff;
+                screenBuff.memory = gScreenBuff.memory;
+                screenBuff.width = gScreenBuff.width;
+                screenBuff.height = gScreenBuff.height;
+                screenBuff.pitch = gScreenBuff.pitch;
 
                 game::SoundOutputBuffer soundBuff;
                 soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
                 soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
                 soundBuff.samples = samples;
 
-                game::UpdateAndRender(&buff, xOffsetGradient, yOffsetGradient, &soundBuff);
-
-                // Overflows to zero eventually
-                ++xOffsetGradient;
-                ++yOffsetGradient;
+                game::UpdateAndRender(&screenBuff, &soundBuff, &gInput);
 
                 if (isSoundValid) {
                     // soundBuff now contains game generated output
@@ -466,7 +441,7 @@ WinMain(
                 Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                          wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
-#if 1
+#if 0
                 // Performance
 
                 // We only query the performance once per frame so that we don't leave out the time

@@ -13,6 +13,8 @@ static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 #define GLOBAL static
 #define LOCAL_PERSIST static
 
+#define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 // Typedefs for common types
 typedef int8_t i8;
 typedef int16_t i16;
@@ -46,6 +48,24 @@ struct SoundOutputBuffer {
     i16* samples;
 };
 
+struct ButtonState {
+    //u32 halfTransitionCount; // For controllers
+    bool32 endedDown; // If the button was down at the end of the frame
+};
+
+struct InputButtons {
+    ButtonState up;
+    ButtonState down;
+    ButtonState left;
+    ButtonState right;
+};
+
+GLOBAL constexpr u8 playerCount{ 2 };
+
+struct Input {
+    InputButtons playerInputs[playerCount];
+};
+
 // We use the style 2 (Game as a service to the OS) described in the series
 
 /// Services that the platform layer provides to the game ///
@@ -54,13 +74,9 @@ struct SoundOutputBuffer {
 
 /// Services that the game provides to the platform layer ///
 
-INTERNAL void OutputSound(const SoundOutputBuffer* buff);
-
-INTERNAL void DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset);
-
 // Input, bitmap buffer, sound buffer and timing
-INTERNAL void UpdateAndRender(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset,
-                              const SoundOutputBuffer* soundBuff);
+INTERNAL void UpdateAndRender(const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
+                              const Input* input);
 
 } //namespace game
 

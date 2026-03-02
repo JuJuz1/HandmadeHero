@@ -3,10 +3,9 @@
 namespace game {
 
 INTERNAL void
-OutputSound(const SoundOutputBuffer* buff) {
+OutputSound(const SoundOutputBuffer* buff, u32 toneHz) {
     LOCAL_PERSIST f32 tSine;
     constexpr i32 toneVolume{ 3000 };
-    constexpr u32 toneHz{ 256 };
     const u32 wavePeriod{ buff->samplesPerSecond / toneHz };
 
     i16* sampleOut{ buff->samples };
@@ -52,12 +51,42 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
 }
 
 INTERNAL void
-UpdateAndRender(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset,
-                const SoundOutputBuffer* soundBuff) {
+UpdateAndRender(const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
+                const Input* input) {
+    LOCAL_PERSIST u32 xOffset{};
+    LOCAL_PERSIST u32 yOffset{};
+    LOCAL_PERSIST u32 toneHz{ 256 };
+
+    const InputButtons* input0{ &input->playerInputs[0] };
+    // Input (Godot style)
+    //if Input.just_pressed("A")
+    //if Input.just_released("A")
+    //if Input.pressed("A")
+
+    // Controllers:
+    //Input.AButtonEndedDown
+    //Input.AButtonHalfTransitionCount
+
+    constexpr u32 offset{ 10 };
+    if (input0->up.endedDown) {
+        yOffset -= offset;
+    }
+    if (input0->down.endedDown) {
+        yOffset += offset;
+    }
+    if (input0->left.endedDown) {
+        xOffset -= offset;
+    }
+    if (input0->right.endedDown) {
+        xOffset += offset;
+    }
+
     // TODO: allow sample offsets
-    OutputSound(soundBuff);
+    OutputSound(soundBuff, toneHz);
 
     DrawGradient(buff, xOffset, yOffset);
+    //++xOffset;
+    //++yOffset;
 }
 
 } //namespace game
