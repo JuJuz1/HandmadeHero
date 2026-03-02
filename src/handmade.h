@@ -30,9 +30,10 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-GLOBAL constexpr f32 PI32{ 3.14159265359f };
-
 namespace game {
+
+GLOBAL constexpr f32 PI32{ 3.14159265359f };
+GLOBAL constexpr u8 playerCount{ 2 };
 
 // Struct to hold buffer info
 struct OffScreenBuffer {
@@ -48,19 +49,25 @@ struct SoundOutputBuffer {
     i16* samples;
 };
 
-struct ButtonState {
+struct Button {
     //u32 halfTransitionCount; // For controllers
     bool32 endedDown; // If the button was down at the end of the frame
 };
 
 struct InputButtons {
-    ButtonState up;
-    ButtonState down;
-    ButtonState left;
-    ButtonState right;
+    // A union allows us to do:
+    // InputButtons b;
+    // b[0] is the same as b.up;
+    union {
+        Button buttons[4];
+        struct {
+            Button up;
+            Button down;
+            Button left;
+            Button right;
+        };
+    };
 };
-
-GLOBAL constexpr u8 playerCount{ 2 };
 
 struct Input {
     InputButtons playerInputs[playerCount];
