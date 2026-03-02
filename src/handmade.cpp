@@ -1,7 +1,9 @@
 #include "handmade.h"
 
+namespace game {
+
 INTERNAL void
-GameOutputSound(const GameSoundOutputBuffer* buff) {
+OutputSound(const SoundOutputBuffer* buff) {
     LOCAL_PERSIST f32 tSine;
     constexpr i32 toneVolume{ 3000 };
     constexpr u32 toneHz{ 256 };
@@ -22,7 +24,7 @@ GameOutputSound(const GameSoundOutputBuffer* buff) {
 }
 
 INTERNAL void
-DrawGradient(const GameOffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
+DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
     // NOTE: maybe see what the optimizer does to buff (passing by value vs pointer)
     // remember to not get fixated on micro-optimizations before actually doing optimization
     // though...
@@ -50,10 +52,12 @@ DrawGradient(const GameOffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
 }
 
 INTERNAL void
-GameUpdateAndRender(const GameOffScreenBuffer* buff, u32 xOffset, u32 yOffset,
-                    const GameSoundOutputBuffer* soundBuff) {
+UpdateAndRender(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset,
+                const SoundOutputBuffer* soundBuff) {
     // TODO: allow sample offsets
-    GameOutputSound(soundBuff);
+    OutputSound(soundBuff);
 
     DrawGradient(buff, xOffset, yOffset);
 }
+
+} //namespace game

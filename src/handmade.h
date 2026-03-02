@@ -30,15 +30,17 @@ typedef double f64;
 
 GLOBAL constexpr f32 PI32{ 3.14159265359f };
 
+namespace game {
+
 // Struct to hold buffer info
-struct GameOffScreenBuffer {
+struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
     u32 pitch;
 };
 
-struct GameSoundOutputBuffer {
+struct SoundOutputBuffer {
     u32 samplesPerSecond;
     u32 sampleCount;
     i16* samples;
@@ -52,10 +54,14 @@ struct GameSoundOutputBuffer {
 
 /// Services that the game provides to the platform layer ///
 
-INTERNAL void GameOutputSound(const GameSoundOutputBuffer* buff);
+INTERNAL void OutputSound(const SoundOutputBuffer* buff);
+
+INTERNAL void DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset);
 
 // Input, bitmap buffer, sound buffer and timing
-INTERNAL void GameUpdateAndRender(const GameOffScreenBuffer* buff, u32 xOffset, u32 yOffset,
-                                  const GameSoundOutputBuffer* soundBuff);
+INTERNAL void UpdateAndRender(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset,
+                              const SoundOutputBuffer* soundBuff);
+
+} //namespace game
 
 #endif // HANDMADE_H

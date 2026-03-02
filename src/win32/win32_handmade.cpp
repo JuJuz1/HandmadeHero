@@ -300,7 +300,7 @@ Win32ClearSoundBuffer(Win32SoundOutput* soundOutput) {
 
 INTERNAL void
 Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
-                     const GameSoundOutputBuffer* sourceBuff) {
+                     const game::SoundOutputBuffer* sourceBuff) {
     LPVOID region1;
     DWORD region1Size;
     LPVOID region2;
@@ -374,13 +374,14 @@ WinMain(
             Win32ClearSoundBuffer(&soundOutput);
             gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
 
+            // TODO: pool with bitmap
             i16* samples{ static_cast<i16*>(
                 VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
 
             // Animating gradient
             u32 xOffsetGradient{};
             u32 yOffsetGradient{};
-#if 0
+
             // Performance statistics
             LARGE_INTEGER freqCounter;
             QueryPerformanceFrequency(&freqCounter);
@@ -389,7 +390,7 @@ WinMain(
             QueryPerformanceCounter(&lastCounter);
             // RDTSC
             u64 lastCycleCount{ __rdtsc() };
-#endif
+
             // The main loop!
             gIsGameRunning = true;
 
@@ -421,9 +422,9 @@ WinMain(
                     byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
                                  soundOutput.buffSize;
 
-                    targetCursor = ((playCursor +
-                                     soundOutput.latencySampleCount * soundOutput.bytesPerSample) %
-                                    soundOutput.buffSize);
+                    targetCursor =
+                        (playCursor + soundOutput.latencySampleCount * soundOutput.bytesPerSample) %
+                        soundOutput.buffSize;
                     // To the end and wrap behind playCursor
                     if (byteToLock > targetCursor) {
                         bytesToWrite = soundOutput.buffSize - byteToLock;
@@ -438,18 +439,18 @@ WinMain(
                 }
 
                 // Call non-platform specific code
-                GameOffScreenBuffer buff;
+                game::OffScreenBuffer buff;
                 buff.memory = gScreenBuff.memory;
                 buff.width = gScreenBuff.width;
                 buff.height = gScreenBuff.height;
                 buff.pitch = gScreenBuff.pitch;
 
-                GameSoundOutputBuffer soundBuff;
+                game::SoundOutputBuffer soundBuff;
                 soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
                 soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
                 soundBuff.samples = samples;
 
-                GameUpdateAndRender(&buff, xOffsetGradient, yOffsetGradient, &soundBuff);
+                game::UpdateAndRender(&buff, xOffsetGradient, yOffsetGradient, &soundBuff);
 
                 // Overflows to zero eventually
                 ++xOffsetGradient;
@@ -465,7 +466,7 @@ WinMain(
                 Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                          wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
-#if 0
+#if 1
                 // Performance
 
                 // We only query the performance once per frame so that we don't leave out the time

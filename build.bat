@@ -3,7 +3,7 @@
 rem setup env for x64
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
 
-mkdir build
+IF NOT EXIST build mkdir build
 pushd build
 rem We are now inside build
 
