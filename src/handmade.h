@@ -19,6 +19,8 @@ HANDMADE_DEBUG:
 */
 
 // TODO: use these ASSERT(s) vs assert from <cassert>?
+// probably just make this better to include more information (error messages and variadic arguments
+// of values?)
 #ifdef HANDMADE_DEBUG
 // clang-format off
 #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; }
@@ -44,7 +46,7 @@ typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
-typedef i32 bool32;
+typedef i32 bool32; // We never use bool
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -94,6 +96,7 @@ struct InputButtons {
 };
 
 struct Input {
+    // TODO: insert frame statistics
     InputButtons playerInputs[playerCount];
 };
 

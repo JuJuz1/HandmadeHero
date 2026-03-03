@@ -8,12 +8,11 @@ This is not a final platform layer!
 #include <dsound.h>
 #include <windows.h>
 
-#include <cassert>
 #include <cstdio>
 
 #include "win32_handmade.h"
 
-GLOBAL bool32 gIsGameRunning{ false };
+GLOBAL bool32 gIsGameRunning;
 GLOBAL Win32OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 
@@ -107,10 +106,9 @@ Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
             // Should always be true here
             bool32 altPressed{ (lParam & (1 << 29)) != 0 };
+            ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
             if (altPressed) {
                 gIsGameRunning = false;
-            } else {
-                assert(false && "SYSKEYDOWN did not have the alt key pressed");
             }
         }
     } break;
@@ -291,7 +289,7 @@ Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD byte
     if (SUCCEEDED(gSecondaryBuff->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2,
                                        &region2Size, 0))) {
         // TODO: assert regionSizes
-        //assert(false && "regionSizes are invalid!");
+        //ASSERT(false && "regionSizes are invalid!");
 
         const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
         i16* destSample{ static_cast<i16*>(region1) };
@@ -387,7 +385,8 @@ WinMain(
                 static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
             if (!(samples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
                 // at least one of these failed, the game will not run correctly (or at all!)
-                ASSERT(false);
+                // TODO: better assertion
+                ASSERT(false && "One or more of the game memory allocations failed!");
             }
 
             // Performance statistics
@@ -427,7 +426,7 @@ WinMain(
                 DWORD bytesToWrite{};
                 DWORD playCursor;
                 DWORD writeCursor;
-                bool32 isSoundValid{ false };
+                bool32 isSoundValid{};
 
                 if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
                     byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
@@ -449,7 +448,7 @@ WinMain(
                     // log, couldnt get curr pos
                 }
 
-                // Call non-platform specific code
+                // Call game code
                 game::OffScreenBuffer screenBuff{};
                 screenBuff.memory = gScreenBuff.memory;
                 screenBuff.width = gScreenBuff.width;
