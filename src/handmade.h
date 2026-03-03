@@ -36,10 +36,10 @@ HANDMADE_DEBUG:
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-#define KILOBYTES(count) ((count) * 1024)
-#define MEGABYTES(count) (KILOBYTES(count) * 1024)
-#define GIGABYTES(count) (MEGABYTES(count) * 1024)
-#define TERABYTES(count) (GIGABYTES(count) * 1024)
+#define KILOBYTES(count) ((count) * 1024LL)
+#define MEGABYTES(count) (KILOBYTES(count) * 1024LL)
+#define GIGABYTES(count) (MEGABYTES(count) * 1024LL)
+#define TERABYTES(count) (GIGABYTES(count) * 1024LL)
 
 // Typedefs for common types
 typedef int8_t i8;

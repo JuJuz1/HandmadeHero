@@ -365,22 +365,21 @@ WinMain(
                 VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
 
 #if HANDMADE_INTERNAL
-            // allocate at the same address
-            LPVOID baseAddress{ reinterpret_cast<LPVOID>(TERABYTES(static_cast<u64>(2))) };
+            // allocate at the same address if developer build
+            LPVOID baseAddress{ reinterpret_cast<LPVOID>(TERABYTES(2)) };
 #else
             LPVOID baseAddress{ 0 };
 #endif
             game::GameMemory gameMemory{};
             gameMemory.permanentStorageSize = MEGABYTES(64);
             // Integral promotion, otherwise we wrap to 0 because we hit u32 max...
-            gameMemory.transientStorageSize = GIGABYTES(static_cast<u64>(4));
+            gameMemory.transientStorageSize = GIGABYTES(4);
 
+            // TODO: Variable memory allocation based on platform statistics
             u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
             gameMemory.permanentStorage =
                 VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-            // Variable memory allocation based on platform
-            // TODO: align with permamentStorage
             gameMemory.transientStorage =
                 static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
             if (!(samples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
