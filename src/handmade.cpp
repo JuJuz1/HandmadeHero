@@ -2,6 +2,7 @@
 
 namespace game {
 
+// Write the sound data to buff
 INTERNAL void
 OutputSound(const SoundOutputBuffer* buff, u32 toneHz) {
     LOCAL_PERSIST f32 tSine;
@@ -51,11 +52,20 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
 }
 
 INTERNAL void
-UpdateAndRender(const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
+UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
                 const Input* input) {
-    LOCAL_PERSIST u32 xOffset{};
-    LOCAL_PERSIST u32 yOffset{};
-    LOCAL_PERSIST u32 toneHz{ 256 };
+
+    ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
+
+    GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
+    if (!memory->isInitialized) {
+        gameState->toneHz = 256;
+        gameState->xOffset = 0;
+        gameState->yOffset = 0;
+
+        // TODO: maybe make platform set this
+        memory->isInitialized = true;
+    }
 
     const InputButtons* input0{ &input->playerInputs[0] };
     // Input (Godot style)
@@ -69,22 +79,22 @@ UpdateAndRender(const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
 
     constexpr u32 offset{ 10 };
     if (input0->up.endedDown) {
-        yOffset -= offset;
+        gameState->yOffset -= offset;
     }
     if (input0->down.endedDown) {
-        yOffset += offset;
+        gameState->yOffset += offset;
     }
     if (input0->left.endedDown) {
-        xOffset -= offset;
+        gameState->xOffset -= offset;
     }
     if (input0->right.endedDown) {
-        xOffset += offset;
+        gameState->xOffset += offset;
     }
 
     // TODO: allow sample offsets
-    OutputSound(soundBuff, toneHz);
+    OutputSound(soundBuff, gameState->toneHz);
 
-    DrawGradient(buff, xOffset, yOffset);
+    DrawGradient(buff, gameState->xOffset, gameState->yOffset);
     //++xOffset;
     //++yOffset;
 }

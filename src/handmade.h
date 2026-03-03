@@ -8,12 +8,36 @@
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 
+/*
+HANDMADE_INTERNAL:
+    0: release builds
+    1: developer builds
+
+HANDMADE_DEBUG:
+    0: enables assertions
+    1: disables assertions
+*/
+
+// TODO: use these ASSERT(s) vs assert from <cassert>?
+#ifdef HANDMADE_DEBUG
+// clang-format off
+#define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; }
+// clang-format on
+#else
+#define ASSERT(expr)
+#endif
+
 // Defines for static
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+#define KILOBYTES(count) ((count) * 1024)
+#define MEGABYTES(count) (KILOBYTES(count) * 1024)
+#define GIGABYTES(count) (MEGABYTES(count) * 1024)
+#define TERABYTES(count) (GIGABYTES(count) * 1024)
 
 // Typedefs for common types
 typedef int8_t i8;
@@ -73,6 +97,17 @@ struct Input {
     InputButtons playerInputs[playerCount];
 };
 
+// All the memory the game needs
+struct GameMemory {
+    u64 permanentStorageSize;
+    void* permanentStorage;
+
+    u64 transientStorageSize;
+    void* transientStorage;
+
+    bool32 isInitialized;
+};
+
 // We use the style 2 (Game as a service to the OS) described in the series
 
 /// Services that the platform layer provides to the game ///
@@ -81,9 +116,15 @@ struct Input {
 
 /// Services that the game provides to the platform layer ///
 
-// Input, bitmap buffer, sound buffer and timing
-INTERNAL void UpdateAndRender(const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
-                              const Input* input);
+// Game's "main loop"
+INTERNAL void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff,
+                              const SoundOutputBuffer* soundBuff, const Input* input);
+
+struct GameState {
+    u32 xOffset;
+    u32 yOffset;
+    u32 toneHz;
+};
 
 } //namespace game
 

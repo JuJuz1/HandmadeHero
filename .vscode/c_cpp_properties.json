@@ -6,7 +6,8 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
-                "_DEBUG"
+                "HANDMADE_DEBUG",
+                "HANDMADE_INTERNAL"
             ],
             "windowsSdkVersion": "10.0.26100.0",
             "compilerPath": "cl.exe",

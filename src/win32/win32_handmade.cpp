@@ -20,7 +20,7 @@ GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 // TODO: will be refactored in episode 17
 // as it currently doesn't support multiple key pressed per (Windows) poll time
 // Currently the polling goes through Win32MainWindowCallback, which is not good!
-GLOBAL game::Input gInput{};
+GLOBAL game::Input gInput;
 
 INTERNAL WindowDimension
 Win32GetWindowDimensions(HWND windowHandle) {
@@ -93,6 +93,9 @@ Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         OutputDebugStringA("WM_SIZE\n");
     } break;
 
+#ifdef _DEBUG
+
+#endif
     // Key presses
 
     // SYSKEYDOWN is called whenever the key press includes alt
@@ -350,6 +353,11 @@ WinMain(
         if (windowHandle) {
             // DirectSound
             Win32SoundOutput soundOutput{};
+            soundOutput.samplesPerSecond = 48000;
+            soundOutput.bytesPerSample = sizeof(u16) * 2;
+            soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
+            soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15;
+
             Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
             Win32ClearSoundBuffer(&soundOutput);
             gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
@@ -357,6 +365,30 @@ WinMain(
             // TODO: pool with bitmap
             i16* samples{ static_cast<i16*>(
                 VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
+
+#if HANDMADE_INTERNAL
+            // allocate at the same address
+            LPVOID baseAddress{ reinterpret_cast<LPVOID>(TERABYTES(static_cast<u64>(2))) };
+#else
+            LPVOID baseAddress{ 0 };
+#endif
+            game::GameMemory gameMemory{};
+            gameMemory.permanentStorageSize = MEGABYTES(64);
+            // Integral promotion, otherwise we wrap to 0 because we hit u32 max...
+            gameMemory.transientStorageSize = GIGABYTES(static_cast<u64>(4));
+
+            u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
+            gameMemory.permanentStorage =
+                VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+            // Variable memory allocation based on platform
+            // TODO: align with permamentStorage
+            gameMemory.transientStorage =
+                static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
+            if (!(samples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
+                // at least one of these failed, the game will not run correctly (or at all!)
+                ASSERT(false);
+            }
 
             // Performance statistics
             LARGE_INTEGER freqCounter;
@@ -418,18 +450,18 @@ WinMain(
                 }
 
                 // Call non-platform specific code
-                game::OffScreenBuffer screenBuff;
+                game::OffScreenBuffer screenBuff{};
                 screenBuff.memory = gScreenBuff.memory;
                 screenBuff.width = gScreenBuff.width;
                 screenBuff.height = gScreenBuff.height;
                 screenBuff.pitch = gScreenBuff.pitch;
 
-                game::SoundOutputBuffer soundBuff;
+                game::SoundOutputBuffer soundBuff{};
                 soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
                 soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
                 soundBuff.samples = samples;
 
-                game::UpdateAndRender(&screenBuff, &soundBuff, &gInput);
+                game::UpdateAndRender(&gameMemory, &screenBuff, &soundBuff, &gInput);
 
                 if (isSoundValid) {
                     // soundBuff now contains game generated output
