@@ -56,6 +56,19 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
+#if HANDMADE_INTERNAL
+INTERNAL void* DEBUGPlatformReadFile(const char* filename);
+INTERNAL void DEBUGPlatformFreeFileMemory(void* memory);
+INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, u32 fileSize, void* memory);
+#endif
+
+inline u32
+safeTrunateU64toU32(u64 value) {
+    // TODO: U32_MAX and such
+    ASSERT(value <= 0xFFFFFFFF);
+    return static_cast<u32>(value);
+}
+
 namespace game {
 
 GLOBAL constexpr f32 PI32{ 3.14159265359f };
