@@ -59,9 +59,18 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     if (!memory->isInitialized) {
+        // The memory is already zeroed
+        //gameState->xOffset = 0;
+        //gameState->yOffset = 0;
         gameState->toneHz = 256;
-        gameState->xOffset = 0;
-        gameState->yOffset = 0;
+
+        const char* fileName{ __FILE__ };
+        DEBUGFileReadResult readResult{ DEBUGPlatformReadFile(fileName) };
+        if (readResult.content) {
+            bool32 writeResult{ DEBUGPlatformWriteFile("test.out", readResult.content,
+                                                       readResult.contentSize) };
+            DEBUGPlatformFreeFileMemory(readResult.content);
+        }
 
         // TODO: maybe make platform set this
         memory->isInitialized = true;

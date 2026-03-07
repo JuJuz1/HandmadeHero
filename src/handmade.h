@@ -57,14 +57,20 @@ typedef float f32;
 typedef double f64;
 
 #if HANDMADE_INTERNAL
-INTERNAL void* DEBUGPlatformReadFile(const char* filename);
+struct DEBUGFileReadResult {
+    void* content;
+    u32 contentSize;
+};
+
+INTERNAL DEBUGFileReadResult DEBUGPlatformReadFile(const char* filename);
 INTERNAL void DEBUGPlatformFreeFileMemory(void* memory);
-INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, u32 fileSize, void* memory);
+// TODO: make this safer i.e. protect against lost data e.g. if the write succeeds only partially
+INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize);
 #endif
 
 inline u32
 safeTrunateU64toU32(u64 value) {
-    // TODO: U32_MAX and such
+    // TODO: U32_MAX and such...
     ASSERT(value <= 0xFFFFFFFF);
     return static_cast<u32>(value);
 }

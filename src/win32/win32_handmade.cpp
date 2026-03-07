@@ -21,24 +21,28 @@ GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 // Currently the polling goes through Win32MainWindowCallback, which is not good!
 GLOBAL game::Input gInput;
 
-INTERNAL void*
+INTERNAL DEBUGFileReadResult
 DEBUGPlatformReadFile(const char* filename) {
-    void* result{};
+    DEBUGFileReadResult result;
+    // What an atrocious name for a function which requests to read a file...
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER fileSize;
         if (GetFileSizeEx(fileHandle, &fileSize)) {
-            // Check
-            result = VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            if (result) {
+            result.content =
+                VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            if (result.content) {
                 u32 bytesToRead{ safeTrunateU64toU32(fileSize.QuadPart) };
                 DWORD bytesRead;
-                if (ReadFile(fileHandle, result, bytesToRead, &bytesRead, 0)) {
+                // Consider the case where one could truncate the file after reading
+                if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
+                    bytesToRead == bytesRead) {
                     // Success
+                    result.contentSize = bytesToRead;
                 } else {
-                    DEBUGPlatformFreeFileMemory(result);
-                    result = 0;
+                    DEBUGPlatformFreeFileMemory(result.content);
+                    result.content = 0;
                 }
             } else {
                 // TODO: log
@@ -60,8 +64,27 @@ DEBUGPlatformFreeFileMemory(void* memory) {
         VirtualFree(memory, 0, MEM_RELEASE);
     }
 }
+
 INTERNAL bool32
-DEBUGPlatformWriteFile(const char* filename, u32 fileSize, void* memory) {}
+DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize) {
+    bool32 result{};
+    HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
+    if (fileHandle != INVALID_HANDLE_VALUE) {
+        DWORD bytesWritten;
+        if (WriteFile(fileHandle, memory, fileSize, &bytesWritten, 0)) {
+            // Success
+            result = bytesWritten == fileSize;
+        } else {
+            // TODO: log
+        }
+
+        CloseHandle(fileHandle);
+    } else {
+        // TODO: log
+    }
+
+    return result;
+}
 
 INTERNAL WindowDimension
 Win32GetWindowDimensions(HWND windowHandle) {
