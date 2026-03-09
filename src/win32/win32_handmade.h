@@ -1,7 +1,12 @@
 #ifndef WIN32_HANDMADE_H
 #define WIN32_HANDMADE_H
 
-struct Win32OffScreenBuffer {
+// Compiler switch
+#ifdef HANDMADE_WIN32
+
+namespace win32 {
+
+struct OffScreenBuffer {
     BITMAPINFO info;
     void* memory;
     i32 width;
@@ -10,13 +15,8 @@ struct Win32OffScreenBuffer {
     u32 pitch;
 };
 
-struct WindowDimension {
-    i32 width;
-    i32 height;
-};
-
-// Secondary buffer values
-struct Win32SoundOutput {
+// "Secondary" buffer values
+struct SoundOutput {
     u32 samplesPerSecond;
     u32 bytesPerSample;
     u32 buffSize;
@@ -24,4 +24,12 @@ struct Win32SoundOutput {
     u32 runningSampleIndex;
 };
 
+struct WindowDimension {
+    i32 width;
+    i32 height;
+};
+
+} //namespace win32
+
+#endif // HANDMADE_WIN32
 #endif // WIN32_HANDMADE_H

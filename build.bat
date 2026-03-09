@@ -14,7 +14,7 @@ rem /GR- disable RTTI
 rem /Bt better output info
 
 rem link the User32.lib, Gdi32.lib to create UI
-cl -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /W4 /std:c++20 /I ../src ../src/win32/win32_handmade.cpp User32.lib Gdi32.lib
+cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /W4 /std:c++20 /I ../src ../src/win32/win32_handmade.cpp User32.lib Gdi32.lib
 
 rem not actually needed, to pop the build directory?
 rem needed if building from command line and not vscode

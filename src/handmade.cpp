@@ -65,11 +65,11 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
         gameState->toneHz = 256;
 
         const char* fileName{ __FILE__ };
-        DEBUGFileReadResult readResult{ DEBUGPlatformReadFile(fileName) };
+        win32::DEBUGFileReadResult readResult{ win32::DEBUGPlatformReadFile(fileName) };
         if (readResult.content) {
-            bool32 writeResult{ DEBUGPlatformWriteFile("test.out", readResult.content,
-                                                       readResult.contentSize) };
-            DEBUGPlatformFreeFileMemory(readResult.content);
+            bool32 writeResult{ win32::DEBUGPlatformWriteFile("test.out", readResult.content,
+                                                              readResult.contentSize) };
+            win32::DEBUGPlatformFreeFileMemory(readResult.content);
         }
 
         // TODO: maybe make platform set this

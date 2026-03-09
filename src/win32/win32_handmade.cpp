@@ -13,13 +13,15 @@ This is not a final platform layer!
 #include "win32_handmade.h"
 
 GLOBAL bool32 gIsGameRunning;
-GLOBAL Win32OffScreenBuffer gScreenBuff;
+GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 
 // TODO: will be refactored in episode 17
 // as it currently doesn't support multiple key pressed per (Windows) poll time
-// Currently the polling goes through Win32MainWindowCallback, which is not good!
+// Currently the polling goes through win32::MainWindowCallback, which is not good!
 GLOBAL game::Input gInput;
+
+namespace win32 {
 
 INTERNAL DEBUGFileReadResult
 DEBUGPlatformReadFile(const char* filename) {
@@ -87,7 +89,7 @@ DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize) {
 }
 
 INTERNAL WindowDimension
-Win32GetWindowDimensions(HWND windowHandle) {
+GetWindowDimensions(HWND windowHandle) {
     RECT clientRect;
     GetClientRect(windowHandle, &clientRect);
     const i32 w{ clientRect.right - clientRect.left };
@@ -97,7 +99,7 @@ Win32GetWindowDimensions(HWND windowHandle) {
 }
 
 INTERNAL void
-Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
+ResizeDIBSection(OffScreenBuffer* buff, i32 w, i32 h) {
     if (buff->memory) {
         VirtualFree(buff->memory, 0, MEM_RELEASE);
     }
@@ -122,17 +124,150 @@ Win32ResizeDIBSection(Win32OffScreenBuffer* buff, i32 w, i32 h) {
 }
 
 INTERNAL void
-Win32DisplayBufferWindow(const HDC deviceContext, const Win32OffScreenBuffer* buff, i32 wndWidth,
-                         i32 wndHeight) {
+DisplayBufferWindow(const HDC deviceContext, const OffScreenBuffer* buff, i32 wndWidth,
+                    i32 wndHeight) {
     // TODO: aspect ratio correction
     StretchDIBits(deviceContext, 0, 0, wndWidth, wndHeight, // dest
                   0, 0, buff->width, buff->height,          // src
                   buff->memory, &buff->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
+// Make use of runtime dynamic library linking
+// Make a function pointer type for DirectSoundCreate (a function inside the dll)
+// Feels like magic but really it's not when you understand it
+// clang-format off
+#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
+typedef DIRECT_SOUND_CREATE(direct_sound_create);
+// clang-format on
+
+//TODO: consider cleaning up, starting to become a mess
+INTERNAL void
+InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
+    HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
+    if (dSoundLib) {
+        direct_sound_create* dSoundCreate =
+            reinterpret_cast<direct_sound_create*>(GetProcAddress(dSoundLib, "DirectSoundCreate"));
+        LPDIRECTSOUND dSound;
+
+        // For "both" buffers
+        WAVEFORMATEX waveFormat;
+        waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+        waveFormat.nChannels = 2;
+        waveFormat.nSamplesPerSec = samplesPerSecond;
+        waveFormat.wBitsPerSample = 16;
+        waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
+        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
+        waveFormat.cbSize = 0;
+
+        if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
+            if (SUCCEEDED(dSound->SetCooperativeLevel(windowHandle, DSSCL_PRIORITY))) {
+                DSBUFFERDESC primaryBuffDescription{};
+                primaryBuffDescription.dwSize = sizeof(primaryBuffDescription);
+                primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+                LPDIRECTSOUNDBUFFER primaryBuff;
+                if (SUCCEEDED(
+                        dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
+                    if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
+                        OutputDebugStringA("Primary buffer format was set\n");
+                    } else {
+                        // log, setting format failed
+                    }
+                } else {
+                    // log, creating primary sound buffer failed
+                }
+            } else {
+                // log, couldn't set cooperative
+            }
+
+            // Secondary buffer, this is where we write to!
+            DSBUFFERDESC secondaryBuffDescription{};
+            secondaryBuffDescription.dwSize = sizeof(secondaryBuffDescription);
+            secondaryBuffDescription.dwFlags = 0;
+            secondaryBuffDescription.dwBufferBytes = buffSize;
+            secondaryBuffDescription.lpwfxFormat = &waveFormat;
+
+            if (SUCCEEDED(
+                    dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
+                OutputDebugStringA("Secondary buffer format created\n");
+            } else {
+                // log, creating secondary sound buffer failed
+            }
+        } else {
+            // log, couldn't create dsound
+        }
+    } else {
+        // TODO: log, couldn't load dll
+    }
+}
+
+INTERNAL void
+ClearSoundBuffer(SoundOutput* soundOutput) {
+    LPVOID region1;
+    DWORD region1Size;
+    LPVOID region2;
+    DWORD region2Size;
+    if (SUCCEEDED(gSecondaryBuff->Lock(0, soundOutput->buffSize, &region1, &region1Size, &region2,
+                                       &region2Size, 0))) {
+        u8* destSample{ static_cast<u8*>(region1) };
+
+        for (DWORD i{ 0 }; i < region1Size; ++i) {
+            *destSample++ = 0;
+        }
+
+        destSample = static_cast<u8*>(region2);
+
+        for (DWORD i{ 0 }; i < region2Size; ++i) {
+            *destSample++ = 0;
+        }
+
+        gSecondaryBuff->Unlock(region1, region1Size, region2, region2Size);
+    } else {
+        // log, couldnt lock while clearing
+    }
+}
+
+INTERNAL void
+FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
+                const game::SoundOutputBuffer* sourceBuff) {
+    LPVOID region1;
+    DWORD region1Size;
+    LPVOID region2;
+    DWORD region2Size;
+    if (SUCCEEDED(gSecondaryBuff->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2,
+                                       &region2Size, 0))) {
+        // TODO: assert regionSizes
+        //ASSERT(false && "regionSizes are invalid!");
+
+        const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
+        i16* destSample{ static_cast<i16*>(region1) };
+        i16* srcSample{ sourceBuff->samples };
+
+        // TODO: collapse loops to one
+        for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
+            *destSample++ = *srcSample++;
+            *destSample++ = *srcSample++;
+            ++soundOutput->runningSampleIndex;
+        }
+
+        const DWORD region2SampleCount{ region2Size / soundOutput->bytesPerSample };
+        destSample = static_cast<i16*>(region2);
+
+        for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
+            *destSample++ = *srcSample++;
+            *destSample++ = *srcSample++;
+            ++soundOutput->runningSampleIndex;
+        }
+
+        gSecondaryBuff->Unlock(region1, region1Size, region2, region2Size);
+    } else {
+        // log, couldnt lock
+    }
+}
+
 // Callback for messages
 LRESULT CALLBACK
-Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     LRESULT result{ 0 };
 
     switch (msg) {
@@ -234,9 +369,8 @@ Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PAINTSTRUCT paint;
         const HDC deviceContext{ BeginPaint(wnd, &paint) };
 
-        auto wndDimension{ Win32GetWindowDimensions(wnd) };
-        Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
-                                 wndDimension.height);
+        auto wndDimension{ GetWindowDimensions(wnd) };
+        DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
 
         EndPaint(wnd, &paint);
     } break;
@@ -249,138 +383,7 @@ Win32MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return result;
 }
 
-// Make use of runtime dynamic library linking
-// Make a function pointer type for DirectSoundCreate (a function inside the dll)
-// Feels like magic but really it's not when you understand it
-// clang-format off
-#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
-typedef DIRECT_SOUND_CREATE(direct_sound_create);
-// clang-format on
-
-//TODO: consider cleaning up, starting to become a mess
-INTERNAL void
-Win32InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
-    HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
-    if (dSoundLib) {
-        direct_sound_create* dSoundCreate =
-            reinterpret_cast<direct_sound_create*>(GetProcAddress(dSoundLib, "DirectSoundCreate"));
-        LPDIRECTSOUND dSound;
-
-        // For "both" buffers
-        WAVEFORMATEX waveFormat;
-        waveFormat.wFormatTag = WAVE_FORMAT_PCM;
-        waveFormat.nChannels = 2;
-        waveFormat.nSamplesPerSec = samplesPerSecond;
-        waveFormat.wBitsPerSample = 16;
-        waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
-        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
-        waveFormat.cbSize = 0;
-
-        if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
-            if (SUCCEEDED(dSound->SetCooperativeLevel(windowHandle, DSSCL_PRIORITY))) {
-                DSBUFFERDESC primaryBuffDescription{};
-                primaryBuffDescription.dwSize = sizeof(primaryBuffDescription);
-                primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
-
-                LPDIRECTSOUNDBUFFER primaryBuff;
-                if (SUCCEEDED(
-                        dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
-                    if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
-                        OutputDebugStringA("Primary buffer format was set\n");
-                    } else {
-                        // log, setting format failed
-                    }
-                } else {
-                    // log, creating primary sound buffer failed
-                }
-            } else {
-                // log, couldn't set cooperative
-            }
-
-            // Secondary buffer, this is where we write to!
-            DSBUFFERDESC secondaryBuffDescription{};
-            secondaryBuffDescription.dwSize = sizeof(secondaryBuffDescription);
-            secondaryBuffDescription.dwFlags = 0;
-            secondaryBuffDescription.dwBufferBytes = buffSize;
-            secondaryBuffDescription.lpwfxFormat = &waveFormat;
-
-            if (SUCCEEDED(
-                    dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
-                OutputDebugStringA("Secondary buffer format created\n");
-            } else {
-                // log, creating secondary sound buffer failed
-            }
-        } else {
-            // log, couldn't create dsound
-        }
-    } else {
-        // TODO: log, couldn't load dll
-    }
-}
-
-INTERNAL void
-Win32ClearSoundBuffer(Win32SoundOutput* soundOutput) {
-    LPVOID region1;
-    DWORD region1Size;
-    LPVOID region2;
-    DWORD region2Size;
-    if (SUCCEEDED(gSecondaryBuff->Lock(0, soundOutput->buffSize, &region1, &region1Size, &region2,
-                                       &region2Size, 0))) {
-        u8* destSample{ static_cast<u8*>(region1) };
-
-        for (DWORD i{ 0 }; i < region1Size; ++i) {
-            *destSample++ = 0;
-        }
-
-        destSample = static_cast<u8*>(region2);
-
-        for (DWORD i{ 0 }; i < region2Size; ++i) {
-            *destSample++ = 0;
-        }
-
-        gSecondaryBuff->Unlock(region1, region1Size, region2, region2Size);
-    } else {
-        // log, couldnt lock while clearing
-    }
-}
-
-INTERNAL void
-Win32FillSoundBuffer(Win32SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
-                     const game::SoundOutputBuffer* sourceBuff) {
-    LPVOID region1;
-    DWORD region1Size;
-    LPVOID region2;
-    DWORD region2Size;
-    if (SUCCEEDED(gSecondaryBuff->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2,
-                                       &region2Size, 0))) {
-        // TODO: assert regionSizes
-        //ASSERT(false && "regionSizes are invalid!");
-
-        const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
-        i16* destSample{ static_cast<i16*>(region1) };
-        i16* srcSample{ sourceBuff->samples };
-
-        // TODO: collapse loops to one
-        for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
-            *destSample++ = *srcSample++;
-            *destSample++ = *srcSample++;
-            ++soundOutput->runningSampleIndex;
-        }
-
-        const DWORD region2SampleCount{ region2Size / soundOutput->bytesPerSample };
-        destSample = static_cast<i16*>(region2);
-
-        for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
-            *destSample++ = *srcSample++;
-            *destSample++ = *srcSample++;
-            ++soundOutput->runningSampleIndex;
-        }
-
-        gSecondaryBuff->Unlock(region1, region1Size, region2, region2Size);
-    } else {
-        // log, couldnt lock
-    }
-}
+} //namespace win32
 
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
 int WINAPI
@@ -395,11 +398,11 @@ WinMain(
 
     constexpr i32 startingWidth{ 1280 };
     constexpr i32 startingHeight{ 720 };
-    Win32ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
+    win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc = Win32MainWindowCallback;
+    windowClass.lpfnWndProc = win32::MainWindowCallback;
     //GetModuleHandle(0) returns hInstance
     windowClass.hInstance = hInstance;
     //HICON     hIcon;
@@ -415,14 +418,14 @@ WinMain(
 
         if (windowHandle) {
             // DirectSound
-            Win32SoundOutput soundOutput{};
+            win32::SoundOutput soundOutput{};
             soundOutput.samplesPerSecond = 48000;
             soundOutput.bytesPerSample = sizeof(u16) * 2;
             soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
             soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15;
 
-            Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
-            Win32ClearSoundBuffer(&soundOutput);
+            win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
+            win32::ClearSoundBuffer(&soundOutput);
             gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
 
             // TODO: pool with bitmap
@@ -528,13 +531,13 @@ WinMain(
 
                 if (isSoundValid) {
                     // soundBuff now contains game generated output
-                    Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
+                    win32::FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
                 }
 
                 const HDC deviceContext{ GetDC(windowHandle) };
-                auto wndDimension{ Win32GetWindowDimensions(windowHandle) };
-                Win32DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
-                                         wndDimension.height);
+                auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
+                win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
+                                           wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
 #if 0
                 // Performance

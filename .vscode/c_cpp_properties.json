@@ -7,7 +7,8 @@
             ],
             "defines": [
                 "HANDMADE_DEBUG",
-                "HANDMADE_INTERNAL"
+                "HANDMADE_INTERNAL",
+                "HANDMADE_WIN32"
             ],
             "windowsSdkVersion": "10.0.26100.0",
             "compilerPath": "cl.exe",
