@@ -238,7 +238,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
     if (SUCCEEDED(gSecondaryBuff->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2,
                                        &region2Size, 0))) {
         // TODO: assert regionSizes
-        //ASSERT(false && "regionSizes are invalid!");
+        //ASSERT(!"regionSizes are invalid!");
 
         const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
         i16* destSample{ static_cast<i16*>(region1) };
@@ -278,7 +278,7 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         gIsGameRunning = false;
     } break;
     case WM_DESTROY: {
-        // NOTE: This might happen as an error?
+        // NOTE: This might happen as an error, recreate window?
         OutputDebugStringA("WM_DESTROY\n");
         gIsGameRunning = false;
     } break;
@@ -293,35 +293,37 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         OutputDebugStringA("WM_SIZE\n");
     } break;
 
-#ifdef _DEBUG
-
-#endif
     // Key presses
 
     // SYSKEYDOWN is called whenever the key press includes alt
     // all other keypresses go to the non-sys versions below
     // This forces us to handle alt + f4 here...
     case WM_SYSKEYDOWN: {
-        u32 vkCode{ static_cast<u32>(wParam) };
-        if (vkCode == VK_F4) {
-            OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
-            // Should always be true here
-            bool32 altPressed{ (lParam & (1 << 29)) != 0 };
-            ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
-            if (altPressed) {
-                gIsGameRunning = false;
-            }
-        }
+        ASSERT(!"Keyboard input came through a non-dispatch message!");
+
+        //u32 vkCode{ static_cast<u32>(wParam) };
+        //if (vkCode == VK_F4) {
+        //    OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
+        //    // Should always be true here
+        //    bool32 altPressed{ (lParam & (1 << 29)) != 0 };
+        //    ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
+        //    if (altPressed) {
+        //        gIsGameRunning = false;
+        //    }
+        //}
     } break;
     case WM_SYSKEYUP: {
     } break;
     case WM_KEYDOWN: {
+        ASSERT(!"Keyboard input came through a non-dispatch message!");
+
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-        u32 vkCode{ static_cast<u32>(wParam) };
+        //u32 vkCode{ static_cast<u32>(wParam) };
         // lParam contains additional information about keystrokes
+
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-        bool32 isDown{ (lParam & (1 << 31)) == 0 };
-        bool32 wasDown{ (lParam & (1 << 30)) != 0 };
+        //bool32 isDown{ (lParam & (1 << 31)) == 0 };
+        //bool32 wasDown{ (lParam & (1 << 30)) != 0 };
 
         //char buf[32];
         //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
@@ -330,35 +332,35 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         // If continuously pressing
         // TODO: should change to handle that case also instead of breaking?
         //if (wasDown != isDown) {
-        if (vkCode == 'W') {
-            OutputDebugStringA("W\n");
-            gInput.playerInputs->up.endedDown = isDown;
-        } else if (vkCode == 'S') {
-            OutputDebugStringA("S\n");
-            gInput.playerInputs->down.endedDown = isDown;
-        } else if (vkCode == 'A') {
-            OutputDebugStringA("A\n");
-            gInput.playerInputs->left.endedDown = isDown;
-        } else if (vkCode == 'D') {
-            OutputDebugStringA("D\n");
-            gInput.playerInputs->right.endedDown = isDown;
-        } else if (vkCode == 'Q') {
-            OutputDebugStringA("Q\n");
-        } else if (vkCode == 'E') {
-            OutputDebugStringA("E\n");
-        } else if (vkCode == VK_UP) {
-            OutputDebugStringA("VK_UP\n");
-        } else if (vkCode == VK_DOWN) {
-            OutputDebugStringA("VK_DOWN\n");
-        } else if (vkCode == VK_LEFT) {
-            OutputDebugStringA("VK_LEFT\n");
-        } else if (vkCode == VK_RIGHT) {
-            OutputDebugStringA("VK_RIGHT\n");
-        } else if (vkCode == VK_ESCAPE) {
-            OutputDebugStringA("VK_ESCAPE\n");
-        } else if (vkCode == VK_SPACE) {
-            OutputDebugStringA("VK_SPACE\n");
-        }
+        //if (vkCode == 'W') {
+        //    OutputDebugStringA("W\n");
+        //    gInput.playerInputs->up.endedDown = isDown;
+        //} else if (vkCode == 'S') {
+        //    OutputDebugStringA("S\n");
+        //    gInput.playerInputs->down.endedDown = isDown;
+        //} else if (vkCode == 'A') {
+        //    OutputDebugStringA("A\n");
+        //    gInput.playerInputs->left.endedDown = isDown;
+        //} else if (vkCode == 'D') {
+        //    OutputDebugStringA("D\n");
+        //    gInput.playerInputs->right.endedDown = isDown;
+        //} else if (vkCode == 'Q') {
+        //    OutputDebugStringA("Q\n");
+        //} else if (vkCode == 'E') {
+        //    OutputDebugStringA("E\n");
+        //} else if (vkCode == VK_UP) {
+        //    OutputDebugStringA("VK_UP\n");
+        //} else if (vkCode == VK_DOWN) {
+        //    OutputDebugStringA("VK_DOWN\n");
+        //} else if (vkCode == VK_LEFT) {
+        //    OutputDebugStringA("VK_LEFT\n");
+        //} else if (vkCode == VK_RIGHT) {
+        //    OutputDebugStringA("VK_RIGHT\n");
+        //} else if (vkCode == VK_ESCAPE) {
+        //    OutputDebugStringA("VK_ESCAPE\n");
+        //} else if (vkCode == VK_SPACE) {
+        //    OutputDebugStringA("VK_SPACE\n");
+        //}
         //}
     } break;
     case WM_KEYUP: {
@@ -454,7 +456,7 @@ WinMain(
             if (!(samples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
                 // at least one of these failed, the game will not run correctly (or at all!)
                 // TODO: better assertion
-                ASSERT(false && "One or more of the game memory allocations failed!");
+                ASSERT(!"One or more of the game memory allocations failed!");
             }
 
             // Performance statistics
@@ -480,8 +482,74 @@ WinMain(
                         gIsGameRunning = false;
                     }
 
-                    TranslateMessage(&message);
-                    DispatchMessageA(&message);
+                    switch (message.message) {
+                    case WM_SYSKEYDOWN: {
+                        u32 vkCode{ static_cast<u32>(message.wParam) };
+                        if (vkCode == VK_F4) {
+                            OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
+                            // Should always be true here
+                            bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
+                            ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
+                            if (altPressed) {
+                                gIsGameRunning = false;
+                            }
+                        }
+                    } break;
+                    case WM_SYSKEYUP: {
+                    } break;
+                    case WM_KEYDOWN: {
+                        // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+                        u32 vkCode{ static_cast<u32>(message.wParam) };
+                        // message.lParam contains additional information about keystrokes
+                        // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
+                        bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
+                        bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
+
+                        //char buf[32];
+                        //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
+                        //OutputDebugStringA(buf);
+
+                        // If continuously pressing
+                        // TODO: should change to handle that case also instead of breaking?
+                        //if (wasDown != isDown) {
+                        if (vkCode == 'W') {
+                            OutputDebugStringA("W\n");
+                            gInput.playerInputs->up.endedDown = isDown;
+                        } else if (vkCode == 'S') {
+                            OutputDebugStringA("S\n");
+                            gInput.playerInputs->down.endedDown = isDown;
+                        } else if (vkCode == 'A') {
+                            OutputDebugStringA("A\n");
+                            gInput.playerInputs->left.endedDown = isDown;
+                        } else if (vkCode == 'D') {
+                            OutputDebugStringA("D\n");
+                            gInput.playerInputs->right.endedDown = isDown;
+                        } else if (vkCode == 'Q') {
+                            OutputDebugStringA("Q\n");
+                        } else if (vkCode == 'E') {
+                            OutputDebugStringA("E\n");
+                        } else if (vkCode == VK_UP) {
+                            OutputDebugStringA("VK_UP\n");
+                        } else if (vkCode == VK_DOWN) {
+                            OutputDebugStringA("VK_DOWN\n");
+                        } else if (vkCode == VK_LEFT) {
+                            OutputDebugStringA("VK_LEFT\n");
+                        } else if (vkCode == VK_RIGHT) {
+                            OutputDebugStringA("VK_RIGHT\n");
+                        } else if (vkCode == VK_ESCAPE) {
+                            OutputDebugStringA("VK_ESCAPE\n");
+                        } else if (vkCode == VK_SPACE) {
+                            OutputDebugStringA("VK_SPACE\n");
+                        }
+                        //}
+                    } break;
+                    case WM_KEYUP: {
+                    } break;
+                    default: {
+                        TranslateMessage(&message);
+                        DispatchMessageA(&message);
+                    } break;
+                    }
                 }
 
                 // Directsound
