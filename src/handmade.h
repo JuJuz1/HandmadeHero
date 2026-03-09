@@ -111,6 +111,7 @@ struct InputButtons {
     // b[0] is the same as b.up;
     union {
         Button buttons[4];
+
         struct {
             Button up;
             Button down;

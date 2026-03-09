@@ -7,6 +7,7 @@
 # IndentWidth:     4
 # InsertBraces:    true
 # PointerAlignment: Left
+# SeparateDefinitionBlocks: Always
 
 ---
 Language:        Cpp
@@ -260,7 +261,7 @@ RemoveParentheses: Leave
 RemoveSemicolon: false
 RequiresClausePosition: OwnLine
 RequiresExpressionIndentation: OuterScope
-SeparateDefinitionBlocks: Leave
+SeparateDefinitionBlocks: Always
 ShortNamespaceLines: 1
 SkipMacroDefinitionBody: false
 SortIncludes:
@@ -310,7 +311,7 @@ SpacesInParensOptions:
   InEmptyParentheses: false
   Other:           false
 SpacesInSquareBrackets: false
-Standard:        Latest
+Standard:        c++20
 StatementAttributeLikeMacros:
   - Q_EMIT
 StatementMacros:

@@ -60,6 +60,7 @@ DEBUGPlatformReadFile(const char* filename) {
 
     return result;
 }
+
 INTERNAL void
 DEBUGPlatformFreeFileMemory(void* memory) {
     if (memory) {

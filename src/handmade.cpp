@@ -67,8 +67,7 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
         const char* fileName{ __FILE__ };
         win32::DEBUGFileReadResult readResult{ win32::DEBUGPlatformReadFile(fileName) };
         if (readResult.content) {
-            bool32 writeResult{ win32::DEBUGPlatformWriteFile("test.out", readResult.content,
-                                                              readResult.contentSize) };
+            win32::DEBUGPlatformWriteFile("test.out", readResult.content, readResult.contentSize);
             win32::DEBUGPlatformFreeFileMemory(readResult.content);
         }
 
