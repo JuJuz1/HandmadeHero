@@ -385,13 +385,23 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 INTERNAL void
-ProcessKeyboardInput(game::Input* input) {
+ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
+    // The fired message should never have the same state (isDown)
+    ASSERT(button->endedDown != isDown);
+    button->endedDown = isDown;
+    ++button->halfTransitionCount;
+}
+
+INTERNAL void
+ProcessPendingMessages(game::Input* input) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
         // message.lParam contains additional information about keystrokes
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
         u32 vkCode{ static_cast<u32>(message.wParam) };
+        bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
+        bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
 
         switch (message.message) {
         case WM_QUIT: {
@@ -411,72 +421,71 @@ ProcessKeyboardInput(game::Input* input) {
         case WM_SYSKEYUP: {
         } break;
         case WM_KEYDOWN: {
-            //bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
-            //bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
+            //char buf[32];
+            //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
+            //OutputDebugStringA(buf);
 
             // If continuously pressing
             // TODO: should change to handle that case also instead of breaking?
-            //if (wasDown != isDown) {
-            if (vkCode == 'W') {
-                OutputDebugStringA("W\n");
-                input->playerInputs->up.pressed = true;
-                //if (!wasDown) {
-                //    input->playerInputs->up.justPressed = true;
-                //} else {
-                //    input->playerInputs->up.justPressed = false;
-                //    input->playerInputs->up.pressed = true;
+            if (wasDown != isDown) {
+                if (vkCode == 'W') {
+                    OutputDebugStringA("W\n");
+                    // This approach won't work for justPressed, we have to use halfTransitionCount
+                    //input->playerInputs->up.pressed = true;
+                    ProcessKeyboardMessage(&input->playerInputs->up, isDown);
+                } else if (vkCode == 'S') {
+                    OutputDebugStringA("S\n");
+                    ProcessKeyboardMessage(&input->playerInputs->down, isDown);
+                } else if (vkCode == 'A') {
+                    OutputDebugStringA("A\n");
+                    ProcessKeyboardMessage(&input->playerInputs->left, isDown);
+                } else if (vkCode == 'D') {
+                    OutputDebugStringA("D\n");
+                    ProcessKeyboardMessage(&input->playerInputs->right, isDown);
+                } else if (vkCode == 'Q') {
+                    OutputDebugStringA("Q\n");
+                } else if (vkCode == 'E') {
+                    OutputDebugStringA("E\n");
+                } else if (vkCode == VK_UP) {
+                    OutputDebugStringA("VK_UP\n");
+                } else if (vkCode == VK_DOWN) {
+                    OutputDebugStringA("VK_DOWN\n");
+                } else if (vkCode == VK_LEFT) {
+                    OutputDebugStringA("VK_LEFT\n");
+                } else if (vkCode == VK_RIGHT) {
+                    OutputDebugStringA("VK_RIGHT\n");
+                } else if (vkCode == VK_ESCAPE) {
+                    OutputDebugStringA("VK_ESCAPE\n");
+                } else if (vkCode == VK_SPACE) {
+                    OutputDebugStringA("VK_SPACE\n");
+                }
                 //}
-            } else if (vkCode == 'S') {
-                OutputDebugStringA("S\n");
-                input->playerInputs->down.pressed = true;
-            } else if (vkCode == 'A') {
-                OutputDebugStringA("A\n");
-                input->playerInputs->left.pressed = true;
-            } else if (vkCode == 'D') {
-                OutputDebugStringA("D\n");
-                input->playerInputs->right.pressed = true;
-            } else if (vkCode == 'Q') {
-                OutputDebugStringA("Q\n");
-            } else if (vkCode == 'E') {
-                OutputDebugStringA("E\n");
-            } else if (vkCode == VK_UP) {
-                OutputDebugStringA("VK_UP\n");
-            } else if (vkCode == VK_DOWN) {
-                OutputDebugStringA("VK_DOWN\n");
-            } else if (vkCode == VK_LEFT) {
-                OutputDebugStringA("VK_LEFT\n");
-            } else if (vkCode == VK_RIGHT) {
-                OutputDebugStringA("VK_RIGHT\n");
-            } else if (vkCode == VK_ESCAPE) {
-                OutputDebugStringA("VK_ESCAPE\n");
-            } else if (vkCode == VK_SPACE) {
-                OutputDebugStringA("VK_SPACE\n");
             }
-            //}
-        } break;
+            break;
         case WM_KEYUP: {
-            if (vkCode == 'W') {
-                OutputDebugStringA("W\n");
-                input->playerInputs->up.pressed = false;
-                input->playerInputs->up.released = true;
-            } else if (vkCode == 'S') {
-                OutputDebugStringA("S\n");
-                input->playerInputs->down.pressed = false;
-                input->playerInputs->down.released = true;
-            } else if (vkCode == 'A') {
-                OutputDebugStringA("A\n");
-                input->playerInputs->left.pressed = false;
-                input->playerInputs->left.released = true;
-            } else if (vkCode == 'D') {
-                OutputDebugStringA("D\n");
-                input->playerInputs->right.pressed = false;
-                input->playerInputs->right.released = true;
+            if (wasDown != isDown) {
+                if (vkCode == 'W') {
+                    OutputDebugStringA("W\n");
+                    //input->playerInputs->up.pressed = false;
+                    //input->playerInputs->up.released = true;
+                    ProcessKeyboardMessage(&input->playerInputs->up, isDown);
+                } else if (vkCode == 'S') {
+                    OutputDebugStringA("S\n");
+                    ProcessKeyboardMessage(&input->playerInputs->down, isDown);
+                } else if (vkCode == 'A') {
+                    OutputDebugStringA("A\n");
+                    ProcessKeyboardMessage(&input->playerInputs->left, isDown);
+                } else if (vkCode == 'D') {
+                    OutputDebugStringA("D\n");
+                    ProcessKeyboardMessage(&input->playerInputs->right, isDown);
+                }
             }
         } break;
         default: {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         } break;
+        }
         }
     }
 }
@@ -553,6 +562,8 @@ WinMain(
                 ASSERT(!"One or more of the game memory allocations failed!");
             }
 
+            game::Input input{ game::Input{} };
+
             // Performance statistics
             LARGE_INTEGER freqCounter;
             QueryPerformanceFrequency(&freqCounter);
@@ -562,19 +573,15 @@ WinMain(
             // RDTSC
             u64 lastCycleCount{ __rdtsc() };
 
-            game::Input inputKeyboard{ game::Input{} };
-
             // The main loop!
             gIsGameRunning = true;
 
             while (gIsGameRunning) {
-                // Clear just pressed and released
-                for (u32 i{}; i < ARRAY_COUNT(inputKeyboard.playerInputs->buttons); ++i) {
-                    //inputKeyboard.playerInputs[0].buttons[i].justPressed = false;
-                    inputKeyboard.playerInputs[0].buttons[i].released = false;
+                for (u32 i{}; i < ARRAY_COUNT(input.playerInputs[0].buttons); ++i) {
+                    input.playerInputs[0].buttons[i].halfTransitionCount = 0;
                 }
 
-                win32::ProcessKeyboardInput(&inputKeyboard);
+                win32::ProcessPendingMessages(&input);
 
                 // Directsound
                 // Circular buffer so we might get two regions to write to
@@ -620,7 +627,7 @@ WinMain(
                 soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
                 soundBuff.samples = samples;
 
-                game::UpdateAndRender(&gameMemory, &screenBuff, &soundBuff, &inputKeyboard);
+                game::UpdateAndRender(&gameMemory, &screenBuff, &soundBuff, &input);
 
                 if (isSoundValid) {
                     // soundBuff now contains game generated output

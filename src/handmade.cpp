@@ -78,26 +78,25 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
 
     const InputButtons* input0{ &input->playerInputs[0] };
     // Input (Godot style)
-    //if Input.just_pressed("A")
-    //if Input.just_released("A")
-    //if Input.pressed("A")
+    //if Input.just_pressed("A")  <==> endedDown && halfTransitionCount > 0
+    //if Input.just_released("A") <==> !endedDown && halfTransitionCount > 0
+    //if Input.pressed("A")       <==> endedDown
 
-    // Controllers:
-    //Input.AButtonEndedDown
-    //Input.AButtonHalfTransitionCount
-
-    constexpr u32 offset{ 10 };
-    //if (input0->up.justPressed)
-    if (input0->up.released) {
+    constexpr u32 offset{ 5 };
+    // TODO: abstract these into functions like IsJustPressed(input0->up)...
+    // Continuosly pressing
+    if (input0->up.endedDown) {
         gameState->yOffset -= offset;
     }
-    if (input0->down.released) {
+    // Just pressed
+    if (input0->down.endedDown && input0->down.halfTransitionCount > 0) {
         gameState->yOffset += offset;
     }
-    if (input0->left.pressed) {
+    // Just released
+    if (!input0->left.endedDown && input0->left.halfTransitionCount > 0) {
         gameState->xOffset -= offset;
     }
-    if (input0->right.pressed) {
+    if (input0->right.endedDown) {
         gameState->xOffset += offset;
     }
 

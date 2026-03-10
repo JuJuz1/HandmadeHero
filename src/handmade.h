@@ -87,7 +87,8 @@ safeTrunateU64toU32(u64 value) {
 
 namespace game {
 
-GLOBAL constexpr u8 playerCount{ 2 };
+// TODO: experiment with more than 1
+GLOBAL constexpr u8 playerCount{ 1 };
 
 // Struct to hold buffer info
 struct OffScreenBuffer {
@@ -105,10 +106,10 @@ struct SoundOutputBuffer {
 
 // Keyboard button states
 struct Button {
-    //u32 halfTransitionCount; // For controllers
-    //bool32 justPressed; // If the button was just pressed (true for only the first frame pressed)
-    bool32 pressed;  // If the button is pressed continuosly
-    bool32 released; // If the button was just released (true for only the first frame released)
+    bool32 endedDown; // If the button ended down during the frame
+    // The amount of times the state changed during the frame, with this we can deduce
+    // if the button was just pressed, pressed continuosly or just released
+    u32 halfTransitionCount;
 };
 
 struct InputButtons {
@@ -134,11 +135,11 @@ struct Input {
 
 // All the memory the game needs
 struct GameMemory {
-    u64 permanentStorageSize;
     void* permanentStorage;
+    u64 permanentStorageSize;
 
-    u64 transientStorageSize;
     void* transientStorage;
+    u64 transientStorageSize;
 
     bool32 isInitialized;
 };
