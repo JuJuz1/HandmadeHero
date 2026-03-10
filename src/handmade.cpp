@@ -65,10 +65,11 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
         gameState->toneHz = 256;
 
         const char* fileName{ __FILE__ };
-        win32::DEBUGFileReadResult readResult{ win32::DEBUGPlatformReadFile(fileName) };
+        platform::DEBUGFileReadResult readResult{ platform::DEBUGPlatformReadFile(fileName) };
         if (readResult.content) {
-            win32::DEBUGPlatformWriteFile("test.out", readResult.content, readResult.contentSize);
-            win32::DEBUGPlatformFreeFileMemory(readResult.content);
+            platform::DEBUGPlatformWriteFile("test.out", readResult.content,
+                                             readResult.contentSize);
+            platform::DEBUGPlatformFreeFileMemory(readResult.content);
         }
 
         // TODO: maybe make platform set this
@@ -86,16 +87,17 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
     //Input.AButtonHalfTransitionCount
 
     constexpr u32 offset{ 10 };
-    if (input0->up.endedDown) {
+    //if (input0->up.justPressed)
+    if (input0->up.released) {
         gameState->yOffset -= offset;
     }
-    if (input0->down.endedDown) {
+    if (input0->down.released) {
         gameState->yOffset += offset;
     }
-    if (input0->left.endedDown) {
+    if (input0->left.pressed) {
         gameState->xOffset -= offset;
     }
-    if (input0->right.endedDown) {
+    if (input0->right.pressed) {
         gameState->xOffset += offset;
     }
 

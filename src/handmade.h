@@ -36,6 +36,8 @@ HANDMADE_DEBUG:
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
+// Integral promotion, otherwise the value might wrap to 0 because we hit u32 max...
+
 #define KILOBYTES(count) ((count) * 1024LL)
 #define MEGABYTES(count) (KILOBYTES(count) * 1024LL)
 #define GIGABYTES(count) (MEGABYTES(count) * 1024LL)
@@ -46,7 +48,7 @@ typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
-typedef i32 bool32; // We never use bool
+typedef i32 bool32; // We never use bool here :)
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -58,7 +60,7 @@ typedef double f64;
 
 #if HANDMADE_INTERNAL
 
-namespace win32 {
+namespace platform {
 
 struct DEBUGFileReadResult {
     void* content;
@@ -70,9 +72,11 @@ INTERNAL void DEBUGPlatformFreeFileMemory(void* memory);
 // TODO: make this safer i.e. protect against lost data e.g. if the write succeeds only partially
 INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize);
 
-} //namespace win32
+} //namespace platform
 
 #endif // HANDMADE_INTERNAL
+
+GLOBAL constexpr f32 PI32{ 3.14159265359f };
 
 inline u32
 safeTrunateU64toU32(u64 value) {
@@ -83,7 +87,6 @@ safeTrunateU64toU32(u64 value) {
 
 namespace game {
 
-GLOBAL constexpr f32 PI32{ 3.14159265359f };
 GLOBAL constexpr u8 playerCount{ 2 };
 
 // Struct to hold buffer info
@@ -100,9 +103,12 @@ struct SoundOutputBuffer {
     i16* samples;
 };
 
+// Keyboard button states
 struct Button {
     //u32 halfTransitionCount; // For controllers
-    bool32 endedDown; // If the button was down at the end of the frame
+    //bool32 justPressed; // If the button was just pressed (true for only the first frame pressed)
+    bool32 pressed;  // If the button is pressed continuosly
+    bool32 released; // If the button was just released (true for only the first frame released)
 };
 
 struct InputButtons {

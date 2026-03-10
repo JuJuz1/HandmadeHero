@@ -32,7 +32,10 @@ rem /OPT:REF disable functions and data which are not referenced
 rem recommended my docs: /OPT:NOICF to preserve identical functions in debug builds
 rem link the User32.lib, Gdi32.lib to create UI
 
-cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm /W4 /wd4201 /Oi /EHa- /GR- /std:c++20 /nologo /I ../src ../src/win32/win32_handmade.cpp /link /OPT:REF /OPT:NOICF User32.lib Gdi32.lib
+set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm /W4 /wd4201 /Oi /EHa- /GR- /std:c++20 /nologo
+set commonLinkerFlags=/OPT:REF /OPT:NOICF User32.lib Gdi32.lib
+
+cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %commonLinkerFlags%
 
 rem not actually needed, to pop the build directory?
 rem needed if building from command line and not vscode
