@@ -54,7 +54,6 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
 INTERNAL void
 UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
                 const Input* input) {
-
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
@@ -83,20 +82,19 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
     //if Input.pressed("A")       <==> endedDown
 
     constexpr u32 offset{ 5 };
-    // TODO: abstract these into functions like IsJustPressed(input0->up)...
     // Continuosly pressing
-    if (input0->up.endedDown) {
+    if (input::ActionPressed(&input0->up)) {
         gameState->yOffset -= offset;
     }
     // Just pressed
-    if (input0->down.endedDown && input0->down.halfTransitionCount > 0) {
+    if (input::ActionJustPressed(&input0->down)) {
         gameState->yOffset += offset;
     }
     // Just released
-    if (!input0->left.endedDown && input0->left.halfTransitionCount > 0) {
+    if (input::ActionReleased(&input0->left)) {
         gameState->xOffset -= offset;
     }
-    if (input0->right.endedDown) {
+    if (input::ActionPressed(&input0->right)) {
         gameState->xOffset += offset;
     }
 

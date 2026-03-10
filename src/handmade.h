@@ -60,6 +60,8 @@ typedef double f64;
 
 #if HANDMADE_INTERNAL
 
+/// Services that the platform layer provides to the game ///
+
 namespace platform {
 
 struct DEBUGFileReadResult {
@@ -79,7 +81,7 @@ INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 f
 GLOBAL constexpr f32 PI32{ 3.14159265359f };
 
 inline u32
-safeTrunateU64toU32(u64 value) {
+SafeTrunateU64toU32(u64 value) {
     // TODO: U32_MAX and such...
     ASSERT(value <= 0xFFFFFFFF);
     return static_cast<u32>(value);
@@ -89,6 +91,18 @@ namespace game {
 
 // TODO: experiment with more than 1
 GLOBAL constexpr u8 playerCount{ 1 };
+GLOBAL constexpr u8 buttonCount{ 4 };
+
+// All the memory the game needs
+struct GameMemory {
+    void* permanentStorage;
+    u64 permanentStorageSize;
+
+    void* transientStorage;
+    u64 transientStorageSize;
+
+    bool32 isInitialized;
+};
 
 // Struct to hold buffer info
 struct OffScreenBuffer {
@@ -117,7 +131,7 @@ struct InputButtons {
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[4];
+        Button buttons[buttonCount];
 
         struct {
             Button up;
@@ -133,22 +147,29 @@ struct Input {
     InputButtons playerInputs[playerCount];
 };
 
-// All the memory the game needs
-struct GameMemory {
-    void* permanentStorage;
-    u64 permanentStorageSize;
+static_assert(sizeof(InputButtons) == sizeof(Button) * buttonCount,
+              "Inputbuttons count doesn't match the amount of buttons declared!");
 
-    void* transientStorage;
-    u64 transientStorageSize;
+namespace input {
 
-    bool32 isInitialized;
-};
+INTERNAL bool32
+ActionJustPressed(const Button* button) {
+    return button->endedDown && button->halfTransitionCount > 0;
+}
+
+INTERNAL bool32
+ActionPressed(const Button* button) {
+    return button->endedDown;
+}
+
+INTERNAL bool32
+ActionReleased(const Button* button) {
+    return !button->endedDown && button->halfTransitionCount > 0;
+}
+
+} //namespace input
 
 // We use the style 2 (Game as a service to the OS) described in the series
-
-/// Services that the platform layer provides to the game ///
-
-/// ----------------------------------------------------- ///
 
 /// Services that the game provides to the platform layer ///
 

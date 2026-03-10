@@ -29,8 +29,6 @@ struct WindowDimension {
     i32 height;
 };
 
-void NewFunction(game::Input* input, bool32 isDown, u32 vkCode);
-
 } //namespace win32
 
 #endif // HANDMADE_WIN32

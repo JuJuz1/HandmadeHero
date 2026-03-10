@@ -30,7 +30,7 @@ DEBUGPlatformReadFile(const char* filename) {
             result.content =
                 VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
             if (result.content) {
-                u32 bytesToRead{ safeTrunateU64toU32(fileSize.QuadPart) };
+                u32 bytesToRead{ SafeTrunateU64toU32(fileSize.QuadPart) };
                 DWORD bytesRead;
                 // Consider the case where one could truncate the file after reading
                 if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
@@ -291,77 +291,17 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         OutputDebugStringA("WM_SIZE\n");
     } break;
 
-    // Key presses
-
-    // SYSKEYDOWN is called whenever the key press includes alt
-    // all other keypresses go to the non-sys versions below
-    // This forces us to handle alt + f4 here...
     case WM_SYSKEYDOWN: {
         ASSERT(!"Keyboard input came through a non-dispatch message!");
-
-        //u32 vkCode{ static_cast<u32>(wParam) };
-        //if (vkCode == VK_F4) {
-        //    OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
-        //    // Should always be true here
-        //    bool32 altPressed{ (lParam & (1 << 29)) != 0 };
-        //    ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
-        //    if (altPressed) {
-        //        gIsGameRunning = false;
-        //    }
-        //}
     } break;
     case WM_SYSKEYUP: {
+        ASSERT(!"Keyboard input came through a non-dispatch message!");
     } break;
     case WM_KEYDOWN: {
         ASSERT(!"Keyboard input came through a non-dispatch message!");
-
-        // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-        //u32 vkCode{ static_cast<u32>(wParam) };
-        // lParam contains additional information about keystrokes
-
-        // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-        //bool32 isDown{ (lParam & (1 << 31)) == 0 };
-        //bool32 wasDown{ (lParam & (1 << 30)) != 0 };
-
-        //char buf[32];
-        //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
-        //OutputDebugStringA(buf);
-
-        // If continuously pressing
-        // TODO: should change to handle that case also instead of breaking?
-        //if (wasDown != isDown) {
-        //if (vkCode == 'W') {
-        //    OutputDebugStringA("W\n");
-        //    gInput.playerInputs->up.endedDown = isDown;
-        //} else if (vkCode == 'S') {
-        //    OutputDebugStringA("S\n");
-        //    gInput.playerInputs->down.endedDown = isDown;
-        //} else if (vkCode == 'A') {
-        //    OutputDebugStringA("A\n");
-        //    gInput.playerInputs->left.endedDown = isDown;
-        //} else if (vkCode == 'D') {
-        //    OutputDebugStringA("D\n");
-        //    gInput.playerInputs->right.endedDown = isDown;
-        //} else if (vkCode == 'Q') {
-        //    OutputDebugStringA("Q\n");
-        //} else if (vkCode == 'E') {
-        //    OutputDebugStringA("E\n");
-        //} else if (vkCode == VK_UP) {
-        //    OutputDebugStringA("VK_UP\n");
-        //} else if (vkCode == VK_DOWN) {
-        //    OutputDebugStringA("VK_DOWN\n");
-        //} else if (vkCode == VK_LEFT) {
-        //    OutputDebugStringA("VK_LEFT\n");
-        //} else if (vkCode == VK_RIGHT) {
-        //    OutputDebugStringA("VK_RIGHT\n");
-        //} else if (vkCode == VK_ESCAPE) {
-        //    OutputDebugStringA("VK_ESCAPE\n");
-        //} else if (vkCode == VK_SPACE) {
-        //    OutputDebugStringA("VK_SPACE\n");
-        //}
-        //}
     } break;
     case WM_KEYUP: {
+        ASSERT(!"Keyboard input came through a non-dispatch message!");
     } break;
 
     case WM_PAINT: {
@@ -407,6 +347,10 @@ ProcessPendingMessages(game::Input* input) {
         case WM_QUIT: {
             gIsGameRunning = false;
         } break;
+
+        // SYSKEYDOWN is called whenever the key press includes alt
+        // all other keypresses go to the non-sys versions below
+        // This forces us to handle alt + f4 here...
         case WM_SYSKEYDOWN: {
             if (vkCode == VK_F4) {
                 OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
@@ -427,65 +371,65 @@ ProcessPendingMessages(game::Input* input) {
 
             // If continuously pressing
             // TODO: should change to handle that case also instead of breaking?
-            if (wasDown != isDown) {
-                if (vkCode == 'W') {
-                    OutputDebugStringA("W\n");
-                    // This approach won't work for justPressed, we have to use halfTransitionCount
-                    //input->playerInputs->up.pressed = true;
-                    ProcessKeyboardMessage(&input->playerInputs->up, isDown);
-                } else if (vkCode == 'S') {
-                    OutputDebugStringA("S\n");
-                    ProcessKeyboardMessage(&input->playerInputs->down, isDown);
-                } else if (vkCode == 'A') {
-                    OutputDebugStringA("A\n");
-                    ProcessKeyboardMessage(&input->playerInputs->left, isDown);
-                } else if (vkCode == 'D') {
-                    OutputDebugStringA("D\n");
-                    ProcessKeyboardMessage(&input->playerInputs->right, isDown);
-                } else if (vkCode == 'Q') {
-                    OutputDebugStringA("Q\n");
-                } else if (vkCode == 'E') {
-                    OutputDebugStringA("E\n");
-                } else if (vkCode == VK_UP) {
-                    OutputDebugStringA("VK_UP\n");
-                } else if (vkCode == VK_DOWN) {
-                    OutputDebugStringA("VK_DOWN\n");
-                } else if (vkCode == VK_LEFT) {
-                    OutputDebugStringA("VK_LEFT\n");
-                } else if (vkCode == VK_RIGHT) {
-                    OutputDebugStringA("VK_RIGHT\n");
-                } else if (vkCode == VK_ESCAPE) {
-                    OutputDebugStringA("VK_ESCAPE\n");
-                } else if (vkCode == VK_SPACE) {
-                    OutputDebugStringA("VK_SPACE\n");
-                }
-                //}
+            if (wasDown == isDown) {
+                break;
             }
-            break;
+            if (vkCode == 'W') {
+                OutputDebugStringA("W\n");
+                // This approach won't work for justPressed, we have to use halfTransitionCount
+                //input->playerInputs->up.pressed = true;
+                ProcessKeyboardMessage(&input->playerInputs->up, isDown);
+            } else if (vkCode == 'S') {
+                OutputDebugStringA("S\n");
+                ProcessKeyboardMessage(&input->playerInputs->down, isDown);
+            } else if (vkCode == 'A') {
+                OutputDebugStringA("A\n");
+                ProcessKeyboardMessage(&input->playerInputs->left, isDown);
+            } else if (vkCode == 'D') {
+                OutputDebugStringA("D\n");
+                ProcessKeyboardMessage(&input->playerInputs->right, isDown);
+            } else if (vkCode == 'Q') {
+                OutputDebugStringA("Q\n");
+            } else if (vkCode == 'E') {
+                OutputDebugStringA("E\n");
+            } else if (vkCode == VK_UP) {
+                OutputDebugStringA("VK_UP\n");
+            } else if (vkCode == VK_DOWN) {
+                OutputDebugStringA("VK_DOWN\n");
+            } else if (vkCode == VK_LEFT) {
+                OutputDebugStringA("VK_LEFT\n");
+            } else if (vkCode == VK_RIGHT) {
+                OutputDebugStringA("VK_RIGHT\n");
+            } else if (vkCode == VK_ESCAPE) {
+                OutputDebugStringA("VK_ESCAPE\n");
+            } else if (vkCode == VK_SPACE) {
+                OutputDebugStringA("VK_SPACE\n");
+            }
+        } break;
         case WM_KEYUP: {
-            if (wasDown != isDown) {
-                if (vkCode == 'W') {
-                    OutputDebugStringA("W\n");
-                    //input->playerInputs->up.pressed = false;
-                    //input->playerInputs->up.released = true;
-                    ProcessKeyboardMessage(&input->playerInputs->up, isDown);
-                } else if (vkCode == 'S') {
-                    OutputDebugStringA("S\n");
-                    ProcessKeyboardMessage(&input->playerInputs->down, isDown);
-                } else if (vkCode == 'A') {
-                    OutputDebugStringA("A\n");
-                    ProcessKeyboardMessage(&input->playerInputs->left, isDown);
-                } else if (vkCode == 'D') {
-                    OutputDebugStringA("D\n");
-                    ProcessKeyboardMessage(&input->playerInputs->right, isDown);
-                }
+            if (wasDown == isDown) {
+                break;
+            }
+            if (vkCode == 'W') {
+                OutputDebugStringA("W\n");
+                //input->playerInputs->up.pressed = false;
+                //input->playerInputs->up.released = true;
+                ProcessKeyboardMessage(&input->playerInputs->up, isDown);
+            } else if (vkCode == 'S') {
+                OutputDebugStringA("S\n");
+                ProcessKeyboardMessage(&input->playerInputs->down, isDown);
+            } else if (vkCode == 'A') {
+                OutputDebugStringA("A\n");
+                ProcessKeyboardMessage(&input->playerInputs->left, isDown);
+            } else if (vkCode == 'D') {
+                OutputDebugStringA("D\n");
+                ProcessKeyboardMessage(&input->playerInputs->right, isDown);
             }
         } break;
         default: {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         } break;
-        }
         }
     }
 }
