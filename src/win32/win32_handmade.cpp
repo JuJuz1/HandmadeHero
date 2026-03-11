@@ -18,6 +18,20 @@ GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 
 namespace platform {
 
+INTERNAL void
+DEBUGPrintInt(const char* name, i32 value) {
+    char buf[32];
+    sprintf_s(buf, sizeof(buf), "%s: %d\n", name, value);
+    OutputDebugStringA(buf);
+}
+
+INTERNAL void
+DEBUGPrintFloat(const char* name, f32 value) {
+    char buf[16];
+    sprintf_s(buf, sizeof(buf), "%s: %f\n", name, value);
+    OutputDebugStringA(buf);
+}
+
 INTERNAL DEBUGFileReadResult
 DEBUGPlatformReadFile(const char* filename) {
     DEBUGFileReadResult result;
@@ -369,11 +383,11 @@ ProcessPendingMessages(game::Input* input) {
             //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
             //OutputDebugStringA(buf);
 
-            // If continuously pressing
-            // TODO: should change to handle that case also instead of breaking?
+            // Ignore continuous messages!
             if (wasDown == isDown) {
                 break;
             }
+
             if (vkCode == 'W') {
                 OutputDebugStringA("W\n");
                 // This approach won't work for justPressed, we have to use halfTransitionCount
@@ -390,8 +404,10 @@ ProcessPendingMessages(game::Input* input) {
                 ProcessKeyboardMessage(&input->playerInputs->right, isDown);
             } else if (vkCode == 'Q') {
                 OutputDebugStringA("Q\n");
+                ProcessKeyboardMessage(&input->playerInputs->Q, isDown);
             } else if (vkCode == 'E') {
                 OutputDebugStringA("E\n");
+                ProcessKeyboardMessage(&input->playerInputs->E, isDown);
             } else if (vkCode == VK_UP) {
                 OutputDebugStringA("VK_UP\n");
             } else if (vkCode == VK_DOWN) {
@@ -410,6 +426,7 @@ ProcessPendingMessages(game::Input* input) {
             if (wasDown == isDown) {
                 break;
             }
+
             if (vkCode == 'W') {
                 OutputDebugStringA("W\n");
                 //input->playerInputs->up.pressed = false;
@@ -424,6 +441,12 @@ ProcessPendingMessages(game::Input* input) {
             } else if (vkCode == 'D') {
                 OutputDebugStringA("D\n");
                 ProcessKeyboardMessage(&input->playerInputs->right, isDown);
+            } else if (vkCode == 'Q') {
+                OutputDebugStringA("Q\n");
+                ProcessKeyboardMessage(&input->playerInputs->Q, isDown);
+            } else if (vkCode == 'E') {
+                OutputDebugStringA("E\n");
+                ProcessKeyboardMessage(&input->playerInputs->E, isDown);
             }
         } break;
         default: {
@@ -506,7 +529,7 @@ WinMain(
                 ASSERT(!"One or more of the game memory allocations failed!");
             }
 
-            game::Input input{ game::Input{} };
+            game::Input input{};
 
             // Performance statistics
             LARGE_INTEGER freqCounter;

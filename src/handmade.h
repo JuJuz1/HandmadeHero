@@ -64,6 +64,9 @@ typedef double f64;
 
 namespace platform {
 
+INTERNAL void DEBUGPrintInt(const char* name, i32 value);
+INTERNAL void DEBUGPrintFloat(const char* name, f32 value);
+
 struct DEBUGFileReadResult {
     void* content;
     u32 contentSize;
@@ -80,18 +83,31 @@ INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 f
 
 GLOBAL constexpr f32 PI32{ 3.14159265359f };
 
-inline u32
+INTERNAL inline i32
+SafeTruncateI64toI32(i64 value) {
+    ASSERT(value <= 2147483647LL);
+    ASSERT(value >= -2147483648LL);
+    return static_cast<i32>(value);
+}
+
+INTERNAL inline u32
 SafeTrunateU64toU32(u64 value) {
     // TODO: U32_MAX and such...
-    ASSERT(value <= 0xFFFFFFFF);
+    ASSERT(value <= 0xFFFFFFFFULL);
     return static_cast<u32>(value);
+}
+
+INTERNAL inline f32
+SafeTruncateF64toF32(f64 value) {
+    ASSERT(value <= 3.402823466e+38);
+    ASSERT(value >= -3.402823466e+38);
+    return static_cast<f32>(value);
 }
 
 namespace game {
 
 // TODO: experiment with more than 1
 GLOBAL constexpr u8 playerCount{ 1 };
-GLOBAL constexpr u8 buttonCount{ 4 };
 
 // All the memory the game needs
 struct GameMemory {
@@ -126,6 +142,8 @@ struct Button {
     u32 halfTransitionCount;
 };
 
+GLOBAL constexpr u8 buttonCount{ 6 };
+
 struct InputButtons {
     // A union allows us to do:
     // InputButtons b;
@@ -138,6 +156,9 @@ struct InputButtons {
             Button down;
             Button left;
             Button right;
+
+            Button Q;
+            Button E;
         };
     };
 };

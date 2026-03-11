@@ -55,13 +55,16 @@ INTERNAL void
 UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
                 const Input* input) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
+    // NOTE: this macro depends on the order of the buttons inside InputButtons
+    ASSERT(&input->playerInputs[0].E - &input->playerInputs[0].buttons[0] ==
+           ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     if (!memory->isInitialized) {
         // The memory is already zeroed
         //gameState->xOffset = 0;
         //gameState->yOffset = 0;
-        gameState->toneHz = 256;
+        gameState->toneHz = 2'000'000'200;
 
         const char* fileName{ __FILE__ };
         platform::DEBUGFileReadResult readResult{ platform::DEBUGPlatformReadFile(fileName) };
@@ -78,8 +81,9 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
     const InputButtons* input0{ &input->playerInputs[0] };
     // Input (Godot style)
     //if Input.just_pressed("A")  <==> endedDown && halfTransitionCount > 0
-    //if Input.just_released("A") <==> !endedDown && halfTransitionCount > 0
     //if Input.pressed("A")       <==> endedDown
+    //if Input.just_released("A") <==> !endedDown && halfTransitionCount > 0
+    // Managed to get the same functionality done!
 
     constexpr u32 offset{ 5 };
     // Continuosly pressing
@@ -96,6 +100,19 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
     }
     if (input::ActionPressed(&input0->right)) {
         gameState->xOffset += offset;
+    }
+
+    constexpr u32 toneHzOffset{ 30 };
+    platform::DEBUGPrintInt("toneHz", gameState->toneHz);
+
+    if (input::ActionJustPressed(&input0->E)) {
+        gameState->toneHz += toneHzOffset;
+    } else if (input::ActionJustPressed(&input0->Q)) {
+        if (gameState->toneHz > toneHzOffset) {
+            gameState->toneHz -= toneHzOffset;
+        } else {
+            gameState->toneHz = 1;
+        }
     }
 
     // TODO: allow sample offsets
