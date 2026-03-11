@@ -15,6 +15,7 @@ This is not a final platform layer!
 GLOBAL bool32 gIsGameRunning;
 GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
+GLOBAL i64 gPerfCounterFreq;
 
 namespace platform {
 
@@ -457,6 +458,18 @@ ProcessPendingMessages(game::Input* input) {
     }
 }
 
+INTERNAL inline LARGE_INTEGER
+GetWallClock() {
+    LARGE_INTEGER res;
+    QueryPerformanceCounter(&res);
+    return res;
+}
+
+INTERNAL inline f32
+GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
+    return static_cast<f32>(end.QuadPart - start.QuadPart) / gPerfCounterFreq;
+}
+
 } //namespace win32
 
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
@@ -483,6 +496,15 @@ WinMain(
 
     const char* name{ "Handmade Hero" };
     windowClass.lpszClassName = name;
+
+    // TODO: query this via Windows
+    // NOTE: in the future make the game function without a minimum frame rate
+    constexpr u32 monitorHz{ 60 };
+    constexpr u32 gameUpdateHz{ monitorHz / 2 }; // NOTE: Could this the same as monitorHz?
+    constexpr f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
+
+    constexpr u32 desiredSchedulerMS{ 1 };
+    bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
     if (RegisterClass(&windowClass)) {
         const HWND windowHandle = CreateWindowExA(0, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
@@ -534,9 +556,9 @@ WinMain(
             // Performance statistics
             LARGE_INTEGER freqCounter;
             QueryPerformanceFrequency(&freqCounter);
-            i64 perfCounterFreq{ freqCounter.QuadPart };
-            LARGE_INTEGER lastCounter;
-            QueryPerformanceCounter(&lastCounter);
+            gPerfCounterFreq = freqCounter.QuadPart;
+
+            LARGE_INTEGER lastCounter{ win32::GetWallClock() };
             // RDTSC
             u64 lastCycleCount{ __rdtsc() };
 
@@ -601,41 +623,68 @@ WinMain(
                     win32::FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
                 }
 
+                // Performance
+                // We only query the performance once per frame so that we don't leave out the time
+                // between the frame's end and start
+
+                const u64 endCycleCount{ __rdtsc() };
+                const f64 cycleElapsedM{ static_cast<f64>(endCycleCount - lastCycleCount) /
+                                         (1000.0 * 1000.0) };
+
+                LARGE_INTEGER endCounter{ win32::GetWallClock() };
+                const f32 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
+                f32 secondsElapedForFrame{ secondsElapsed };
+
+                // Wait if we are ahead of the target FPS
+                if (secondsElapedForFrame < targetSecondsPerFrame) {
+                    while (secondsElapedForFrame < targetSecondsPerFrame) {
+                        if (isSleepGranular) {
+                            DWORD remainingMS{ static_cast<DWORD>(
+                                (targetSecondsPerFrame - secondsElapedForFrame) * 1000.0f) };
+                            if (remainingMS > 0) {
+                                Sleep(remainingMS);
+                            }
+                        }
+
+                        // NOTE: this would not always work...
+                        //f32 testSecondsElapsedForFrame{ win32::GetSecondsElapsed(
+                        //    lastCounter, win32::GetWallClock()) };
+                        //ASSERT(testSecondsElapsedForFrame < targetSecondsPerFrame);
+
+                        secondsElapedForFrame =
+                            win32::GetSecondsElapsed(lastCounter, win32::GetWallClock());
+                    }
+                } else {
+                    //TODO: log the missed frame!!!
+                }
+
                 const HDC deviceContext{ GetDC(windowHandle) };
                 auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
                 win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                            wndDimension.height);
                 ReleaseDC(windowHandle, deviceContext);
-#if 0
-                // Performance
 
-                // We only query the performance once per frame so that we don't leave out the time
-                // between the frame's end and start
-                LARGE_INTEGER endCounter;
-                QueryPerformanceCounter(&endCounter);
-                const u64 endCycleCount{ __rdtsc() };
-
-                const i64 counterElapsed{ endCounter.QuadPart - lastCounter.QuadPart };
-                lastCounter = endCounter;
-                const f64 cycleElapsedM{ static_cast<f64>(endCycleCount - lastCycleCount) /
-                                         (1000.0 * 1000.0) };
-                lastCycleCount = endCycleCount;
-
-                // Multiply by 1000 so that the integer divide doesn't always result in 0, assuming
-                // the frame took less than 1 second
-                const f64 ms{ (1000.0 * counterElapsed) / perfCounterFreq };
+                const f64 ms{ 1000.0 * secondsElapsed };
                 const f64 FPS{ 1000.0 / ms };
+#if 1
                 char buf[64]; // yikes...
                 sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS,
                           cycleElapsedM);
                 OutputDebugStringA(buf);
 #endif
+
+                lastCycleCount = endCycleCount;
+
+                LARGE_INTEGER resetCounter{ win32::GetWallClock() };
+                lastCounter = resetCounter;
             }
         } else {
             // NOTE: Log?
             OutputDebugStringA("Failed to create windowHandle!\n");
         }
-    } else {
+    }
+
+    else {
         // NOTE: Log?
         OutputDebugStringA("Failed to register windowClass!\n");
     }

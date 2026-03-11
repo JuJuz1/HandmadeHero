@@ -64,7 +64,7 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
         // The memory is already zeroed
         //gameState->xOffset = 0;
         //gameState->yOffset = 0;
-        gameState->toneHz = 2'000'000'200;
+        gameState->toneHz = 256;
 
         const char* fileName{ __FILE__ };
         platform::DEBUGFileReadResult readResult{ platform::DEBUGPlatformReadFile(fileName) };
