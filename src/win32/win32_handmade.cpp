@@ -331,7 +331,6 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         EndPaint(wnd, &paint);
     } break;
     default: {
-        //OutputDebugStringA("DEFAULT\n");
         result = DefWindowProcA(wnd, msg, wParam, lParam);
     } break;
     }
@@ -342,6 +341,8 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 INTERNAL void
 ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
     // The fired message should never have the same state (isDown)
+    // This also catches scenarios when we forget to add the keypress handling to both WM_KEYUP and
+    // WM_KEYDOWN
     ASSERT(button->endedDown != isDown);
     button->endedDown = isDown;
     ++button->halfTransitionCount;
@@ -409,6 +410,9 @@ ProcessPendingMessages(game::Input* input) {
             } else if (vkCode == 'E') {
                 OutputDebugStringA("E\n");
                 ProcessKeyboardMessage(&input->playerInputs->E, isDown);
+            } else if (vkCode == VK_SHIFT) {
+                OutputDebugStringA("VK_SHIFT\n");
+                ProcessKeyboardMessage(&input->playerInputs->shift, isDown);
             } else if (vkCode == VK_UP) {
                 OutputDebugStringA("VK_UP\n");
             } else if (vkCode == VK_DOWN) {
@@ -448,6 +452,9 @@ ProcessPendingMessages(game::Input* input) {
             } else if (vkCode == 'E') {
                 OutputDebugStringA("E\n");
                 ProcessKeyboardMessage(&input->playerInputs->E, isDown);
+            } else if (vkCode == VK_SHIFT) {
+                OutputDebugStringA("VK_SHIFT\n");
+                ProcessKeyboardMessage(&input->playerInputs->shift, isDown);
             }
         } break;
         default: {
@@ -458,16 +465,41 @@ ProcessPendingMessages(game::Input* input) {
     }
 }
 
-INTERNAL inline LARGE_INTEGER
+INTERNAL LARGE_INTEGER
 GetWallClock() {
     LARGE_INTEGER res;
     QueryPerformanceCounter(&res);
     return res;
 }
 
-INTERNAL inline f32
+INTERNAL f32
 GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return static_cast<f32>(end.QuadPart - start.QuadPart) / gPerfCounterFreq;
+}
+
+INTERNAL void
+DEBUGDrawVertical(OffScreenBuffer* buff, u32 x, u32 top, u32 bottom, u32 color) {
+    u8* pixel{ static_cast<u8*>(buff->memory) + buff->bytesPerPixel * x + buff->pitch * top };
+    for (u32 y{ top }; y < bottom; ++y) {
+        *(reinterpret_cast<u32*>(pixel)) = color;
+        pixel += buff->pitch;
+    }
+}
+
+INTERNAL void
+DEBUGDisplayAudioSync(OffScreenBuffer* buff, DWORD lastPlayCursorCount, DWORD* lastPlayCursor,
+                      const SoundOutput* soundOutput) {
+    constexpr u32 padX{ 16 };
+    constexpr u32 padY{ 16 };
+
+    constexpr u32 top = padY;
+    const u32 bottom{ buff->height - padY };
+
+    const f32 c{ static_cast<f32>(buff->width) / soundOutput->buffSize };
+    for (u32 i{}; i < lastPlayCursorCount; ++i) {
+        u32 x{ static_cast<u32>(c * lastPlayCursor[i]) + padX };
+        DEBUGDrawVertical(buff, x, top, bottom, 0xFFFFFFFF);
+    }
 }
 
 } //namespace win32
@@ -503,6 +535,8 @@ WinMain(
     constexpr u32 gameUpdateHz{ monitorHz / 2 }; // NOTE: Could this the same as monitorHz?
     constexpr f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
+    constexpr u32 framesOfAudioLatency{ 3 }; // 3 seems to be enough for gameUpdateHz of 30
+
     constexpr u32 desiredSchedulerMS{ 1 };
     bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
@@ -513,12 +547,15 @@ WinMain(
                                                   CW_USEDEFAULT, 0, 0, hInstance, 0);
 
         if (windowHandle) {
+            const HDC deviceContext{ GetDC(windowHandle) };
+
             // DirectSound
             win32::SoundOutput soundOutput{};
             soundOutput.samplesPerSecond = 48000;
             soundOutput.bytesPerSample = sizeof(u16) * 2;
             soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
-            soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15;
+            soundOutput.latencySampleCount =
+                framesOfAudioLatency * soundOutput.samplesPerSecond / gameUpdateHz;
 
             win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
             win32::ClearSoundBuffer(&soundOutput);
@@ -562,6 +599,12 @@ WinMain(
             // RDTSC
             u64 lastCycleCount{ __rdtsc() };
 
+            DWORD DEBUGlastPlayCursorIndex{};
+            DWORD DEBUGlastPlayCursor[gameUpdateHz / 2]{};
+
+            DWORD lastPlayCursor{};
+            bool32 isSoundValid{};
+
             // The main loop!
             gIsGameRunning = true;
 
@@ -580,17 +623,14 @@ WinMain(
                 DWORD byteToLock{};
                 DWORD targetCursor;
                 DWORD bytesToWrite{};
-                DWORD playCursor;
-                DWORD writeCursor;
-                bool32 isSoundValid{};
 
-                if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
+                if (isSoundValid) {
                     byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
                                  soundOutput.buffSize;
 
-                    targetCursor =
-                        (playCursor + soundOutput.latencySampleCount * soundOutput.bytesPerSample) %
-                        soundOutput.buffSize;
+                    targetCursor = (lastPlayCursor +
+                                    soundOutput.latencySampleCount * soundOutput.bytesPerSample) %
+                                   soundOutput.buffSize;
                     // To the end and wrap behind playCursor
                     if (byteToLock > targetCursor) {
                         bytesToWrite = soundOutput.buffSize - byteToLock;
@@ -598,8 +638,6 @@ WinMain(
                     } else {
                         bytesToWrite = targetCursor - byteToLock;
                     }
-
-                    isSoundValid = true;
                 } else {
                     // log, couldnt get curr pos
                 }
@@ -626,10 +664,6 @@ WinMain(
                 // Performance
                 // We only query the performance once per frame so that we don't leave out the time
                 // between the frame's end and start
-
-                const u64 endCycleCount{ __rdtsc() };
-                const f64 cycleElapsedM{ static_cast<f64>(endCycleCount - lastCycleCount) /
-                                         (1000.0 * 1000.0) };
 
                 LARGE_INTEGER endCounter{ win32::GetWallClock() };
                 const f32 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
@@ -658,14 +692,42 @@ WinMain(
                     //TODO: log the missed frame!!!
                 }
 
-                const HDC deviceContext{ GetDC(windowHandle) };
+                endCounter = win32::GetWallClock();
+                const f64 ms{ 1000 * win32::GetSecondsElapsed(lastCounter, endCounter) };
+                const f64 FPS{ 1000 / ms };
+
                 auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
+
+#if HANDMADE_INTERNAL
+                win32::DEBUGDisplayAudioSync(&gScreenBuff, ARRAY_COUNT(DEBUGlastPlayCursor),
+                                             DEBUGlastPlayCursor, &soundOutput);
+#endif
+
                 win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                            wndDimension.height);
-                ReleaseDC(windowHandle, deviceContext);
 
-                const f64 ms{ 1000.0 * secondsElapsed };
-                const f64 FPS{ 1000.0 / ms };
+                DWORD playCursor;
+                DWORD writeCursor;
+                if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
+                    lastPlayCursor = playCursor;
+                    isSoundValid = true;
+                } else {
+                    isSoundValid = false;
+                }
+
+#if HANDMADE_INTERNAL
+                DEBUGlastPlayCursor[DEBUGlastPlayCursorIndex++] = playCursor;
+                if (DEBUGlastPlayCursorIndex > ARRAY_COUNT(DEBUGlastPlayCursor)) {
+                    DEBUGlastPlayCursorIndex = 0;
+                }
+#endif
+
+                const u64 endCycleCount{ __rdtsc() };
+                const f64 cycleElapsedM{ static_cast<f64>(endCycleCount - lastCycleCount) /
+                                         (1000.0 * 1000.0) };
+
+                //const f64 ms{ 1000.0 * secondsElapsed };
+                //const f64 FPS{ 1000 / ms };
 #if 1
                 char buf[64]; // yikes...
                 sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS,
@@ -678,6 +740,8 @@ WinMain(
                 LARGE_INTEGER resetCounter{ win32::GetWallClock() };
                 lastCounter = resetCounter;
             }
+
+            ReleaseDC(windowHandle, deviceContext);
         } else {
             // NOTE: Log?
             OutputDebugStringA("Failed to create windowHandle!\n");

@@ -129,9 +129,9 @@ struct OffScreenBuffer {
 };
 
 struct SoundOutputBuffer {
+    i16* samples;
     u32 samplesPerSecond;
     u32 sampleCount;
-    i16* samples;
 };
 
 // Keyboard button states
@@ -142,7 +142,7 @@ struct Button {
     u32 halfTransitionCount;
 };
 
-GLOBAL constexpr u8 buttonCount{ 6 };
+GLOBAL constexpr u8 buttonCount{ 7 };
 
 struct InputButtons {
     // A union allows us to do:
@@ -156,6 +156,8 @@ struct InputButtons {
             Button down;
             Button left;
             Button right;
+
+            Button shift;
 
             Button Q;
             Button E;

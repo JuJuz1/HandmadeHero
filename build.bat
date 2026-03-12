@@ -32,7 +32,8 @@ rem /OPT:REF disable functions and data which are not referenced
 rem recommended my docs: /OPT:NOICF to preserve identical functions in debug builds
 rem link the User32.lib, Gdi32.lib to create UI
 
-set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm /W4 /wd4201 /Oi /EHa- /GR- /std:c++20 /nologo
+set commonCompilerWarnings=/W4 /wd4201
+set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm %commonCompilerWarnings% /Oi /EHa- /GR- /std:c++20 /nologo
 set commonWin32Libraries=User32.lib Gdi32.lib Winmm.lib
 set commonLinkerFlags=/OPT:REF /OPT:NOICF %commonWin32Libraries%
 

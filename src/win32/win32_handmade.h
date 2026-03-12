@@ -12,7 +12,7 @@ struct OffScreenBuffer {
     i32 width;
     i32 height;
     u32 bytesPerPixel;
-    u32 pitch;
+    i32 pitch;
 };
 
 // "Secondary" buffer values

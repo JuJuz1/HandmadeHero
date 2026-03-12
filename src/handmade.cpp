@@ -99,7 +99,11 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
         gameState->xOffset -= offset;
     }
     if (input::ActionPressed(&input0->right)) {
-        gameState->xOffset += offset;
+        if (input::ActionPressed(&input0->shift)) {
+            gameState->xOffset += offset * 5;
+        } else {
+            gameState->xOffset += offset;
+        }
     }
 
     constexpr u32 toneHzOffset{ 30 };
