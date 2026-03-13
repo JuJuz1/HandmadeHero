@@ -19,7 +19,10 @@ OutputSound(const SoundOutputBuffer* buff, u32 toneHz) {
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;
 
-        tSine += 2 * PI32 / static_cast<f32>(wavePeriod);
+        tSine += 2 * PI32f / static_cast<f32>(wavePeriod);
+        if (tSine > 2 * PI32f) {
+            tSine -= 2 * PI32f;
+        }
     }
 }
 

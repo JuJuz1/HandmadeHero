@@ -29,7 +29,8 @@ HANDMADE_DEBUG:
 #define ASSERT(expr)
 #endif
 
-// Defines for static
+// Defines for different meanings of static
+
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
@@ -44,6 +45,7 @@ HANDMADE_DEBUG:
 #define TERABYTES(count) (GIGABYTES(count) * 1024LL)
 
 // Typedefs for common types
+
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
@@ -81,7 +83,7 @@ INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 f
 
 #endif // HANDMADE_INTERNAL
 
-GLOBAL constexpr f32 PI32{ 3.14159265359f };
+GLOBAL constexpr f32 PI32f{ 3.14159265359f };
 
 INTERNAL inline i32
 SafeTruncateI64toI32(i64 value) {

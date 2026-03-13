@@ -19,6 +19,8 @@ GLOBAL i64 gPerfCounterFreq;
 
 namespace platform {
 
+// TODO: make these more generic (and allow variadic arguments?)
+// and much safer...
 INTERNAL void
 DEBUGPrintInt(const char* name, i32 value) {
     char buf[32];
@@ -28,7 +30,7 @@ DEBUGPrintInt(const char* name, i32 value) {
 
 INTERNAL void
 DEBUGPrintFloat(const char* name, f32 value) {
-    char buf[16];
+    char buf[32];
     sprintf_s(buf, sizeof(buf), "%s: %f\n", name, value);
     OutputDebugStringA(buf);
 }
@@ -98,6 +100,7 @@ DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize) {
 
     return result;
 }
+
 } //namespace platform
 
 namespace win32 {
@@ -434,8 +437,6 @@ ProcessPendingMessages(game::Input* input) {
 
             if (vkCode == 'W') {
                 OutputDebugStringA("W\n");
-                //input->playerInputs->up.pressed = false;
-                //input->playerInputs->up.released = true;
                 ProcessKeyboardMessage(&input->playerInputs->up, isDown);
             } else if (vkCode == 'S') {
                 OutputDebugStringA("S\n");
@@ -477,6 +478,7 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return static_cast<f32>(end.QuadPart - start.QuadPart) / gPerfCounterFreq;
 }
 
+#if 0
 INTERNAL void
 DEBUGDrawVertical(OffScreenBuffer* buff, u32 x, u32 top, u32 bottom, u32 color) {
     u8* pixel{ static_cast<u8*>(buff->memory) + buff->bytesPerPixel * x + buff->pitch * top };
@@ -501,6 +503,7 @@ DEBUGDisplayAudioSync(OffScreenBuffer* buff, DWORD lastPlayCursorCount, DWORD* l
         DEBUGDrawVertical(buff, x, top, bottom, 0xFFFFFFFF);
     }
 }
+#endif
 
 } //namespace win32
 
@@ -535,6 +538,7 @@ WinMain(
     constexpr u32 gameUpdateHz{ monitorHz / 2 }; // NOTE: Could this the same as monitorHz?
     constexpr f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
+    // NOTE: This will not be used if we recap episode 20 audio fixes
     constexpr u32 framesOfAudioLatency{ 3 }; // 3 seems to be enough for gameUpdateHz of 30
 
     constexpr u32 desiredSchedulerMS{ 1 };
@@ -599,8 +603,10 @@ WinMain(
             // RDTSC
             u64 lastCycleCount{ __rdtsc() };
 
+#if 0
             DWORD DEBUGlastPlayCursorIndex{};
             DWORD DEBUGlastPlayCursor[gameUpdateHz / 2]{};
+#endif
 
             DWORD lastPlayCursor{};
             bool32 isSoundValid{};
@@ -659,6 +665,34 @@ WinMain(
                 if (isSoundValid) {
                     // soundBuff now contains game generated output
                     win32::FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
+                    // TODO: look up episode 20 if we want to continue fixing the audio sync
+                    // For now we skip fixing the issues as it is very complicated and I think I
+                    // wouldn't get much out of it...
+                    //#if HANDMADE_INTERNAL
+                    //                    DWORD playCursor;
+                    //                    DWORD writeCursor;
+                    //                    gSecondaryBuff->GetCurrentPosition(&playCursor,
+                    //                    &writeCursor);
+
+                    //                    DWORD unwrappedWriteCursor{ writeCursor };
+                    //                    if (unwrappedWriteCursor < playCursor) {
+                    //                        unwrappedWriteCursor += soundOutput.buffSize;
+                    //                    }
+
+                    //                    DWORD bytesBetweenCursors{ unwrappedWriteCursor -
+                    //                    playCursor };
+
+                    //                    char buf[256];
+                    //                    sprintf_s(buf, "LPC: %u, BTL: %u, BTW: %u, - PC: %u, WC:
+                    //                    %u, delta: %u\n",
+                    //                              lastPlayCursor, byteToLock, targetCursor,
+                    //                              bytesToWrite, playCursor, writeCursor);
+                    //                    OutputDebugStringA(buf);
+
+                    //                    // soundBuff now contains game generated output
+                    //                    win32::FillSoundBuffer(&soundOutput, byteToLock,
+                    //                    bytesToWrite, &soundBuff);
+                    //#endif
                 }
 
                 // Performance
@@ -698,7 +732,8 @@ WinMain(
 
                 auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
 
-#if HANDMADE_INTERNAL
+//#if HANDMADE_INTERNAL
+#if 0
                 win32::DEBUGDisplayAudioSync(&gScreenBuff, ARRAY_COUNT(DEBUGlastPlayCursor),
                                              DEBUGlastPlayCursor, &soundOutput);
 #endif
@@ -715,7 +750,8 @@ WinMain(
                     isSoundValid = false;
                 }
 
-#if HANDMADE_INTERNAL
+//#if HANDMADE_INTERNAL
+#if 0
                 DEBUGlastPlayCursor[DEBUGlastPlayCursorIndex++] = playCursor;
                 if (DEBUGlastPlayCursorIndex > ARRAY_COUNT(DEBUGlastPlayCursor)) {
                     DEBUGlastPlayCursorIndex = 0;
