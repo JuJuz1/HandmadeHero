@@ -3,7 +3,7 @@ Episode 11: Important topics about making code cross-platform
 This is not a final platform layer!
 */
 
-#include "handmade.cpp"
+#include "handmade.h"
 
 #include <dsound.h>
 #include <windows.h>
@@ -21,22 +21,27 @@ namespace platform {
 
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
-INTERNAL void
+void
 DEBUGPrintInt(const char* name, i32 value) {
     char buf[32];
     sprintf_s(buf, sizeof(buf), "%s: %d\n", name, value);
     OutputDebugStringA(buf);
 }
 
-INTERNAL void
+void
 DEBUGPrintFloat(const char* name, f32 value) {
     char buf[32];
     sprintf_s(buf, sizeof(buf), "%s: %f\n", name, value);
     OutputDebugStringA(buf);
 }
 
-INTERNAL DEBUGFileReadResult
-DEBUGPlatformReadFile(const char* filename) {
+DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory) {
+    if (memory) {
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+}
+
+DEBUG_PLATFORM_READ_FILE(DEBUGPlatformReadFile) {
     DEBUGFileReadResult result;
     // What an atrocious name for a function which requests to read a file...
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
@@ -47,7 +52,7 @@ DEBUGPlatformReadFile(const char* filename) {
             result.content =
                 VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
             if (result.content) {
-                u32 bytesToRead{ SafeTrunateU64toU32(fileSize.QuadPart) };
+                u32 bytesToRead{ SafeTruncateU64toU32(fileSize.QuadPart) };
                 DWORD bytesRead;
                 // Consider the case where one could truncate the file after reading
                 if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
@@ -73,15 +78,7 @@ DEBUGPlatformReadFile(const char* filename) {
     return result;
 }
 
-INTERNAL void
-DEBUGPlatformFreeFileMemory(void* memory) {
-    if (memory) {
-        VirtualFree(memory, 0, MEM_RELEASE);
-    }
-}
-
-INTERNAL bool32
-DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize) {
+DEBUG_PLATFORM_WRITE_FILE(DEBUGPlatformWriteFile) {
     bool32 result{};
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -162,8 +159,8 @@ INTERNAL void
 InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
     if (dSoundLib) {
-        direct_sound_create* dSoundCreate =
-            reinterpret_cast<direct_sound_create*>(GetProcAddress(dSoundLib, "DirectSoundCreate"));
+        direct_sound_create* dSoundCreate{ reinterpret_cast<direct_sound_create*>(
+            GetProcAddress(dSoundLib, "DirectSoundCreate")) };
         LPDIRECTSOUND dSound;
 
         // For "both" buffers
@@ -478,6 +475,54 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return static_cast<f32>(end.QuadPart - start.QuadPart) / gPerfCounterFreq;
 }
 
+struct GameCode {
+    HMODULE dll;
+    game::dll::update_and_render* updateAndRender;
+    game::dll::get_sound_samples* getSoundSamples;
+
+    bool32 isValid;
+};
+
+INTERNAL GameCode
+LoadGameCode() {
+    using namespace game::dll;
+
+    GameCode gameCode;
+    // TODO: change to .dll
+    gameCode.dll = LoadLibraryA("handmade.exe");
+    gameCode.isValid = false;
+
+    if (gameCode.dll) {
+        gameCode.updateAndRender =
+            reinterpret_cast<update_and_render*>(GetProcAddress(gameCode.dll, "UpdateAndRender"));
+        gameCode.getSoundSamples =
+            reinterpret_cast<get_sound_samples*>(GetProcAddress(gameCode.dll, "GetSoundSamples"));
+
+        gameCode.isValid = (gameCode.updateAndRender && gameCode.getSoundSamples);
+    } else {
+        // TODO: log
+        OutputDebugStringA("Failed to load handmade.dll!\n");
+    }
+
+    if (!gameCode.isValid) {
+        gameCode.updateAndRender = UpdateAndRenderStub;
+        gameCode.getSoundSamples = GetSoundSamplesStub;
+    }
+
+    return gameCode;
+}
+
+INTERNAL void
+UnloadGameCode(GameCode* gamecode) {
+    if (gamecode->dll) {
+        FreeLibrary(gamecode->dll);
+    }
+
+    gamecode->updateAndRender = game::dll::UpdateAndRenderStub;
+    gamecode->getSoundSamples = game::dll::GetSoundSamplesStub;
+    gamecode->isValid = false;
+}
+
 #if 0
 INTERNAL void
 DEBUGDrawVertical(OffScreenBuffer* buff, u32 x, u32 top, u32 bottom, u32 color) {
@@ -517,6 +562,8 @@ WinMain(
     int                  // nCmdShow Window visibility option
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
+
+    //win32::GameCode game{ win32::LoadGameCode() };
 
     constexpr i32 startingWidth{ 1280 };
     constexpr i32 startingHeight{ 720 };
@@ -592,6 +639,10 @@ WinMain(
                 ASSERT(!"One or more of the game memory allocations failed!");
             }
 
+            gameMemory.DEBUGPlatformFreeFileMemory = platform::DEBUGPlatformFreeFileMemory;
+            gameMemory.DEBUGPlatformReadFile = platform::DEBUGPlatformReadFile;
+            gameMemory.DEBUGPlatformWriteFile = platform::DEBUGPlatformWriteFile;
+
             game::Input input{};
 
             // Performance statistics
@@ -615,6 +666,9 @@ WinMain(
             gIsGameRunning = true;
 
             while (gIsGameRunning) {
+                // NOTE: crazy stuff
+                win32::GameCode game{ win32::LoadGameCode() };
+
                 for (u32 i{}; i < ARRAY_COUNT(input.playerInputs[0].buttons); ++i) {
                     input.playerInputs[0].buttons[i].halfTransitionCount = 0;
                 }
@@ -655,12 +709,14 @@ WinMain(
                 screenBuff.height = gScreenBuff.height;
                 screenBuff.pitch = gScreenBuff.pitch;
 
+                game.updateAndRender(&gameMemory, &screenBuff, &input);
+
                 game::SoundOutputBuffer soundBuff{};
                 soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
                 soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
                 soundBuff.samples = samples;
 
-                game::UpdateAndRender(&gameMemory, &screenBuff, &soundBuff, &input);
+                game.getSoundSamples(&gameMemory, &soundBuff);
 
                 if (isSoundValid) {
                     // soundBuff now contains game generated output
@@ -703,6 +759,7 @@ WinMain(
                 const f32 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
                 f32 secondsElapedForFrame{ secondsElapsed };
 
+#if 1
                 // Wait if we are ahead of the target FPS
                 if (secondsElapedForFrame < targetSecondsPerFrame) {
                     while (secondsElapedForFrame < targetSecondsPerFrame) {
@@ -725,6 +782,7 @@ WinMain(
                 } else {
                     //TODO: log the missed frame!!!
                 }
+#endif
 
                 endCounter = win32::GetWallClock();
                 const f64 ms{ 1000 * win32::GetSecondsElapsed(lastCounter, endCounter) };
@@ -775,6 +833,8 @@ WinMain(
 
                 LARGE_INTEGER resetCounter{ win32::GetWallClock() };
                 lastCounter = resetCounter;
+
+                win32::UnloadGameCode(&game);
             }
 
             ReleaseDC(windowHandle, deviceContext);

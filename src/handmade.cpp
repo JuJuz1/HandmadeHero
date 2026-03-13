@@ -2,26 +2,45 @@
 
 namespace game {
 
+namespace input {
+
+INTERNAL bool32
+ActionJustPressed(const Button* button) {
+    return button->endedDown && button->halfTransitionCount > 0;
+}
+
+INTERNAL bool32
+ActionPressed(const Button* button) {
+    return button->endedDown;
+}
+
+INTERNAL bool32
+ActionReleased(const Button* button) {
+    return !button->endedDown && button->halfTransitionCount > 0;
+}
+
+} //namespace input
+
 // Write the sound data to buff
 INTERNAL void
-OutputSound(const SoundOutputBuffer* buff, u32 toneHz) {
-    LOCAL_PERSIST f32 tSine;
+OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
     constexpr i32 toneVolume{ 3000 };
-    const u32 wavePeriod{ buff->samplesPerSecond / toneHz };
+    const u32 wavePeriod{ buff->samplesPerSecond / gameState->toneHz };
 
+    // NOTE: invalid semantics as buff is const but we copy the pointer...
     i16* sampleOut{ buff->samples };
 
     for (u32 i{ 0 }; i < buff->sampleCount; ++i) {
         // Sine wave
-        const f32 sineValue{ sinf(tSine) };
+        const f32 sineValue{ sinf(gameState->tSine) };
         const i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
 
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;
 
-        tSine += 2 * PI32f / static_cast<f32>(wavePeriod);
-        if (tSine > 2 * PI32f) {
-            tSine -= 2 * PI32f;
+        gameState->tSine += 2 * PI32f / static_cast<f32>(wavePeriod);
+        if (gameState->tSine > 2 * PI32f) {
+            gameState->tSine -= 2 * PI32f;
         }
     }
 }
@@ -54,9 +73,13 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
     }
 }
 
-INTERNAL void
-UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutputBuffer* soundBuff,
-                const Input* input) {
+// NOTE: use extern "C" to avoid name mangling
+extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
+    GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
+    OutputSound(gameState, soundBuff);
+}
+
+extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
     ASSERT(&input->playerInputs[0].E - &input->playerInputs[0].buttons[0] ==
@@ -68,13 +91,13 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
         //gameState->xOffset = 0;
         //gameState->yOffset = 0;
         gameState->toneHz = 256;
+        //gameState->tSine = 0;
 
         const char* fileName{ __FILE__ };
-        platform::DEBUGFileReadResult readResult{ platform::DEBUGPlatformReadFile(fileName) };
+        platform::DEBUGFileReadResult readResult{ memory->DEBUGPlatformReadFile(fileName) };
         if (readResult.content) {
-            platform::DEBUGPlatformWriteFile("test.out", readResult.content,
-                                             readResult.contentSize);
-            platform::DEBUGPlatformFreeFileMemory(readResult.content);
+            memory->DEBUGPlatformWriteFile("test.out", readResult.content, readResult.contentSize);
+            memory->DEBUGPlatformFreeFileMemory(readResult.content);
         }
 
         // TODO: maybe make platform set this
@@ -110,7 +133,7 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
     }
 
     constexpr u32 toneHzOffset{ 30 };
-    platform::DEBUGPrintInt("toneHz", gameState->toneHz);
+    //platform::DEBUGPrintInt("toneHz", gameState->toneHz);
 
     if (input::ActionJustPressed(&input0->E)) {
         gameState->toneHz += toneHzOffset;
@@ -123,7 +146,7 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
     }
 
     // TODO: allow sample offsets
-    OutputSound(soundBuff, gameState->toneHz);
+    //OutputSound(soundBuff, gameState->toneHz);
 
     DrawGradient(buff, gameState->xOffset, gameState->yOffset);
     //++xOffset;
@@ -131,3 +154,17 @@ UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const SoundOutp
 }
 
 } //namespace game
+
+// TODO: is this needed?
+#if HANDMADE_WIN32
+#include "windows.h"
+
+BOOL WINAPI
+DllMain(HINSTANCE, //hinstDLL, handle to DLL module
+        DWORD,     //fdwReason, reason for calling function
+        LPVOID     //lpvReserved reserved
+) {
+    return TRUE;
+}
+
+#endif

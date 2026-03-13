@@ -66,18 +66,34 @@ typedef double f64;
 
 namespace platform {
 
-INTERNAL void DEBUGPrintInt(const char* name, i32 value);
-INTERNAL void DEBUGPrintFloat(const char* name, f32 value);
+//void DEBUGPrintInt(const char* name, i32 value);
+//void DEBUGPrintFloat(const char* name, f32 value);
 
 struct DEBUGFileReadResult {
     void* content;
     u32 contentSize;
 };
 
-INTERNAL DEBUGFileReadResult DEBUGPlatformReadFile(const char* filename);
-INTERNAL void DEBUGPlatformFreeFileMemory(void* memory);
+// clang-format off
+#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name(void* memory)
+typedef DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_platform_free_file_memory);
+//DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemoryStub) {}
+
+#define DEBUG_PLATFORM_READ_FILE(name) DEBUGFileReadResult name(const char* filename)
+typedef DEBUG_PLATFORM_READ_FILE(debug_platform_read_file);
+//DEBUG_PLATFORM_READ_FILE(DEBUGPlatformReadFileStub) {}
+
+#define DEBUG_PLATFORM_WRITE_FILE(name) bool32 name(const char* filename, void* memory, u32 fileSize)
+typedef DEBUG_PLATFORM_WRITE_FILE(debug_platform_write_file);
+//DEBUG_PLATFORM_WRITE_FILE(DEBUGPlatformWriteFileStub) {}
+
+
+//DEBUGFileReadResult DEBUGPlatformReadFile(const char* filename);
+//void DEBUGPlatformFreeFileMemory(void* memory);
 // TODO: make this safer i.e. protect against lost data e.g. if the write succeeds only partially
-INTERNAL bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize);
+//bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize);
+
+// clang-format on
 
 } //namespace platform
 
@@ -93,7 +109,7 @@ SafeTruncateI64toI32(i64 value) {
 }
 
 INTERNAL inline u32
-SafeTrunateU64toU32(u64 value) {
+SafeTruncateU64toU32(u64 value) {
     // TODO: U32_MAX and such...
     ASSERT(value <= 0xFFFFFFFFULL);
     return static_cast<u32>(value);
@@ -105,6 +121,8 @@ SafeTruncateF64toF32(f64 value) {
     ASSERT(value >= -3.402823466e+38);
     return static_cast<f32>(value);
 }
+
+/// Game specific code ///
 
 namespace game {
 
@@ -120,9 +138,15 @@ struct GameMemory {
     u64 transientStorageSize;
 
     bool32 isInitialized;
+
+    // Exported functions for the game
+
+    platform::debug_platform_free_file_memory* DEBUGPlatformFreeFileMemory;
+    platform::debug_platform_read_file* DEBUGPlatformReadFile;
+    platform::debug_platform_write_file* DEBUGPlatformWriteFile;
 };
 
-// Struct to hold buffer info
+// Struct to hold screen buffer info
 struct OffScreenBuffer {
     void* memory;
     i32 width;
@@ -175,37 +199,37 @@ struct Input {
 static_assert(sizeof(InputButtons) == sizeof(Button) * buttonCount,
               "Inputbuttons count doesn't match the amount of buttons declared!");
 
-namespace input {
-
-INTERNAL bool32
-ActionJustPressed(const Button* button) {
-    return button->endedDown && button->halfTransitionCount > 0;
-}
-
-INTERNAL bool32
-ActionPressed(const Button* button) {
-    return button->endedDown;
-}
-
-INTERNAL bool32
-ActionReleased(const Button* button) {
-    return !button->endedDown && button->halfTransitionCount > 0;
-}
-
-} //namespace input
-
 // We use the style 2 (Game as a service to the OS) described in the series
 
 /// Services that the game provides to the platform layer ///
 
+namespace dll {
+
+// clang-format off
+#define GET_SOUND_SAMPLES(name) void name(GameMemory* memory, const SoundOutputBuffer* soundBuff)
+typedef GET_SOUND_SAMPLES(get_sound_samples);
+GET_SOUND_SAMPLES(GetSoundSamplesStub) {}
+
+//void GetSoundSamples(GameMemory* memory, const SoundOutputBuffer* soundBuff);
+
+#define UPDATE_AND_RENDER(name) void name(GameMemory* memory, const OffScreenBuffer* buff, const Input* input)
+typedef UPDATE_AND_RENDER(update_and_render);
+UPDATE_AND_RENDER(UpdateAndRenderStub) {
+    //ASSERT(!"UpdateAndRenderStub called!");
+}
+
+// clang-format on
+
 // Game's "main loop"
-INTERNAL void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff,
-                              const SoundOutputBuffer* soundBuff, const Input* input);
+//void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const Input* input);
+
+} //namespace dll
 
 struct GameState {
     u32 xOffset;
     u32 yOffset;
     u32 toneHz;
+    f32 tSine;
 };
 
 } //namespace game

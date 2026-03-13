@@ -37,7 +37,10 @@ set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBU
 set commonWin32Libraries=User32.lib Gdi32.lib Winmm.lib
 set commonLinkerFlags=/OPT:REF /OPT:NOICF %commonWin32Libraries%
 
+rem compile the platform and the game as seperate to allow DLL tricks
 cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %commonLinkerFlags%
+cl %commonCompilerFlags% ../src/handmade.cpp /link /DLL /EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
+rem /link before /DLL?
 
 rem not actually needed, to pop the build directory?
 rem needed if building from command line and not vscode

@@ -2,7 +2,7 @@
 #define WIN32_HANDMADE_H
 
 // Compiler switch
-#ifdef HANDMADE_WIN32
+#if HANDMADE_WIN32
 
 namespace win32 {
 
