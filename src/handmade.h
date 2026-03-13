@@ -38,11 +38,13 @@ HANDMADE_DEBUG:
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 // Integral promotion, otherwise the value might wrap to 0 because we hit u32 max...
-
 #define KILOBYTES(count) ((count) * 1024LL)
 #define MEGABYTES(count) (KILOBYTES(count) * 1024LL)
 #define GIGABYTES(count) (MEGABYTES(count) * 1024LL)
 #define TERABYTES(count) (GIGABYTES(count) * 1024LL)
+
+// To suppress warnings on stub functions
+#define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
 
 // Typedefs for common types
 
@@ -66,33 +68,26 @@ typedef double f64;
 
 namespace platform {
 
-//void DEBUGPrintInt(const char* name, i32 value);
-//void DEBUGPrintFloat(const char* name, f32 value);
-
 struct DEBUGFileReadResult {
     void* content;
     u32 contentSize;
 };
 
 // clang-format off
-#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name(void* memory)
-typedef DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_platform_free_file_memory);
-//DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemoryStub) {}
+#define DEBUG_PRINT_INT(name) void name(const char* valueName, i32 value)
+typedef DEBUG_PRINT_INT(debug_print_int);
 
-#define DEBUG_PLATFORM_READ_FILE(name) DEBUGFileReadResult name(const char* filename)
-typedef DEBUG_PLATFORM_READ_FILE(debug_platform_read_file);
-//DEBUG_PLATFORM_READ_FILE(DEBUGPlatformReadFileStub) {}
+#define DEBUG_PRINT_FLOAT(name) void name(const char* valueName, f32 value)
+typedef DEBUG_PRINT_FLOAT(debug_print_float);
 
-#define DEBUG_PLATFORM_WRITE_FILE(name) bool32 name(const char* filename, void* memory, u32 fileSize)
-typedef DEBUG_PLATFORM_WRITE_FILE(debug_platform_write_file);
-//DEBUG_PLATFORM_WRITE_FILE(DEBUGPlatformWriteFileStub) {}
+#define DEBUG_FREE_FILE_MEMORY(name) void name(void* memory)
+typedef DEBUG_FREE_FILE_MEMORY(debug_free_file_memory);
 
+#define DEBUG_READ_FILE(name) DEBUGFileReadResult name(const char* filename)
+typedef DEBUG_READ_FILE(debug_read_file);
 
-//DEBUGFileReadResult DEBUGPlatformReadFile(const char* filename);
-//void DEBUGPlatformFreeFileMemory(void* memory);
-// TODO: make this safer i.e. protect against lost data e.g. if the write succeeds only partially
-//bool32 DEBUGPlatformWriteFile(const char* filename, void* memory, u32 fileSize);
-
+#define DEBUG_WRITE_FILE(name) bool32 name(const char* filename, void* memory, u32 fileSize)
+typedef DEBUG_WRITE_FILE(debug_write_file);
 // clang-format on
 
 } //namespace platform
@@ -141,9 +136,11 @@ struct GameMemory {
 
     // Exported functions for the game
 
-    platform::debug_platform_free_file_memory* DEBUGPlatformFreeFileMemory;
-    platform::debug_platform_read_file* DEBUGPlatformReadFile;
-    platform::debug_platform_write_file* DEBUGPlatformWriteFile;
+    platform::debug_free_file_memory* DEBUGFreeFileMemory;
+    platform::debug_read_file* DEBUGReadFile;
+    platform::debug_write_file* DEBUGWriteFile;
+    platform::debug_print_int* DEBUGPrintInt;
+    platform::debug_print_float* DEBUGPrintFloat;
 };
 
 // Struct to hold screen buffer info
@@ -208,7 +205,9 @@ namespace dll {
 // clang-format off
 #define GET_SOUND_SAMPLES(name) void name(GameMemory* memory, const SoundOutputBuffer* soundBuff)
 typedef GET_SOUND_SAMPLES(get_sound_samples);
-GET_SOUND_SAMPLES(GetSoundSamplesStub) {}
+GET_SOUND_SAMPLES(GetSoundSamplesStub) {
+    UNUSED_PARAMS(memory, soundBuff);
+}
 
 //void GetSoundSamples(GameMemory* memory, const SoundOutputBuffer* soundBuff);
 
@@ -216,6 +215,7 @@ GET_SOUND_SAMPLES(GetSoundSamplesStub) {}
 typedef UPDATE_AND_RENDER(update_and_render);
 UPDATE_AND_RENDER(UpdateAndRenderStub) {
     //ASSERT(!"UpdateAndRenderStub called!");
+    UNUSED_PARAMS(memory, buff, input);
 }
 
 // clang-format on

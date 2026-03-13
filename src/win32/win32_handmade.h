@@ -29,6 +29,14 @@ struct WindowDimension {
     i32 height;
 };
 
+struct GameCode {
+    HMODULE dll;
+    game::dll::update_and_render* updateAndRender;
+    game::dll::get_sound_samples* getSoundSamples;
+
+    bool32 isValid;
+};
+
 } //namespace win32
 
 #endif // HANDMADE_WIN32

@@ -94,10 +94,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //gameState->tSine = 0;
 
         const char* fileName{ __FILE__ };
-        platform::DEBUGFileReadResult readResult{ memory->DEBUGPlatformReadFile(fileName) };
+        platform::DEBUGFileReadResult readResult{ memory->DEBUGReadFile(fileName) };
         if (readResult.content) {
-            memory->DEBUGPlatformWriteFile("test.out", readResult.content, readResult.contentSize);
-            memory->DEBUGPlatformFreeFileMemory(readResult.content);
+            memory->DEBUGWriteFile("test.out", readResult.content, readResult.contentSize);
+            memory->DEBUGFreeFileMemory(readResult.content);
         }
 
         // TODO: maybe make platform set this
@@ -133,7 +133,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     constexpr u32 toneHzOffset{ 30 };
-    //platform::DEBUGPrintInt("toneHz", gameState->toneHz);
+    memory->DEBUGPrintInt("toneHz", gameState->toneHz);
 
     if (input::ActionJustPressed(&input0->E)) {
         gameState->toneHz += toneHzOffset;
@@ -155,7 +155,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
 } //namespace game
 
-// TODO: is this needed?
+// TODO: is this needed? seems like not
+#if 0
 #if HANDMADE_WIN32
 #include "windows.h"
 
@@ -167,4 +168,5 @@ DllMain(HINSTANCE, //hinstDLL, handle to DLL module
     return TRUE;
 }
 
+#endif
 #endif

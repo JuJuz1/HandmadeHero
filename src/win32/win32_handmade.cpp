@@ -21,28 +21,26 @@ namespace platform {
 
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
-void
-DEBUGPrintInt(const char* name, i32 value) {
+DEBUG_PRINT_INT(DEBUGPrintInt) {
     char buf[32];
-    sprintf_s(buf, sizeof(buf), "%s: %d\n", name, value);
+    sprintf_s(buf, "%s: %d\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
-void
-DEBUGPrintFloat(const char* name, f32 value) {
+DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
     char buf[32];
-    sprintf_s(buf, sizeof(buf), "%s: %f\n", name, value);
+    sprintf_s(buf, "%s: %f\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
-DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory) {
+DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
     if (memory) {
         VirtualFree(memory, 0, MEM_RELEASE);
     }
 }
 
-DEBUG_PLATFORM_READ_FILE(DEBUGPlatformReadFile) {
-    DEBUGFileReadResult result;
+DEBUG_READ_FILE(DEBUGReadFile) {
+    DEBUGFileReadResult result{};
     // What an atrocious name for a function which requests to read a file...
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
@@ -60,7 +58,7 @@ DEBUG_PLATFORM_READ_FILE(DEBUGPlatformReadFile) {
                     // Success
                     result.contentSize = bytesToRead;
                 } else {
-                    DEBUGPlatformFreeFileMemory(result.content);
+                    DEBUGFreeFileMemory(result.content);
                     result.content = 0;
                 }
             } else {
@@ -78,7 +76,7 @@ DEBUG_PLATFORM_READ_FILE(DEBUGPlatformReadFile) {
     return result;
 }
 
-DEBUG_PLATFORM_WRITE_FILE(DEBUGPlatformWriteFile) {
+DEBUG_WRITE_FILE(DEBUGWriteFile) {
     bool32 result{};
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -475,22 +473,16 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return static_cast<f32>(end.QuadPart - start.QuadPart) / gPerfCounterFreq;
 }
 
-struct GameCode {
-    HMODULE dll;
-    game::dll::update_and_render* updateAndRender;
-    game::dll::get_sound_samples* getSoundSamples;
-
-    bool32 isValid;
-};
-
 INTERNAL GameCode
 LoadGameCode() {
     using namespace game::dll;
 
+    // TODO: fix paths, also Visual Studio locks .pdb
+    // also determine if an update is necessary rather than querying for it in the loop
+    CopyFileA("handmade.dll", "handmade_temp.dll", FALSE);
     GameCode gameCode;
     // TODO: change to .dll
-    gameCode.dll = LoadLibraryA("handmade.exe");
-    gameCode.isValid = false;
+    gameCode.dll = LoadLibraryA("handmade_temp.dll");
 
     if (gameCode.dll) {
         gameCode.updateAndRender =
@@ -498,7 +490,7 @@ LoadGameCode() {
         gameCode.getSoundSamples =
             reinterpret_cast<get_sound_samples*>(GetProcAddress(gameCode.dll, "GetSoundSamples"));
 
-        gameCode.isValid = (gameCode.updateAndRender && gameCode.getSoundSamples);
+        gameCode.isValid = gameCode.updateAndRender && gameCode.getSoundSamples;
     } else {
         // TODO: log
         OutputDebugStringA("Failed to load handmade.dll!\n");
@@ -516,6 +508,7 @@ INTERNAL void
 UnloadGameCode(GameCode* gamecode) {
     if (gamecode->dll) {
         FreeLibrary(gamecode->dll);
+        gamecode->dll = 0;
     }
 
     gamecode->updateAndRender = game::dll::UpdateAndRenderStub;
@@ -558,7 +551,7 @@ WinMain(
     // commenting out removed C4100 warnings for unreferenced parameters
     HINSTANCE hInstance, // A handle to the current instance of the application
     HINSTANCE,           // hPrevInstance, Not in use anymore
-    PSTR,                // lpCmdLine, Command line arguments
+    LPSTR,               // lpCmdLine, Command line arguments
     int                  // nCmdShow Window visibility option
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
@@ -586,7 +579,7 @@ WinMain(
     constexpr f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
     // NOTE: This will not be used if we recap episode 20 audio fixes
-    constexpr u32 framesOfAudioLatency{ 3 }; // 3 seems to be enough for gameUpdateHz of 30
+    constexpr u32 framesOfAudioLatency{ 4 }; // 3 seems to be enough for gameUpdateHz of 30, test 4
 
     constexpr u32 desiredSchedulerMS{ 1 };
     bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
@@ -639,9 +632,11 @@ WinMain(
                 ASSERT(!"One or more of the game memory allocations failed!");
             }
 
-            gameMemory.DEBUGPlatformFreeFileMemory = platform::DEBUGPlatformFreeFileMemory;
-            gameMemory.DEBUGPlatformReadFile = platform::DEBUGPlatformReadFile;
-            gameMemory.DEBUGPlatformWriteFile = platform::DEBUGPlatformWriteFile;
+            gameMemory.DEBUGFreeFileMemory = platform::DEBUGFreeFileMemory;
+            gameMemory.DEBUGReadFile = platform::DEBUGReadFile;
+            gameMemory.DEBUGWriteFile = platform::DEBUGWriteFile;
+            gameMemory.DEBUGPrintInt = platform::DEBUGPrintInt;
+            gameMemory.DEBUGPrintFloat = platform::DEBUGPrintFloat;
 
             game::Input input{};
 
@@ -662,12 +657,22 @@ WinMain(
             DWORD lastPlayCursor{};
             bool32 isSoundValid{};
 
+            win32::GameCode game{ win32::LoadGameCode() };
+
+            // Unload and load the dll
+            u32 loadCounter{};
+            constexpr f32 loadEverySeconds{ 0.5 };
+            constexpr u32 loadThreshold{ static_cast<u32>(gameUpdateHz * loadEverySeconds) };
+
             // The main loop!
             gIsGameRunning = true;
 
             while (gIsGameRunning) {
-                // NOTE: crazy stuff
-                win32::GameCode game{ win32::LoadGameCode() };
+                if (++loadCounter > loadThreshold) {
+                    win32::UnloadGameCode(&game);
+                    game = win32::LoadGameCode();
+                    loadCounter = 0;
+                }
 
                 for (u32 i{}; i < ARRAY_COUNT(input.playerInputs[0].buttons); ++i) {
                     input.playerInputs[0].buttons[i].halfTransitionCount = 0;
@@ -833,8 +838,6 @@ WinMain(
 
                 LARGE_INTEGER resetCounter{ win32::GetWallClock() };
                 lastCounter = resetCounter;
-
-                win32::UnloadGameCode(&game);
             }
 
             ReleaseDC(windowHandle, deviceContext);
