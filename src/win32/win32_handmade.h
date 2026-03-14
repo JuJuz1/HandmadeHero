@@ -31,6 +31,7 @@ struct WindowDimension {
 
 struct GameCode {
     HMODULE dll;
+    FILETIME lastWritetime;
     game::dll::update_and_render* updateAndRender;
     game::dll::get_sound_samples* getSoundSamples;
 

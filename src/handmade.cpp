@@ -66,7 +66,7 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
             const u8 green{ static_cast<u8>(y + yOffset) };
 
             // Register: xx RR GG BB
-            *pixel++ = ((green << 8) | blue);
+            *pixel++ = (green << 8) | blue;
         }
 
         row += buff->pitch;
@@ -154,19 +154,3 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 }
 
 } //namespace game
-
-// TODO: is this needed? seems like not
-#if 0
-#if HANDMADE_WIN32
-#include "windows.h"
-
-BOOL WINAPI
-DllMain(HINSTANCE, //hinstDLL, handle to DLL module
-        DWORD,     //fdwReason, reason for calling function
-        LPVOID     //lpvReserved reserved
-) {
-    return TRUE;
-}
-
-#endif
-#endif

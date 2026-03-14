@@ -477,18 +477,30 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return static_cast<f64>(end.QuadPart - start.QuadPart) / static_cast<f64>(gPerfCounterFreq);
 }
 
+INTERNAL inline FILETIME
+GetLastWriteTime(const char* filename) {
+    FILETIME lastWriteTime{};
+
+    WIN32_FIND_DATAA findData;
+    HANDLE fileHandle{ FindFirstFileA(filename, &findData) };
+    if (fileHandle != INVALID_HANDLE_VALUE) {
+        lastWriteTime = findData.ftLastWriteTime;
+        FindClose(fileHandle);
+    }
+
+    return lastWriteTime;
+}
+
 INTERNAL GameCode
-LoadGameCode() {
-    using namespace game::dll;
+LoadGameCode(const char* srcDll, const char* tempDll) {
+    // NOTE: Delete the temp file when the program ends?
+    CopyFileA(srcDll, tempDll, FALSE);
 
-    // TODO: fix paths, also Visual Studio locks .pdb
-    // Also determine if an update is necessary rather than querying for it in the loop
-    // Delete the temp file when the program ends?
-    CopyFileA("handmade.dll", "handmade_temp.dll", FALSE);
     GameCode gameCode{};
-    // TODO: change to .dll
-    gameCode.dll = LoadLibraryA("handmade_temp.dll");
+    gameCode.dll = LoadLibraryA(tempDll);
+    gameCode.lastWritetime = GetLastWriteTime(srcDll);
 
+    using namespace game::dll;
     if (gameCode.dll) {
         gameCode.updateAndRender =
             reinterpret_cast<update_and_render*>(GetProcAddress(gameCode.dll, "UpdateAndRender"));
@@ -548,6 +560,26 @@ DEBUGDisplayAudioSync(OffScreenBuffer* buff, DWORD lastPlayCursorCount, DWORD* l
 }
 #endif
 
+INTERNAL void
+CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
+           u64 destSize) {
+    // Space for null terminator
+    u64 total{ srcASize + srcBSize };
+    if (total >= destSize) {
+        total = destSize - 1;
+    }
+
+    for (u32 i{}; i < srcASize && i < total; ++i) {
+        *dest++ = *srcA++;
+    }
+
+    for (u32 i{}; i < srcBSize && i < total; ++i) {
+        *dest++ = *srcB++;
+    }
+
+    *dest++ = '\0';
+}
+
 } //namespace win32
 
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
@@ -561,7 +593,26 @@ WinMain(
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
-    //win32::GameCode game{ win32::LoadGameCode() };
+    // NOTE: don't use MAX_PATH in user code as it can be dangerous
+    char exePath[MAX_PATH];
+    GetModuleFileNameA(0, exePath, sizeof(exePath));
+    const char* exeName{ exePath };
+    for (char* scan{ exePath }; *scan; ++scan) {
+        if (*scan == '\\') {
+            exeName = scan + 1;
+        }
+    }
+
+    // NOTE: a little string processing cause we are handmade
+    const char srcDllFilename[] = "handmade.dll";
+    char srcDllPath[MAX_PATH];
+    win32::CatStrings(exePath, exeName - exePath, srcDllFilename, sizeof(srcDllFilename) - 1,
+                      srcDllPath, sizeof(srcDllPath));
+
+    const char tempDllFilename[] = "handmade_temp.dll";
+    char tempDllPath[MAX_PATH];
+    win32::CatStrings(exePath, exeName - exePath, tempDllFilename, sizeof(tempDllFilename) - 1,
+                      tempDllPath, sizeof(tempDllPath));
 
     constexpr i32 startingWidth{ 1280 };
     constexpr i32 startingHeight{ 720 };
@@ -663,21 +714,15 @@ WinMain(
             DWORD lastPlayCursor{};
             bool32 isSoundValid{};
 
-            win32::GameCode game{ win32::LoadGameCode() };
+            // The game represented as a DLL which allows hot reloading and more fun stuff!
+            win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
 
-            // Unload and load the dll
-            u32 loadCounter{};
-            constexpr f32 loadEverySeconds{ 0.5 };
-            constexpr u32 loadThreshold{ static_cast<u32>(gameUpdateHz * loadEverySeconds) };
-
-            // The main loop!
             gIsGameRunning = true;
-
             while (gIsGameRunning) {
-                if (++loadCounter > loadThreshold) {
+                const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
+                if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
                     win32::UnloadGameCode(&game);
-                    game = win32::LoadGameCode();
-                    loadCounter = 0;
+                    game = win32::LoadGameCode(srcDllPath, tempDllPath);
                 }
 
                 for (u32 i{}; i < ARRAY_COUNT(input.playerInputs[0].buttons); ++i) {

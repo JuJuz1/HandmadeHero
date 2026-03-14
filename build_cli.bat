@@ -39,20 +39,28 @@ rem could also specify in the source and is most recommended
 rem this way we get the maximum flexibility though and we don't boilerplate the source
 
 set commonCompilerWarnings=/W4 /WX /wd4201
-set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm %commonCompilerWarnings% /Oi /EHa- /GR- /std:c++20 /nologo
-set commonWin32Libraries=User32.lib Gdi32.lib Winmm.lib
-set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO %commonWin32Libraries%
+set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set win32Libraries=User32.lib Gdi32.lib Winmm.lib
+set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
+set gameExportedFunctions=/EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
 
 set buildFailed=0
 
+rem delete all .pdb files
+rem replace the game's one with a new timestamped version to enable instantenous updating
+del *.pdb
+
 rem compile the platform and the game as seperate to allow DLL tricks
-cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %commonLinkerFlags%
+cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %win32Libraries% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mwin32_handmade.cpp failed[0m[1m
 )
 
-cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
+rem this requires specific locale...
+set timestamp=%DATE:~-4%%DATE:~6,2%%DATE:~3,2%_%TIME:~0,2%%TIME:~3,2%%TIME:~6,2%
+
+cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /PDB:handmade_%timestamp%.pdb %gameExportedFunctions% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
