@@ -478,7 +478,8 @@ LoadGameCode() {
     using namespace game::dll;
 
     // TODO: fix paths, also Visual Studio locks .pdb
-    // also determine if an update is necessary rather than querying for it in the loop
+    // Also determine if an update is necessary rather than querying for it in the loop
+    // Delete the temp file when the program ends?
     CopyFileA("handmade.dll", "handmade_temp.dll", FALSE);
     GameCode gameCode;
     // TODO: change to .dll
