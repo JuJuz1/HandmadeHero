@@ -1,3 +1,3 @@
-#include "handmade.cpp"
+#include "handmade.h"
 
 // Linux-specific code

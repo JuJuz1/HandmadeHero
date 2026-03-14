@@ -1,0 +1,50 @@
+# https://releases.llvm.org/21.1.0/tools/clang/tools/extra/docs/clang-tidy/index.html
+# Clang tidy file
+# compile_commands.json to specify compiler commands
+
+# To run on all .cpp files in /src:
+# clang-tidy src/**/*.cpp
+# Use this for now:
+# clang-tidy src/handmade.cpp src/win32/win32_handmade.cpp
+
+---
+Checks: >
+  -*,
+
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+
+  clang-analyzer-*,
+  performance-*,
+  portability-*,
+
+  misc-*,
+  -misc-use-anonymous-namespace,
+  -misc-include-cleaner,
+  -misc-definitions-in-headers,
+
+  modernize-*,
+  -modernize-avoid-c-arrays,
+  -modernize-use-trailing-return-type,
+  -modernize-use-std-numbers,
+  -modernize-use-using,
+  -modernize-use-nullptr,
+  -modernize-use-designated-initializers,
+
+  readability-*,
+  -readability-implicit-bool-conversion,
+  -readability-avoid-unconditional-preprocessor-if,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-uppercase-literal-suffix,
+  -readability-function-cognitive-complexity
+
+WarningsAsErrors: ''
+HeaderFileExtensions:
+  - h
+ImplementationFileExtensions:
+  - cpp
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: ''
+FormatStyle: 'file'
+...

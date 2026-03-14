@@ -1,0 +1,12 @@
+[
+    {
+        "directory": "C:/Ylopisto/HandmadeHero",
+        "command": "clang-cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /I src /Zi /FC /W4 /WX /wd4201 /Oi /EHa- /GR- /std:c++20 /nologo src/handmade.cpp",
+        "file": "src/handmade.cpp"
+    },
+    {
+        "directory": "C:/Ylopisto/HandmadeHero",
+        "command": "clang-cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /I src /Zi /FC /W4 /WX /wd4201 /Oi /EHa- /GR- /std:c++20 /nologo src/win32/win32_handmade.cpp",
+        "file": "src/win32/win32_handmade.cpp"
+    }
+]

@@ -23,7 +23,7 @@ HANDMADE_DEBUG:
 // of values?)
 #ifdef HANDMADE_DEBUG
 // clang-format off
-#define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; }
+#define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; } // clang-tidy NOLINT
 // clang-format on
 #else
 #define ASSERT(expr)

@@ -21,24 +21,28 @@ namespace platform {
 
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
+INTERNAL
 DEBUG_PRINT_INT(DEBUGPrintInt) {
     char buf[32];
     sprintf_s(buf, "%s: %d\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
+INTERNAL
 DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
     char buf[32];
     sprintf_s(buf, "%s: %f\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
+INTERNAL
 DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
     if (memory) {
         VirtualFree(memory, 0, MEM_RELEASE);
     }
 }
 
+INTERNAL
 DEBUG_READ_FILE(DEBUGReadFile) {
     DEBUGFileReadResult result{};
     // What an atrocious name for a function which requests to read a file...
@@ -50,7 +54,7 @@ DEBUG_READ_FILE(DEBUGReadFile) {
             result.content =
                 VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
             if (result.content) {
-                u32 bytesToRead{ SafeTruncateU64toU32(fileSize.QuadPart) };
+                const u32 bytesToRead{ SafeTruncateU64toU32(fileSize.QuadPart) };
                 DWORD bytesRead;
                 // Consider the case where one could truncate the file after reading
                 if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
@@ -76,6 +80,7 @@ DEBUG_READ_FILE(DEBUGReadFile) {
     return result;
 }
 
+INTERNAL
 DEBUG_WRITE_FILE(DEBUGWriteFile) {
     bool32 result{};
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
@@ -136,8 +141,7 @@ ResizeDIBSection(OffScreenBuffer* buff, i32 w, i32 h) {
 }
 
 INTERNAL void
-DisplayBufferWindow(const HDC deviceContext, const OffScreenBuffer* buff, i32 wndWidth,
-                    i32 wndHeight) {
+DisplayBufferWindow(HDC deviceContext, const OffScreenBuffer* buff, i32 wndWidth, i32 wndHeight) {
     // TODO: aspect ratio correction
     StretchDIBits(deviceContext, 0, 0, wndWidth, wndHeight, // dest
                   0, 0, buff->width, buff->height,          // src
@@ -253,7 +257,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
 
         const DWORD region1SampleCount{ region1Size / soundOutput->bytesPerSample };
         i16* destSample{ static_cast<i16*>(region1) };
-        i16* srcSample{ sourceBuff->samples };
+        const i16* srcSample{ sourceBuff->samples };
 
         // TODO: collapse loops to one
         for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
@@ -278,9 +282,9 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
 }
 
 // Callback for messages
-LRESULT CALLBACK
+INTERNAL LRESULT CALLBACK
 MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    LRESULT result{ 0 };
+    LRESULT result{};
 
     switch (msg) {
     case WM_CLOSE: {
@@ -321,7 +325,7 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         OutputDebugStringA("WM_PAINT\n");
 
         PAINTSTRUCT paint;
-        const HDC deviceContext{ BeginPaint(wnd, &paint) };
+        HDC deviceContext{ BeginPaint(wnd, &paint) };
 
         auto wndDimension{ GetWindowDimensions(wnd) };
         DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
@@ -353,9 +357,9 @@ ProcessPendingMessages(game::Input* input) {
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
         // message.lParam contains additional information about keystrokes
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-        u32 vkCode{ static_cast<u32>(message.wParam) };
-        bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
-        bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
+        const u32 vkCode{ static_cast<u32>(message.wParam) };
+        const bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
+        const bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
 
         switch (message.message) {
         case WM_QUIT: {
@@ -369,7 +373,7 @@ ProcessPendingMessages(game::Input* input) {
             if (vkCode == VK_F4) {
                 OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
                 // Should always be true here
-                bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
+                const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
                 ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
                 if (altPressed) {
                     gIsGameRunning = false;
@@ -468,9 +472,9 @@ GetWallClock() {
     return res;
 }
 
-INTERNAL f32
+INTERNAL f64
 GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
-    return static_cast<f32>(end.QuadPart - start.QuadPart) / gPerfCounterFreq;
+    return static_cast<f64>(end.QuadPart - start.QuadPart) / static_cast<f64>(gPerfCounterFreq);
 }
 
 INTERNAL GameCode
@@ -481,7 +485,7 @@ LoadGameCode() {
     // Also determine if an update is necessary rather than querying for it in the loop
     // Delete the temp file when the program ends?
     CopyFileA("handmade.dll", "handmade_temp.dll", FALSE);
-    GameCode gameCode;
+    GameCode gameCode{};
     // TODO: change to .dll
     gameCode.dll = LoadLibraryA("handmade_temp.dll");
 
@@ -550,10 +554,10 @@ DEBUGDisplayAudioSync(OffScreenBuffer* buff, DWORD lastPlayCursorCount, DWORD* l
 int WINAPI
 WinMain(
     // commenting out removed C4100 warnings for unreferenced parameters
-    HINSTANCE hInstance, // A handle to the current instance of the application
-    HINSTANCE,           // hPrevInstance, Not in use anymore
-    LPSTR,               // lpCmdLine, Command line arguments
-    int                  // nCmdShow Window visibility option
+    HINSTANCE hInstance,  // A handle to the current instance of the application
+    HINSTANCE /*unused*/, // hPrevInstance, Not in use anymore
+    LPSTR /*unused*/,     // lpCmdLine, Command line arguments
+    int /*unused*/        // nCmdShow Window visibility option
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
@@ -583,16 +587,16 @@ WinMain(
     constexpr u32 framesOfAudioLatency{ 4 }; // 3 seems to be enough for gameUpdateHz of 30, test 4
 
     constexpr u32 desiredSchedulerMS{ 1 };
-    bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
+    const bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
-    if (RegisterClass(&windowClass)) {
-        const HWND windowHandle = CreateWindowExA(0, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                                  // Window size and position
-                                                  CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                                  CW_USEDEFAULT, 0, 0, hInstance, 0);
+    if (RegisterClassA(&windowClass)) {
+        HWND windowHandle = CreateWindowExA(0, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                            // Window size and position
+                                            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                            CW_USEDEFAULT, 0, 0, hInstance, 0);
 
         if (windowHandle) {
-            const HDC deviceContext{ GetDC(windowHandle) };
+            HDC deviceContext{ GetDC(windowHandle) };
 
             // DirectSound
             win32::SoundOutput soundOutput{};
@@ -621,7 +625,8 @@ WinMain(
             gameMemory.transientStorageSize = GIGABYTES(4);
 
             // TODO: Variable memory allocation based on platform statistics
-            u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
+            const u64 totalSize{ gameMemory.permanentStorageSize +
+                                 gameMemory.transientStorageSize };
             gameMemory.permanentStorage =
                 VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
@@ -695,7 +700,7 @@ WinMain(
                                  soundOutput.buffSize;
 
                     targetCursor = (lastPlayCursor +
-                                    soundOutput.latencySampleCount * soundOutput.bytesPerSample) %
+                                    (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) %
                                    soundOutput.buffSize;
                     // To the end and wrap behind playCursor
                     if (byteToLock > targetCursor) {
@@ -762,15 +767,15 @@ WinMain(
                 // between the frame's end and start
 
                 LARGE_INTEGER endCounter{ win32::GetWallClock() };
-                const f32 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
-                f32 secondsElapedForFrame{ secondsElapsed };
+                const f64 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
+                f64 secondsElapedForFrame{ secondsElapsed };
 
 #if 1
                 // Wait if we are ahead of the target FPS
                 if (secondsElapedForFrame < targetSecondsPerFrame) {
                     while (secondsElapedForFrame < targetSecondsPerFrame) {
                         if (isSleepGranular) {
-                            DWORD remainingMS{ static_cast<DWORD>(
+                            const DWORD remainingMS{ static_cast<DWORD>(
                                 (targetSecondsPerFrame - secondsElapedForFrame) * 1000.0f) };
                             if (remainingMS > 0) {
                                 Sleep(remainingMS);
@@ -823,8 +828,8 @@ WinMain(
 #endif
 
                 const u64 endCycleCount{ __rdtsc() };
-                const f64 cycleElapsedM{ static_cast<f64>(endCycleCount - lastCycleCount) /
-                                         (1000.0 * 1000.0) };
+                const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) / 1000 *
+                                         1000 };
 
                 //const f64 ms{ 1000.0 * secondsElapsed };
                 //const f64 FPS{ 1000 / ms };
@@ -837,7 +842,7 @@ WinMain(
 
                 lastCycleCount = endCycleCount;
 
-                LARGE_INTEGER resetCounter{ win32::GetWallClock() };
+                const LARGE_INTEGER resetCounter{ win32::GetWallClock() };
                 lastCounter = resetCounter;
             }
 

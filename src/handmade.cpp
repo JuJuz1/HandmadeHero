@@ -62,8 +62,8 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
             // Memory: BB GG RR xx
             // !little endianness!
 
-            u8 blue{ static_cast<u8>(x + xOffset) };
-            u8 green{ static_cast<u8>(y + yOffset) };
+            const u8 blue{ static_cast<u8>(x + xOffset) };
+            const u8 green{ static_cast<u8>(y + yOffset) };
 
             // Register: xx RR GG BB
             *pixel++ = ((green << 8) | blue);
@@ -94,7 +94,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //gameState->tSine = 0;
 
         const char* fileName{ __FILE__ };
-        platform::DEBUGFileReadResult readResult{ memory->DEBUGReadFile(fileName) };
+        const auto readResult{ memory->DEBUGReadFile(fileName) };
         if (readResult.content) {
             memory->DEBUGWriteFile("test.out", readResult.content, readResult.contentSize);
             memory->DEBUGFreeFileMemory(readResult.content);
