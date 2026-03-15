@@ -13,6 +13,8 @@ This is not a final platform layer!
 #include "win32_handmade.h"
 
 GLOBAL bool32 gIsGameRunning;
+GLOBAL bool32 gIsGamePaused;
+
 GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
@@ -342,50 +344,64 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 INTERNAL void
-BeginRecordInput(InputRecorded* inputRecorded, u32 recordingIndex) {
-    inputRecorded->recordingIndex = recordingIndex;
+BeginRecordInput(AllState* allState, u32 recordingIndex) {
+    allState->recordingIndex = recordingIndex;
 
     const char* filename{ "foo.hmi" };
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
-        inputRecorded->recordingHandle = fileHandle;
+        allState->recordingHandle = fileHandle;
     } else {
         OutputDebugStringA("BeginRecordInput CreateFileA writing to file failed!\n");
     }
+
+    const DWORD bytesToWrite{ static_cast<DWORD>(allState->memorySize) };
+    // 4GB limit with WriteFile, bytesToWrite would truncate if larger than 4GB
+    ASSERT(allState->memorySize == bytesToWrite);
+    DWORD bytesWritten;
+    OutputDebugStringA("BeginRecordInput start recording input!\n");
+    WriteFile(allState->recordingHandle, allState->gameMemory, bytesToWrite, &bytesWritten, 0);
 }
 
 INTERNAL void
-EndRecordInput(InputRecorded* inputRecorded) {
-    CloseHandle(inputRecorded->recordingHandle);
-    inputRecorded->recordingIndex = 0;
+EndRecordInput(AllState* allState) {
+    CloseHandle(allState->recordingHandle);
+    allState->recordingIndex = 0;
+    OutputDebugStringA("RecordInput ended!\n");
 }
 
 INTERNAL void
-BeginInputPlayback(InputRecorded* inputRecorded, u32 playingIndex) {
-    inputRecorded->playingIndex = playingIndex;
+BeginInputPlayback(AllState* allState, u32 playingIndex) {
+    allState->playingIndex = playingIndex;
 
     const char* filename{ "foo.hmi" };
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
-        inputRecorded->playingHandle = fileHandle;
+        allState->playingHandle = fileHandle;
     } else {
         OutputDebugStringA("BeginInputPlayback CreateFileA reading file failed!\n");
     }
+
+    const DWORD bytesToRead{ static_cast<DWORD>(allState->memorySize) };
+    ASSERT(allState->memorySize == bytesToRead);
+    DWORD bytesRead;
+    ReadFile(allState->playingHandle, allState->gameMemory, bytesToRead, &bytesRead, 0);
 }
 
 INTERNAL void
-EndInputPlayback(InputRecorded* inputRecorded) {
-    CloseHandle(inputRecorded->playingHandle);
-    inputRecorded->playingIndex = 0;
+EndInputPlayback(AllState* allState) {
+    CloseHandle(allState->playingHandle);
+    allState->playingIndex = 0;
+    OutputDebugStringA("PlaybackInput ended!\n");
 }
 
 // These functions are the ones called in the loop
 
 INTERNAL void
-RecordInput(const game::Input* input, InputRecorded* inputRecorded) {
+RecordInput(const game::Input* input, AllState* allState) {
     DWORD bytesWritten;
-    if (WriteFile(inputRecorded->recordingHandle, input, sizeof(*input), &bytesWritten, 0) &&
+    if (WriteFile(allState->recordingHandle, input, sizeof(*input), &bytesWritten, 0) &&
         bytesWritten == sizeof(*input)) {
 
     } else {
@@ -394,22 +410,19 @@ RecordInput(const game::Input* input, InputRecorded* inputRecorded) {
 }
 
 INTERNAL void
-PlaybackInput(game::Input* input, InputRecorded* inputRecorded) {
+PlaybackInput(game::Input* input, AllState* allState) {
     DWORD bytesRead;
-    if ((ReadFile(inputRecorded->playingHandle, input, sizeof(*input), &bytesRead, 0) &&
+    if ((ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0) &&
          bytesRead == sizeof(*input))) {
         // Still input left
     } else {
         // EOF or error
-        const u32 playingIndex{ inputRecorded->playingIndex };
-        EndInputPlayback(inputRecorded);
-        OutputDebugStringA("PlaybackInput ended!\n");
+        const u32 playingIndex{ allState->playingIndex };
+        EndInputPlayback(allState);
 
-        // NOTE: this is how to do for looping
-        // Now we start the recording from scratch again!
-        //BeginInputPlayback(inputRecorded, playingIndex);
-        // Read first frame again
-        //ReadFile(inputRecorded->playingHandle, input, sizeof(*input), &bytesRead, 0);
+        // NOTE: add a check if we want to prevent looping, like some bool
+        OutputDebugStringA("PlaybackInput starting loop again!\n");
+        BeginInputPlayback(allState, playingIndex);
     }
 }
 
@@ -424,7 +437,7 @@ ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
 }
 
 INTERNAL void
-ProcessPendingMessages(game::Input* input, InputRecorded* inputRecorded) {
+ProcessPendingMessages(game::Input* input, AllState* allState) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
@@ -497,15 +510,25 @@ ProcessPendingMessages(game::Input* input, InputRecorded* inputRecorded) {
                         // TODO: Clear recorded input from recordingIndex
                         // atm we truncate all the input from the file and start again
                     } else {
-                        if (inputRecorded->recordingIndex == 0) {
-                            BeginRecordInput(inputRecorded, 1);
+                        if (allState->recordingIndex == 0) {
                             OutputDebugStringA("L: Recording STARTED!\n");
+                            BeginRecordInput(allState, 1);
                         } else {
-                            EndRecordInput(inputRecorded);
-                            BeginInputPlayback(inputRecorded, 1);
+                            EndRecordInput(allState);
                             OutputDebugStringA("L: Recording STOPPED!\n");
+                            BeginInputPlayback(allState, 1);
                         }
                     }
+                }
+            } else if (vkCode == 'P') {
+                if (isDown) {
+                    if (gIsGamePaused) {
+                        OutputDebugStringA("P: Game unpaused!\n");
+                    } else {
+                        OutputDebugStringA("P: Game paused!\n");
+                    }
+
+                    gIsGamePaused = !gIsGamePaused;
                 }
             }
 #endif
@@ -738,15 +761,24 @@ WinMain(
 #else
             LPVOID baseAddress{ 0 };
 #endif
+
             game::GameMemory gameMemory{};
             gameMemory.permanentStorageSize = MEGABYTES(64);
-            gameMemory.transientStorageSize = GIGABYTES(4);
+            gameMemory.transientStorageSize = GIGABYTES(1);
 
             // TODO: Variable memory allocation based on platform statistics
             const u64 totalSize{ gameMemory.permanentStorageSize +
                                  gameMemory.transientStorageSize };
             gameMemory.permanentStorage =
                 VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+            // Saving game memory and input
+            // TODO: disable input while playbacking input to avoid overriding input and hitting the
+            // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
+            // headaches as well)
+            win32::AllState allState{};
+            allState.gameMemory = gameMemory.permanentStorage;
+            allState.memorySize = totalSize;
 
             gameMemory.transientStorage =
                 static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
@@ -781,15 +813,10 @@ WinMain(
 
             // The game represented as a DLL which allows hot reloading and more fun stuff!
             win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
-
             game::Input gameInput{};
-            // Saving input
-            // TODO: disable input while playbacking input to avoid overriding input and hitting the
-            // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
-            // headaches as well)
-            win32::InputRecorded inputRecorded{};
 
             gIsGameRunning = true;
+
             while (gIsGameRunning) {
                 const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
                 if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
@@ -801,7 +828,10 @@ WinMain(
                     gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
                 }
 
-                win32::ProcessPendingMessages(&gameInput, &inputRecorded);
+                win32::ProcessPendingMessages(&gameInput, &allState);
+                if (gIsGamePaused) {
+                    continue;
+                }
 
                 // Directsound
                 // Circular buffer so we might get two regions to write to
@@ -838,11 +868,11 @@ WinMain(
                 screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
                 screenBuff.pitch = gScreenBuff.pitch;
 
-                if (inputRecorded.recordingIndex) {
-                    win32::RecordInput(&gameInput, &inputRecorded);
+                if (allState.recordingIndex) {
+                    win32::RecordInput(&gameInput, &allState);
                 }
-                if (inputRecorded.playingIndex) {
-                    win32::PlaybackInput(&gameInput, &inputRecorded);
+                if (allState.playingIndex) {
+                    win32::PlaybackInput(&gameInput, &allState);
                 }
 
                 game.updateAndRender(&gameMemory, &screenBuff, &gameInput);

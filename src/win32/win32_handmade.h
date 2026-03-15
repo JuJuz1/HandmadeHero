@@ -38,9 +38,13 @@ struct GameCode {
     bool32 isValid;
 };
 
-struct InputRecorded {
+// NOTE: not really all state (yet?)
+struct AllState {
     //game::Input* input;
     //u32 inputCount;
+
+    void* gameMemory;
+    u64 memorySize;
 
     u32 recordingIndex;
     u32 playingIndex;
