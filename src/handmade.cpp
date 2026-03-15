@@ -31,12 +31,11 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
     i16* sampleOut{ buff->samples };
 
     for (u32 i{ 0 }; i < buff->sampleCount; ++i) {
-// Sine wave
-#if 0
+        // Sine wave
         const f32 sineValue{ sinf(gameState->tSine) };
-        const i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
-#else
-        const i16 sampleValue{};
+        i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
+#if 1
+        sampleValue = 0;
 #endif
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;
@@ -80,9 +79,10 @@ INTERNAL void
 RenderPlayer(const OffScreenBuffer* screenBuff, u32 playerPosX, u32 playerPosY, u32 color) {
     constexpr u32 playerDimension{ 16 }; // Width and height
 
-    u8* row{ static_cast<u8*>(screenBuff->memory) + (playerPosY * screenBuff->pitch) };
-    const u8* buffEnd{ static_cast<u8*>(screenBuff->memory) +
-                       (screenBuff->pitch * screenBuff->height) };
+    u8* memory{ static_cast<u8*>(screenBuff->memory) };
+
+    u8* row{ memory + (playerPosY * screenBuff->pitch) };
+    const u8* buffEnd{ memory + (screenBuff->pitch * screenBuff->height) };
 
     for (u32 y{}; y < playerDimension; ++y) {
         u8* pixel{ row + (playerPosX * screenBuff->bytesPerPixel) };
@@ -139,32 +139,35 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //if Input.just_released("A") <==> !endedDown && halfTransitionCount > 0
     // Managed to get the same functionality done!
 
-    constexpr u32 offset{ 5 };
+    constexpr u32 gradientOffset{ 5 };
+
+    u32 playerVelocityX{}, playerVelocityY{};
     constexpr u32 playerMoveAmount{ 5 };
-    // Continuosly pressing
+    constexpr u32 playerMoveShiftModifier{ 3 };
+
     if (input::ActionPressed(&input0->up)) {
-        gameState->yOffset -= offset;
-        gameState->playerPosY -= playerMoveAmount;
+        gameState->yOffset -= gradientOffset;
+        playerVelocityY -= playerMoveAmount;
     }
-    // Just pressed
     if (input::ActionPressed(&input0->down)) {
-        gameState->yOffset += offset;
-        gameState->playerPosY += playerMoveAmount;
+        gameState->yOffset += gradientOffset;
+        playerVelocityY += playerMoveAmount;
     }
-    // Just released
     if (input::ActionPressed(&input0->left)) {
-        gameState->xOffset -= offset;
-        gameState->playerPosX -= playerMoveAmount;
+        gameState->xOffset -= gradientOffset;
+        playerVelocityX -= playerMoveAmount;
     }
     if (input::ActionPressed(&input0->right)) {
-        if (input::ActionPressed(&input0->shift)) {
-            //gameState->xOffset += offset * 5;
-            gameState->playerPosX += playerMoveAmount * 3;
-        } else {
-            //gameState->xOffset += offset;
-            gameState->playerPosX += playerMoveAmount;
-        }
+        playerVelocityX += playerMoveAmount;
     }
+    // Shift
+    if (input::ActionPressed(&input0->shift)) {
+        playerVelocityX *= playerMoveShiftModifier;
+        playerVelocityY *= playerMoveShiftModifier;
+    }
+
+    gameState->playerPosX += playerVelocityX;
+    gameState->playerPosY += playerVelocityY;
 
     constexpr u32 toneHzOffset{ 30 };
     //memory->DEBUGPrintInt("toneHz", gameState->toneHz);

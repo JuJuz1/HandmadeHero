@@ -286,7 +286,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
 
 // Callback for messages
 INTERNAL LRESULT CALLBACK
-MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     LRESULT result{};
 
     switch (msg) {
@@ -302,6 +302,11 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     } break;
     case WM_ACTIVATEAPP: {
         OutputDebugStringA("WM_ACTIVATEAPP\n");
+        if (wParam) {
+            SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 255, LWA_ALPHA);
+        } else {
+            SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 64, LWA_ALPHA);
+        }
     } break;
 
     case WM_MOVE: {
@@ -328,15 +333,15 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         OutputDebugStringA("WM_PAINT\n");
 
         PAINTSTRUCT paint;
-        HDC deviceContext{ BeginPaint(wnd, &paint) };
+        HDC deviceContext{ BeginPaint(hWnd, &paint) };
 
-        auto wndDimension{ GetWindowDimensions(wnd) };
+        auto wndDimension{ GetWindowDimensions(hWnd) };
         DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
 
-        EndPaint(wnd, &paint);
+        EndPaint(hWnd, &paint);
     } break;
     default: {
-        result = DefWindowProcA(wnd, msg, wParam, lParam);
+        result = DefWindowProcA(hWnd, msg, wParam, lParam);
     } break;
     }
 
@@ -347,6 +352,8 @@ INTERNAL void
 BeginRecordInput(AllState* allState, u32 recordingIndex) {
     allState->recordingIndex = recordingIndex;
 
+    // TODO: this should be in a specific directory to be cleaned up later
+    // NOTE: Write to disk lazily and store the game memory in RAM?
     const char* filename{ "foo.hmi" };
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -423,14 +430,14 @@ PlaybackInput(game::Input* input, AllState* allState) {
         // NOTE: add a check if we want to prevent looping, like some bool
         OutputDebugStringA("PlaybackInput starting loop again!\n");
         BeginInputPlayback(allState, playingIndex);
+        // Read the first frame again to fix 1 leaky frame, maybe not needed?
+        ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0);
     }
 }
 
+// The fired message should never have the same state (wasDown == isDown)
 INTERNAL void
 ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
-    // The fired message should never have the same state (isDown)
-    // This also catches scenarios when we forget to add the keypress handling to both WM_KEYUP and
-    // WM_KEYDOWN
     ASSERT(button->endedDown != isDown);
     button->endedDown = isDown;
     ++button->halfTransitionCount;
@@ -730,231 +737,240 @@ WinMain(
     constexpr u32 desiredSchedulerMS{ 1 };
     const bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
-    if (RegisterClassA(&windowClass)) {
-        HWND windowHandle = CreateWindowExA(0, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                            // Window size and position
-                                            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                            CW_USEDEFAULT, 0, 0, hInstance, 0);
+    if (!RegisterClassA(&windowClass)) {
+        // NOTE: Log?
+        OutputDebugStringA("Failed to register windowClass!\n");
+        return 0;
+    }
 
-        if (windowHandle) {
-            HDC deviceContext{ GetDC(windowHandle) };
+    // NOTE: I don't need WS_EX_TOPMOST on dwExStyle as I have 2 monitors
+    HWND windowHandle = CreateWindowExA(WS_EX_LAYERED, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                        // Window size and position
+                                        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                        0, 0, hInstance, 0);
 
-            // DirectSound
-            win32::SoundOutput soundOutput{};
-            soundOutput.samplesPerSecond = 48000;
-            soundOutput.bytesPerSample = sizeof(u16) * 2;
-            soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
-            soundOutput.latencySampleCount =
-                framesOfAudioLatency * soundOutput.samplesPerSecond / gameUpdateHz;
+    if (!windowHandle) {
+        // NOTE: Log?
+        OutputDebugStringA("Failed to create windowHandle!\n");
+        return 0;
+    }
 
-            win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
-            win32::ClearSoundBuffer(&soundOutput);
-            gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
+    // DirectSound
+    win32::SoundOutput soundOutput{};
+    soundOutput.samplesPerSecond = 48000;
+    soundOutput.bytesPerSample = sizeof(u16) * 2;
+    soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
+    soundOutput.latencySampleCount =
+        framesOfAudioLatency * soundOutput.samplesPerSecond / gameUpdateHz;
 
-            // TODO: pool with bitmap
-            i16* samples{ static_cast<i16*>(
-                VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
+    win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
+    win32::ClearSoundBuffer(&soundOutput);
+    gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
+
+    // TODO: pool with bitmap
+    i16* soundBuffSamples{ static_cast<i16*>(
+        VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
 
 #if HANDMADE_INTERNAL
-            // Allocate at the same address if developer build
-            LPVOID baseAddress{ reinterpret_cast<LPVOID>(TERABYTES(2)) };
+    // Allocate at the same address if developer build
+    LPVOID baseAddress{ reinterpret_cast<LPVOID>(TERABYTES(2)) };
 #else
-            LPVOID baseAddress{ 0 };
+    LPVOID baseAddress{ 0 };
 #endif
 
-            game::GameMemory gameMemory{};
-            gameMemory.permanentStorageSize = MEGABYTES(64);
-            gameMemory.transientStorageSize = GIGABYTES(1);
+    game::GameMemory gameMemory{};
+    gameMemory.permanentStorageSize = MEGABYTES(64);
+    gameMemory.transientStorageSize =
+        MEGABYTES(128); // NOTE: changed from GIGABYTES(1) to speed up recording
 
-            // TODO: Variable memory allocation based on platform statistics
-            const u64 totalSize{ gameMemory.permanentStorageSize +
-                                 gameMemory.transientStorageSize };
-            gameMemory.permanentStorage =
-                VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    // TODO: Variable memory allocation based on platform statistics
+    const u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
+    gameMemory.permanentStorage =
+        VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-            // Saving game memory and input
-            // TODO: disable input while playbacking input to avoid overriding input and hitting the
-            // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
-            // headaches as well)
-            win32::AllState allState{};
-            allState.gameMemory = gameMemory.permanentStorage;
-            allState.memorySize = totalSize;
+    // Saving game memory and input
+    // TODO: disable input while playbacking input to avoid overriding input and hitting the
+    // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
+    // headaches as well)
+    win32::AllState allState{};
+    allState.gameMemory = gameMemory.permanentStorage;
+    allState.memorySize = totalSize;
 
-            gameMemory.transientStorage =
-                static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
-            if (!(samples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
-                // at least one of these failed, the game will not run correctly (or at all!)
-                // TODO: better assertion
-                ASSERT(!"One or more of the game memory allocations failed!");
-            }
+    gameMemory.transientStorage =
+        static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
+    if (!(soundBuffSamples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
+        // at least one of these failed, the game will not run correctly (or at all!)
+        // TODO: better assertion
+        ASSERT(!"One or more of the game memory allocations failed!");
+    }
 
-            gameMemory.DEBUGFreeFileMemory = platform::DEBUGFreeFileMemory;
-            gameMemory.DEBUGReadFile = platform::DEBUGReadFile;
-            gameMemory.DEBUGWriteFile = platform::DEBUGWriteFile;
-            gameMemory.DEBUGPrintInt = platform::DEBUGPrintInt;
-            gameMemory.DEBUGPrintFloat = platform::DEBUGPrintFloat;
+    gameMemory.DEBUGFreeFileMemory = platform::DEBUGFreeFileMemory;
+    gameMemory.DEBUGReadFile = platform::DEBUGReadFile;
+    gameMemory.DEBUGWriteFile = platform::DEBUGWriteFile;
+    gameMemory.DEBUGPrintInt = platform::DEBUGPrintInt;
+    gameMemory.DEBUGPrintFloat = platform::DEBUGPrintFloat;
 
-            // Performance statistics
-            LARGE_INTEGER freqCounter;
-            QueryPerformanceFrequency(&freqCounter);
-            gPerfCounterFreq = freqCounter.QuadPart;
+    // Performance statistics
+    LARGE_INTEGER freqCounter;
+    QueryPerformanceFrequency(&freqCounter);
+    gPerfCounterFreq = freqCounter.QuadPart;
 
-            LARGE_INTEGER lastCounter{ win32::GetWallClock() };
-            // RDTSC
-            u64 lastCycleCount{ __rdtsc() };
+    LARGE_INTEGER lastCounter{ win32::GetWallClock() };
+    // RDTSC
+    u64 lastCycleCount{ __rdtsc() };
 
 #if 0
             DWORD DEBUGlastPlayCursorIndex{};
             DWORD DEBUGlastPlayCursor[gameUpdateHz / 2]{};
 #endif
 
-            DWORD lastPlayCursor{};
-            bool32 isSoundValid{};
+    DWORD lastPlayCursor{};
+    bool32 isSoundValid{};
 
-            // The game represented as a DLL which allows hot reloading and more fun stuff!
-            win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
-            game::Input gameInput{};
+    // The game represented as a DLL which allows hot reloading and more fun stuff!
+    win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
+    game::Input gameInput{};
 
-            gIsGameRunning = true;
+    gIsGameRunning = true;
 
-            while (gIsGameRunning) {
-                const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
-                if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
-                    win32::UnloadGameCode(&game);
-                    game = win32::LoadGameCode(srcDllPath, tempDllPath);
-                }
+    while (gIsGameRunning) {
+        const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
+        if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
+            win32::UnloadGameCode(&game);
+            game = win32::LoadGameCode(srcDllPath, tempDllPath);
+        }
 
-                for (u32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
-                    gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
-                }
+        for (u32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
+            gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
+        }
 
-                win32::ProcessPendingMessages(&gameInput, &allState);
-                if (gIsGamePaused) {
-                    continue;
-                }
+        win32::ProcessPendingMessages(&gameInput, &allState);
+        if (gIsGamePaused) {
+            continue;
+        }
 
-                // Directsound
-                // Circular buffer so we might get two regions to write to
-                // A single sample is one LEFT and RIGHT together
-                //  i16  i16 ...
-                // [LEFT RIGHT] LEFT RIGHT ...
-                DWORD byteToLock{};
-                DWORD targetCursor;
-                DWORD bytesToWrite{};
+        // Directsound
+        // Circular buffer so we might get two regions to write to
+        // A single sample is one LEFT and RIGHT together
+        //  i16  i16 ...
+        // [LEFT RIGHT] LEFT RIGHT ...
+        DWORD byteToLock{};
+        DWORD targetCursor;
+        DWORD bytesToWrite{};
 
-                if (isSoundValid) {
-                    byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
-                                 soundOutput.buffSize;
+        if (isSoundValid) {
+            byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
+                         soundOutput.buffSize;
 
-                    targetCursor = (lastPlayCursor +
-                                    (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) %
-                                   soundOutput.buffSize;
-                    // To the end and wrap behind playCursor
-                    if (byteToLock > targetCursor) {
-                        bytesToWrite = soundOutput.buffSize - byteToLock;
-                        bytesToWrite += targetCursor;
-                    } else {
-                        bytesToWrite = targetCursor - byteToLock;
-                    }
-                } else {
-                    // log, couldnt get curr pos
-                }
+            targetCursor =
+                (lastPlayCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) %
+                soundOutput.buffSize;
+            // To the end and wrap behind playCursor
+            if (byteToLock > targetCursor) {
+                bytesToWrite = soundOutput.buffSize - byteToLock;
+                bytesToWrite += targetCursor;
+            } else {
+                bytesToWrite = targetCursor - byteToLock;
+            }
+        } else {
+            // log, couldnt get curr pos
+        }
 
-                // Call game code
-                game::OffScreenBuffer screenBuff{};
-                screenBuff.memory = gScreenBuff.memory;
-                screenBuff.width = gScreenBuff.width;
-                screenBuff.height = gScreenBuff.height;
-                screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
-                screenBuff.pitch = gScreenBuff.pitch;
+        // Call game code
+        game::OffScreenBuffer screenBuff{};
+        screenBuff.memory = gScreenBuff.memory;
+        screenBuff.width = gScreenBuff.width;
+        screenBuff.height = gScreenBuff.height;
+        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
+        screenBuff.pitch = gScreenBuff.pitch;
 
-                if (allState.recordingIndex) {
-                    win32::RecordInput(&gameInput, &allState);
-                }
-                if (allState.playingIndex) {
-                    win32::PlaybackInput(&gameInput, &allState);
-                }
+        if (allState.recordingIndex) {
+            win32::RecordInput(&gameInput, &allState);
+        }
+        if (allState.playingIndex) {
+            win32::PlaybackInput(&gameInput, &allState);
+        }
 
-                game.updateAndRender(&gameMemory, &screenBuff, &gameInput);
+        game.updateAndRender(&gameMemory, &screenBuff, &gameInput);
 
-                game::SoundOutputBuffer soundBuff{};
-                soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
-                soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
-                soundBuff.samples = samples;
+        game::SoundOutputBuffer soundBuff{};
+        soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
+        soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
+        soundBuff.samples = soundBuffSamples;
 
-                game.getSoundSamples(&gameMemory, &soundBuff);
+        game.getSoundSamples(&gameMemory, &soundBuff);
 
-                if (isSoundValid) {
-                    // soundBuff now contains game generated output
-                    win32::FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
-                    // TODO: look up episode 20 if we want to continue fixing the audio sync
-                    // For now we skip fixing the issues as it is very complicated and I think I
-                    // wouldn't get much out of it...
-                    //#if HANDMADE_INTERNAL
-                    //                    DWORD playCursor;
-                    //                    DWORD writeCursor;
-                    //                    gSecondaryBuff->GetCurrentPosition(&playCursor,
-                    //                    &writeCursor);
+        if (isSoundValid) {
+            // soundBuff now contains game generated output
+            win32::FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
+            // TODO: look up episode 20 if we want to continue fixing the audio sync
+            // For now we skip fixing the issues as it is very complicated and I think I
+            // wouldn't get much out of it...
+            //#if HANDMADE_INTERNAL
+            //                    DWORD playCursor;
+            //                    DWORD writeCursor;
+            //                    gSecondaryBuff->GetCurrentPosition(&playCursor,
+            //                    &writeCursor);
 
-                    //                    DWORD unwrappedWriteCursor{ writeCursor };
-                    //                    if (unwrappedWriteCursor < playCursor) {
-                    //                        unwrappedWriteCursor += soundOutput.buffSize;
-                    //                    }
+            //                    DWORD unwrappedWriteCursor{ writeCursor };
+            //                    if (unwrappedWriteCursor < playCursor) {
+            //                        unwrappedWriteCursor += soundOutput.buffSize;
+            //                    }
 
-                    //                    DWORD bytesBetweenCursors{ unwrappedWriteCursor -
-                    //                    playCursor };
+            //                    DWORD bytesBetweenCursors{ unwrappedWriteCursor -
+            //                    playCursor };
 
-                    //                    char buf[256];
-                    //                    sprintf_s(buf, "LPC: %u, BTL: %u, BTW: %u, - PC: %u,
-                    //                    WC: %u, delta: %u\n",
-                    //                              lastPlayCursor, byteToLock, targetCursor,
-                    //                              bytesToWrite, playCursor, writeCursor);
-                    //                    OutputDebugStringA(buf);
+            //                    char buf[256];
+            //                    sprintf_s(buf, "LPC: %u, BTL: %u, BTW: %u, - PC: %u,
+            //                    WC: %u, delta: %u\n",
+            //                              lastPlayCursor, byteToLock, targetCursor,
+            //                              bytesToWrite, playCursor, writeCursor);
+            //                    OutputDebugStringA(buf);
 
-                    //                    // soundBuff now contains game generated output
-                    //                    win32::FillSoundBuffer(&soundOutput, byteToLock,
-                    //                    bytesToWrite, &soundBuff);
-                    //#endif
-                }
+            //                    // soundBuff now contains game generated output
+            //                    win32::FillSoundBuffer(&soundOutput, byteToLock,
+            //                    bytesToWrite, &soundBuff);
+            //#endif
+        }
 
-                // Performance
-                // We only query the performance once per frame so that we don't leave out the
-                // time between the frame's end and start
+        // Performance
+        // We only query the performance once per frame so that we don't leave out the
+        // time between the frame's end and start
 
-                LARGE_INTEGER endCounter{ win32::GetWallClock() };
-                const f64 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
-                f64 secondsElapedForFrame{ secondsElapsed };
+        LARGE_INTEGER endCounter{ win32::GetWallClock() };
+        const f64 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
+        f64 secondsElapedForFrame{ secondsElapsed };
 
 #if 1
-                // Wait if we are ahead of the target FPS
-                if (secondsElapedForFrame < targetSecondsPerFrame) {
-                    while (secondsElapedForFrame < targetSecondsPerFrame) {
-                        if (isSleepGranular) {
-                            const DWORD remainingMS{ static_cast<DWORD>(
-                                (targetSecondsPerFrame - secondsElapedForFrame) * 1000.0f) };
-                            if (remainingMS > 0) {
-                                Sleep(remainingMS);
-                            }
-                        }
-
-                        // NOTE: this would not always work...
-                        //f32 testSecondsElapsedForFrame{ win32::GetSecondsElapsed(
-                        //    lastCounter, win32::GetWallClock()) };
-                        //ASSERT(testSecondsElapsedForFrame < targetSecondsPerFrame);
-
-                        secondsElapedForFrame =
-                            win32::GetSecondsElapsed(lastCounter, win32::GetWallClock());
+        // Wait if we are ahead of the target FPS
+        if (secondsElapedForFrame < targetSecondsPerFrame) {
+            while (secondsElapedForFrame < targetSecondsPerFrame) {
+                if (isSleepGranular) {
+                    const DWORD remainingMS{ static_cast<DWORD>(
+                        (targetSecondsPerFrame - secondsElapedForFrame) * 1000.0f) };
+                    if (remainingMS > 0) {
+                        Sleep(remainingMS);
                     }
-                } else {
-                    //TODO: log the missed frame!!!
                 }
+
+                // NOTE: this would not always work...
+                //f32 testSecondsElapsedForFrame{ win32::GetSecondsElapsed(
+                //    lastCounter, win32::GetWallClock()) };
+                //ASSERT(testSecondsElapsedForFrame < targetSecondsPerFrame);
+
+                secondsElapedForFrame =
+                    win32::GetSecondsElapsed(lastCounter, win32::GetWallClock());
+            }
+        } else {
+            //TODO: log the missed frame!!!
+        }
 #endif
 
-                endCounter = win32::GetWallClock();
-                const f64 ms{ 1000 * win32::GetSecondsElapsed(lastCounter, endCounter) };
-                const f64 FPS{ 1000 / ms };
+        endCounter = win32::GetWallClock();
+        const f64 ms{ 1000 * win32::GetSecondsElapsed(lastCounter, endCounter) };
+        const f64 FPS{ 1000 / ms };
 
-                auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
+        auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
 
 //#if HANDMADE_INTERNAL
 #if 0
@@ -962,17 +978,19 @@ WinMain(
                                              DEBUGlastPlayCursor, &soundOutput);
 #endif
 
-                win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
-                                           wndDimension.height);
+        HDC deviceContext{ GetDC(windowHandle) };
+        win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
+                                   wndDimension.height);
+        ReleaseDC(windowHandle, deviceContext);
 
-                DWORD playCursor;
-                DWORD writeCursor;
-                if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
-                    lastPlayCursor = playCursor;
-                    isSoundValid = true;
-                } else {
-                    isSoundValid = false;
-                }
+        DWORD playCursor;
+        DWORD writeCursor;
+        if (SUCCEEDED(gSecondaryBuff->GetCurrentPosition(&playCursor, &writeCursor))) {
+            lastPlayCursor = playCursor;
+            isSoundValid = true;
+        } else {
+            isSoundValid = false;
+        }
 
 //#if HANDMADE_INTERNAL
 #if 0
@@ -982,35 +1000,21 @@ WinMain(
                 }
 #endif
 
-                const u64 endCycleCount{ __rdtsc() };
-                const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) / 1000 *
-                                         1000 };
+        const u64 endCycleCount{ __rdtsc() };
+        const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) / 1000 * 1000 };
 
-                //const f64 ms{ 1000.0 * secondsElapsed };
-                //const f64 FPS{ 1000 / ms };
+        //const f64 ms{ 1000.0 * secondsElapsed };
+        //const f64 FPS{ 1000 / ms };
+        char buf[64]; // yikes...
+        sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS, cycleElapsedM);
 #if 0
-                char buf[64]; // yikes...
-                sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS,
-                          cycleElapsedM);
-                OutputDebugStringA(buf);
+        OutputDebugStringA(buf);
 #endif
 
-                lastCycleCount = endCycleCount;
+        lastCycleCount = endCycleCount;
 
-                const LARGE_INTEGER resetCounter{ win32::GetWallClock() };
-                lastCounter = resetCounter;
-            }
-
-            ReleaseDC(windowHandle, deviceContext);
-        } else {
-            // NOTE: Log?
-            OutputDebugStringA("Failed to create windowHandle!\n");
-        }
-    }
-
-    else {
-        // NOTE: Log?
-        OutputDebugStringA("Failed to register windowClass!\n");
+        const LARGE_INTEGER resetCounter{ win32::GetWallClock() };
+        lastCounter = resetCounter;
     }
 
     return 0;
