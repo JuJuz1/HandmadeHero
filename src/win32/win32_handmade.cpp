@@ -19,7 +19,7 @@ GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
 
-namespace platform {
+namespace platform_export {
 
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
@@ -103,7 +103,7 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
     return result;
 }
 
-} //namespace platform
+} //namespace platform_export
 
 namespace win32 {
 
@@ -630,33 +630,6 @@ UnloadGameCode(GameCode* gamecode) {
     gamecode->isValid = false;
 }
 
-#if 0
-INTERNAL void
-DEBUGDrawVertical(OffScreenBuffer* buff, u32 x, u32 top, u32 bottom, u32 color) {
-    u8* pixel{ static_cast<u8*>(buff->memory) + buff->bytesPerPixel * x + buff->pitch * top };
-    for (u32 y{ top }; y < bottom; ++y) {
-        *(reinterpret_cast<u32*>(pixel)) = color;
-        pixel += buff->pitch;
-    }
-}
-
-INTERNAL void
-DEBUGDisplayAudioSync(OffScreenBuffer* buff, DWORD lastPlayCursorCount, DWORD* lastPlayCursor,
-                      const SoundOutput* soundOutput) {
-    constexpr u32 padX{ 16 };
-    constexpr u32 padY{ 16 };
-
-    constexpr u32 top = padY;
-    const u32 bottom{ buff->height - padY };
-
-    const f32 c{ static_cast<f32>(buff->width) / soundOutput->buffSize };
-    for (u32 i{}; i < lastPlayCursorCount; ++i) {
-        u32 x{ static_cast<u32>(c * lastPlayCursor[i]) + padX };
-        DEBUGDrawVertical(buff, x, top, bottom, 0xFFFFFFFF);
-    }
-}
-#endif
-
 INTERNAL void
 CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
            u64 destSize) {
@@ -718,9 +691,7 @@ WinMain(
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = win32::MainWindowCallback;
-    //GetModuleHandle(0) returns hInstance
     windowClass.hInstance = hInstance;
-    //HICON     hIcon;
 
     const char* name{ "Handmade Hero" };
     windowClass.lpszClassName = name;
@@ -804,11 +775,11 @@ WinMain(
         ASSERT(!"One or more of the game memory allocations failed!");
     }
 
-    gameMemory.DEBUGFreeFileMemory = platform::DEBUGFreeFileMemory;
-    gameMemory.DEBUGReadFile = platform::DEBUGReadFile;
-    gameMemory.DEBUGWriteFile = platform::DEBUGWriteFile;
-    gameMemory.DEBUGPrintInt = platform::DEBUGPrintInt;
-    gameMemory.DEBUGPrintFloat = platform::DEBUGPrintFloat;
+    gameMemory.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
+    gameMemory.DEBUGReadFile = platform_export::DEBUGReadFile;
+    gameMemory.DEBUGWriteFile = platform_export::DEBUGWriteFile;
+    gameMemory.DEBUGPrintInt = platform_export::DEBUGPrintInt;
+    gameMemory.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
 
     // Performance statistics
     LARGE_INTEGER freqCounter;
@@ -819,11 +790,6 @@ WinMain(
     // RDTSC
     u64 lastCycleCount{ __rdtsc() };
 
-#if 0
-            DWORD DEBUGlastPlayCursorIndex{};
-            DWORD DEBUGlastPlayCursor[gameUpdateHz / 2]{};
-#endif
-
     DWORD lastPlayCursor{};
     bool32 isSoundValid{};
 
@@ -831,6 +797,7 @@ WinMain(
     win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
     game::Input gameInput{};
 
+    // Main loop
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
@@ -906,31 +873,6 @@ WinMain(
             // TODO: look up episode 20 if we want to continue fixing the audio sync
             // For now we skip fixing the issues as it is very complicated and I think I
             // wouldn't get much out of it...
-            //#if HANDMADE_INTERNAL
-            //                    DWORD playCursor;
-            //                    DWORD writeCursor;
-            //                    gSecondaryBuff->GetCurrentPosition(&playCursor,
-            //                    &writeCursor);
-
-            //                    DWORD unwrappedWriteCursor{ writeCursor };
-            //                    if (unwrappedWriteCursor < playCursor) {
-            //                        unwrappedWriteCursor += soundOutput.buffSize;
-            //                    }
-
-            //                    DWORD bytesBetweenCursors{ unwrappedWriteCursor -
-            //                    playCursor };
-
-            //                    char buf[256];
-            //                    sprintf_s(buf, "LPC: %u, BTL: %u, BTW: %u, - PC: %u,
-            //                    WC: %u, delta: %u\n",
-            //                              lastPlayCursor, byteToLock, targetCursor,
-            //                              bytesToWrite, playCursor, writeCursor);
-            //                    OutputDebugStringA(buf);
-
-            //                    // soundBuff now contains game generated output
-            //                    win32::FillSoundBuffer(&soundOutput, byteToLock,
-            //                    bytesToWrite, &soundBuff);
-            //#endif
         }
 
         // Performance
@@ -941,8 +883,8 @@ WinMain(
         const f64 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
         f64 secondsElapedForFrame{ secondsElapsed };
 
-#if 1
-        // Wait if we are ahead of the target FPS
+#if 1 // NOTE: if some macro?
+      // Wait if we are ahead of the target FPS
         if (secondsElapedForFrame < targetSecondsPerFrame) {
             while (secondsElapedForFrame < targetSecondsPerFrame) {
                 if (isSleepGranular) {
@@ -972,12 +914,6 @@ WinMain(
 
         auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
 
-//#if HANDMADE_INTERNAL
-#if 0
-                win32::DEBUGDisplayAudioSync(&gScreenBuff, ARRAY_COUNT(DEBUGlastPlayCursor),
-                                             DEBUGlastPlayCursor, &soundOutput);
-#endif
-
         HDC deviceContext{ GetDC(windowHandle) };
         win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                    wndDimension.height);
@@ -992,14 +928,6 @@ WinMain(
             isSoundValid = false;
         }
 
-//#if HANDMADE_INTERNAL
-#if 0
-                DEBUGlastPlayCursor[DEBUGlastPlayCursorIndex++] = playCursor;
-                if (DEBUGlastPlayCursorIndex > ARRAY_COUNT(DEBUGlastPlayCursor)) {
-                    DEBUGlastPlayCursorIndex = 0;
-                }
-#endif
-
         const u64 endCycleCount{ __rdtsc() };
         const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) / 1000 * 1000 };
 
@@ -1007,7 +935,7 @@ WinMain(
         //const f64 FPS{ 1000 / ms };
         char buf[64]; // yikes...
         sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS, cycleElapsedM);
-#if 0
+#if 0 // NOTE: if some macro?
         OutputDebugStringA(buf);
 #endif
 

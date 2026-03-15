@@ -66,7 +66,7 @@ typedef double f64;
 
 /// Services that the platform layer provides to the game ///
 
-namespace platform {
+namespace platform_export {
 
 struct DEBUGFileReadResult {
     void* content;
@@ -90,7 +90,7 @@ typedef DEBUG_READ_FILE(debug_read_file);
 typedef DEBUG_WRITE_FILE(debug_write_file);
 // clang-format on
 
-} //namespace platform
+} //namespace platform_export
 
 #endif // HANDMADE_INTERNAL
 
@@ -136,11 +136,11 @@ struct GameMemory {
 
     // Exported functions for the game
 
-    platform::debug_free_file_memory* DEBUGFreeFileMemory;
-    platform::debug_read_file* DEBUGReadFile;
-    platform::debug_write_file* DEBUGWriteFile;
-    platform::debug_print_int* DEBUGPrintInt;
-    platform::debug_print_float* DEBUGPrintFloat;
+    platform_export::debug_free_file_memory* DEBUGFreeFileMemory;
+    platform_export::debug_read_file* DEBUGReadFile;
+    platform_export::debug_write_file* DEBUGWriteFile;
+    platform_export::debug_print_int* DEBUGPrintInt;
+    platform_export::debug_print_float* DEBUGPrintFloat;
 };
 
 // Struct to hold screen buffer info
