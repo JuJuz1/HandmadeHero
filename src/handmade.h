@@ -148,6 +148,7 @@ struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
+    u32 bytesPerPixel;
     u32 pitch;
 };
 
@@ -211,17 +212,17 @@ GET_SOUND_SAMPLES(GetSoundSamplesStub) {
 
 //void GetSoundSamples(GameMemory* memory, const SoundOutputBuffer* soundBuff);
 
-#define UPDATE_AND_RENDER(name) void name(GameMemory* memory, const OffScreenBuffer* buff, const Input* input)
+#define UPDATE_AND_RENDER(name) void name(GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
 typedef UPDATE_AND_RENDER(update_and_render);
 UPDATE_AND_RENDER(UpdateAndRenderStub) {
     //ASSERT(!"UpdateAndRenderStub called!");
-    UNUSED_PARAMS(memory, buff, input);
+    UNUSED_PARAMS(memory, screenBuff, input);
 }
 
 // clang-format on
 
 // Game's "main loop"
-//void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* buff, const Input* input);
+//void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input);
 
 } //namespace dll
 
@@ -229,7 +230,11 @@ struct GameState {
     u32 xOffset;
     u32 yOffset;
     u32 toneHz;
+
     f32 tSine;
+
+    u32 playerPosX;
+    u32 playerPosY;
 };
 
 } //namespace game

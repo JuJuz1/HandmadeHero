@@ -31,10 +31,13 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
     i16* sampleOut{ buff->samples };
 
     for (u32 i{ 0 }; i < buff->sampleCount; ++i) {
-        // Sine wave
+// Sine wave
+#if 0
         const f32 sineValue{ sinf(gameState->tSine) };
         const i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
-
+#else
+        const i16 sampleValue{};
+#endif
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;
 
@@ -46,18 +49,18 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
 }
 
 INTERNAL void
-DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
+DrawGradient(const OffScreenBuffer* screenBuff, u32 xOffset, u32 yOffset) {
     // NOTE: maybe see what the optimizer does to buff (passing by value vs pointer)
     // remember to not get fixated on micro-optimizations before actually doing optimization
     // though...
 
     // Pitch (length width-wise)
-    u8* row{ static_cast<u8*>(buff->memory) };
+    u8* row{ static_cast<u8*>(screenBuff->memory) };
 
     // Drawing
-    for (i32 y{ 0 }; y < buff->height; ++y) {
+    for (i32 y{ 0 }; y < screenBuff->height; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
-        for (i32 x{ 0 }; x < buff->width; ++x) {
+        for (i32 x{ 0 }; x < screenBuff->width; ++x) {
             // Windows flipped the order of rbg
             // Memory: BB GG RR xx
             // !little endianness!
@@ -69,7 +72,28 @@ DrawGradient(const OffScreenBuffer* buff, u32 xOffset, u32 yOffset) {
             *pixel++ = (green << 8) | blue;
         }
 
-        row += buff->pitch;
+        row += screenBuff->pitch;
+    }
+}
+
+INTERNAL void
+RenderPlayer(const OffScreenBuffer* screenBuff, u32 playerPosX, u32 playerPosY, u32 color) {
+    constexpr u32 playerDimension{ 16 }; // Width and height
+
+    u8* row{ static_cast<u8*>(screenBuff->memory) + (playerPosY * screenBuff->pitch) };
+    const u8* buffEnd{ static_cast<u8*>(screenBuff->memory) +
+                       (screenBuff->pitch * screenBuff->height) };
+
+    for (u32 y{}; y < playerDimension; ++y) {
+        u8* pixel{ row + (playerPosX * screenBuff->bytesPerPixel) };
+        for (u32 x{}; x < playerDimension; ++x) {
+            if (pixel >= screenBuff->memory && pixel < buffEnd) {
+                *reinterpret_cast<u32*>(pixel) = color;
+                pixel += screenBuff->bytesPerPixel;
+            }
+        }
+
+        row += screenBuff->pitch;
     }
 }
 
@@ -92,6 +116,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //gameState->yOffset = 0;
         gameState->toneHz = 256;
         //gameState->tSine = 0;
+        gameState->playerPosX = 200;
+        gameState->playerPosY = 100;
 
         const char* fileName{ __FILE__ };
         const auto readResult{ memory->DEBUGReadFile(fileName) };
@@ -104,7 +130,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         memory->isInitialized = true;
     }
 
+    // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0{ &input->playerInputs[0] };
+
     // Input (Godot style)
     //if Input.just_pressed("A")  <==> endedDown && halfTransitionCount > 0
     //if Input.pressed("A")       <==> endedDown
@@ -112,28 +140,34 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // Managed to get the same functionality done!
 
     constexpr u32 offset{ 5 };
+    constexpr u32 playerMoveAmount{ 5 };
     // Continuosly pressing
     if (input::ActionPressed(&input0->up)) {
         gameState->yOffset -= offset;
+        gameState->playerPosY -= playerMoveAmount;
     }
     // Just pressed
-    if (input::ActionJustPressed(&input0->down)) {
+    if (input::ActionPressed(&input0->down)) {
         gameState->yOffset += offset;
+        gameState->playerPosY += playerMoveAmount;
     }
     // Just released
-    if (input::ActionReleased(&input0->left)) {
+    if (input::ActionPressed(&input0->left)) {
         gameState->xOffset -= offset;
+        gameState->playerPosX -= playerMoveAmount;
     }
     if (input::ActionPressed(&input0->right)) {
         if (input::ActionPressed(&input0->shift)) {
-            gameState->xOffset += offset * 5;
+            //gameState->xOffset += offset * 5;
+            gameState->playerPosX += playerMoveAmount * 3;
         } else {
-            gameState->xOffset += offset;
+            //gameState->xOffset += offset;
+            gameState->playerPosX += playerMoveAmount;
         }
     }
 
     constexpr u32 toneHzOffset{ 30 };
-    memory->DEBUGPrintInt("toneHz", gameState->toneHz);
+    //memory->DEBUGPrintInt("toneHz", gameState->toneHz);
 
     if (input::ActionJustPressed(&input0->E)) {
         gameState->toneHz += toneHzOffset;
@@ -148,9 +182,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // TODO: allow sample offsets
     //OutputSound(soundBuff, gameState->toneHz);
 
-    DrawGradient(buff, gameState->xOffset, gameState->yOffset);
-    //++xOffset;
-    //++yOffset;
+    DrawGradient(screenBuff, gameState->xOffset, gameState->yOffset);
+    RenderPlayer(screenBuff, gameState->playerPosX, gameState->playerPosY, 0xFFFFFFFF);
 }
 
 } //namespace game

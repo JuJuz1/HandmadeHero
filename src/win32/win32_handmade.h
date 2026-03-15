@@ -38,6 +38,16 @@ struct GameCode {
     bool32 isValid;
 };
 
+struct InputRecorded {
+    //game::Input* input;
+    //u32 inputCount;
+
+    u32 recordingIndex;
+    u32 playingIndex;
+    HANDLE recordingHandle;
+    HANDLE playingHandle;
+};
+
 } //namespace win32
 
 #endif // HANDMADE_WIN32

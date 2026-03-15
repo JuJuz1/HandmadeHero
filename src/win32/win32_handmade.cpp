@@ -116,36 +116,37 @@ GetWindowDimensions(HWND windowHandle) {
 }
 
 INTERNAL void
-ResizeDIBSection(OffScreenBuffer* buff, i32 w, i32 h) {
-    if (buff->memory) {
-        VirtualFree(buff->memory, 0, MEM_RELEASE);
+ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
+    if (screenBuff->memory) {
+        VirtualFree(screenBuff->memory, 0, MEM_RELEASE);
     }
 
-    buff->width = w;
-    buff->height = h;
-    buff->bytesPerPixel = 4;
+    screenBuff->width = w;
+    screenBuff->height = h;
+    screenBuff->bytesPerPixel = 4;
 
-    buff->info.bmiHeader.biSize = sizeof(buff->info.bmiHeader);
-    buff->info.bmiHeader.biWidth = buff->width;
-    buff->info.bmiHeader.biHeight = -buff->height; // top-down by assigning negative
-    buff->info.bmiHeader.biPlanes = 1;
-    buff->info.bmiHeader.biBitCount = 32; // 8 padding
-    buff->info.bmiHeader.biCompression = BI_RGB;
+    screenBuff->info.bmiHeader.biSize = sizeof(screenBuff->info.bmiHeader);
+    screenBuff->info.bmiHeader.biWidth = screenBuff->width;
+    screenBuff->info.bmiHeader.biHeight = -screenBuff->height; // top-down by assigning negative
+    screenBuff->info.bmiHeader.biPlanes = 1;
+    screenBuff->info.bmiHeader.biBitCount = 32; // 8 padding
+    screenBuff->info.bmiHeader.biCompression = BI_RGB;
 
-    const u32 bmMemorySize{ buff->width * buff->height * buff->bytesPerPixel };
+    const u32 bmMemorySize{ screenBuff->width * screenBuff->height * screenBuff->bytesPerPixel };
     // Allocate the memory for use immediately (MEM_COMMIT)
-    buff->memory = VirtualAlloc(0, bmMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    buff->pitch = buff->width * buff->bytesPerPixel;
+    screenBuff->memory = VirtualAlloc(0, bmMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    screenBuff->pitch = screenBuff->width * screenBuff->bytesPerPixel;
 
     // TODO: clear to black probably
 }
 
 INTERNAL void
-DisplayBufferWindow(HDC deviceContext, const OffScreenBuffer* buff, i32 wndWidth, i32 wndHeight) {
+DisplayBufferWindow(HDC deviceContext, const OffScreenBuffer* screenBuff, i32 wndWidth,
+                    i32 wndHeight) {
     // TODO: aspect ratio correction
-    StretchDIBits(deviceContext, 0, 0, wndWidth, wndHeight, // dest
-                  0, 0, buff->width, buff->height,          // src
-                  buff->memory, &buff->info, DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(deviceContext, 0, 0, wndWidth, wndHeight,    // dest
+                  0, 0, screenBuff->width, screenBuff->height, // src
+                  screenBuff->memory, &screenBuff->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 // Make use of runtime dynamic library linking
@@ -341,6 +342,78 @@ MainWindowCallback(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 INTERNAL void
+BeginRecordInput(InputRecorded* inputRecorded, u32 recordingIndex) {
+    inputRecorded->recordingIndex = recordingIndex;
+
+    const char* filename{ "foo.hmi" };
+    HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
+    if (fileHandle != INVALID_HANDLE_VALUE) {
+        inputRecorded->recordingHandle = fileHandle;
+    } else {
+        OutputDebugStringA("BeginRecordInput CreateFileA writing to file failed!\n");
+    }
+}
+
+INTERNAL void
+EndRecordInput(InputRecorded* inputRecorded) {
+    CloseHandle(inputRecorded->recordingHandle);
+    inputRecorded->recordingIndex = 0;
+}
+
+INTERNAL void
+BeginInputPlayback(InputRecorded* inputRecorded, u32 playingIndex) {
+    inputRecorded->playingIndex = playingIndex;
+
+    const char* filename{ "foo.hmi" };
+    HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
+                                   0) };
+    if (fileHandle != INVALID_HANDLE_VALUE) {
+        inputRecorded->playingHandle = fileHandle;
+    } else {
+        OutputDebugStringA("BeginInputPlayback CreateFileA reading file failed!\n");
+    }
+}
+
+INTERNAL void
+EndInputPlayback(InputRecorded* inputRecorded) {
+    CloseHandle(inputRecorded->playingHandle);
+    inputRecorded->playingIndex = 0;
+}
+
+// These functions are the ones called in the loop
+
+INTERNAL void
+RecordInput(const game::Input* input, InputRecorded* inputRecorded) {
+    DWORD bytesWritten;
+    if (WriteFile(inputRecorded->recordingHandle, input, sizeof(*input), &bytesWritten, 0) &&
+        bytesWritten == sizeof(*input)) {
+
+    } else {
+        OutputDebugStringA("RecordInput RecordInput writing to file failed!\n");
+    }
+}
+
+INTERNAL void
+PlaybackInput(game::Input* input, InputRecorded* inputRecorded) {
+    DWORD bytesRead;
+    if ((ReadFile(inputRecorded->playingHandle, input, sizeof(*input), &bytesRead, 0) &&
+         bytesRead == sizeof(*input))) {
+        // Still input left
+    } else {
+        // EOF or error
+        const u32 playingIndex{ inputRecorded->playingIndex };
+        EndInputPlayback(inputRecorded);
+        OutputDebugStringA("PlaybackInput ended!\n");
+
+        // NOTE: this is how to do for looping
+        // Now we start the recording from scratch again!
+        //BeginInputPlayback(inputRecorded, playingIndex);
+        // Read first frame again
+        //ReadFile(inputRecorded->playingHandle, input, sizeof(*input), &bytesRead, 0);
+    }
+}
+
+INTERNAL void
 ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
     // The fired message should never have the same state (isDown)
     // This also catches scenarios when we forget to add the keypress handling to both WM_KEYUP and
@@ -351,7 +424,7 @@ ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
 }
 
 INTERNAL void
-ProcessPendingMessages(game::Input* input) {
+ProcessPendingMessages(game::Input* input, InputRecorded* inputRecorded) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
@@ -369,8 +442,9 @@ ProcessPendingMessages(game::Input* input) {
         // SYSKEYDOWN is called whenever the key press includes alt
         // all other keypresses go to the non-sys versions below
         // This forces us to handle alt + f4 here...
+        case WM_SYSKEYUP:
         case WM_SYSKEYDOWN: {
-            if (vkCode == VK_F4) {
+            if (vkCode == VK_F4 && isDown) {
                 OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
                 // Should always be true here
                 const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
@@ -380,17 +454,17 @@ ProcessPendingMessages(game::Input* input) {
                 }
             }
         } break;
-        case WM_SYSKEYUP: {
-        } break;
-        case WM_KEYDOWN: {
-            //char buf[32];
-            //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
-            //OutputDebugStringA(buf);
 
+        case WM_KEYUP:
+        case WM_KEYDOWN: {
             // Ignore continuous messages!
             if (wasDown == isDown) {
                 break;
             }
+
+            //char buf[32];
+            //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
+            //OutputDebugStringA(buf);
 
             if (vkCode == 'W') {
                 OutputDebugStringA("W\n");
@@ -415,52 +489,46 @@ ProcessPendingMessages(game::Input* input) {
             } else if (vkCode == VK_SHIFT) {
                 OutputDebugStringA("VK_SHIFT\n");
                 ProcessKeyboardMessage(&input->playerInputs->shift, isDown);
-            } else if (vkCode == VK_UP) {
-                OutputDebugStringA("VK_UP\n");
-            } else if (vkCode == VK_DOWN) {
-                OutputDebugStringA("VK_DOWN\n");
-            } else if (vkCode == VK_LEFT) {
-                OutputDebugStringA("VK_LEFT\n");
-            } else if (vkCode == VK_RIGHT) {
-                OutputDebugStringA("VK_RIGHT\n");
-            } else if (vkCode == VK_ESCAPE) {
-                OutputDebugStringA("VK_ESCAPE\n");
-            } else if (vkCode == VK_SPACE) {
-                OutputDebugStringA("VK_SPACE\n");
             }
-        } break;
-        case WM_KEYUP: {
-            if (wasDown == isDown) {
-                break;
+#if HANDMADE_INTERNAL
+            else if (vkCode == 'L') {
+                if (isDown) {
+                    if (input->playerInputs->shift.endedDown) {
+                        // TODO: Clear recorded input from recordingIndex
+                        // atm we truncate all the input from the file and start again
+                    } else {
+                        if (inputRecorded->recordingIndex == 0) {
+                            BeginRecordInput(inputRecorded, 1);
+                            OutputDebugStringA("L: Recording STARTED!\n");
+                        } else {
+                            EndRecordInput(inputRecorded);
+                            BeginInputPlayback(inputRecorded, 1);
+                            OutputDebugStringA("L: Recording STOPPED!\n");
+                        }
+                    }
+                }
             }
-
-            if (vkCode == 'W') {
-                OutputDebugStringA("W\n");
-                ProcessKeyboardMessage(&input->playerInputs->up, isDown);
-            } else if (vkCode == 'S') {
-                OutputDebugStringA("S\n");
-                ProcessKeyboardMessage(&input->playerInputs->down, isDown);
-            } else if (vkCode == 'A') {
-                OutputDebugStringA("A\n");
-                ProcessKeyboardMessage(&input->playerInputs->left, isDown);
-            } else if (vkCode == 'D') {
-                OutputDebugStringA("D\n");
-                ProcessKeyboardMessage(&input->playerInputs->right, isDown);
-            } else if (vkCode == 'Q') {
-                OutputDebugStringA("Q\n");
-                ProcessKeyboardMessage(&input->playerInputs->Q, isDown);
-            } else if (vkCode == 'E') {
-                OutputDebugStringA("E\n");
-                ProcessKeyboardMessage(&input->playerInputs->E, isDown);
-            } else if (vkCode == VK_SHIFT) {
-                OutputDebugStringA("VK_SHIFT\n");
-                ProcessKeyboardMessage(&input->playerInputs->shift, isDown);
-            }
-        } break;
+#endif
+            //} else if (vkCode == VK_UP) {
+            //    OutputDebugStringA("VK_UP\n");
+            //} else if (vkCode == VK_DOWN) {
+            //    OutputDebugStringA("VK_DOWN\n");
+            //} else if (vkCode == VK_LEFT) {
+            //    OutputDebugStringA("VK_LEFT\n");
+            //} else if (vkCode == VK_RIGHT) {
+            //    OutputDebugStringA("VK_RIGHT\n");
+            //} else if (vkCode == VK_ESCAPE) {
+            //    OutputDebugStringA("VK_ESCAPE\n");
+            //} else if (vkCode == VK_SPACE) {
+            //    OutputDebugStringA("VK_SPACE\n");
+            //}
+            //}
+            break;
         default: {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         } break;
+        }
         }
     }
 }
@@ -480,7 +548,6 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
 INTERNAL inline FILETIME
 GetLastWriteTime(const char* filename) {
     FILETIME lastWriteTime{};
-
     WIN32_FIND_DATAA findData;
     HANDLE fileHandle{ FindFirstFileA(filename, &findData) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -695,8 +762,6 @@ WinMain(
             gameMemory.DEBUGPrintInt = platform::DEBUGPrintInt;
             gameMemory.DEBUGPrintFloat = platform::DEBUGPrintFloat;
 
-            game::Input input{};
-
             // Performance statistics
             LARGE_INTEGER freqCounter;
             QueryPerformanceFrequency(&freqCounter);
@@ -717,6 +782,13 @@ WinMain(
             // The game represented as a DLL which allows hot reloading and more fun stuff!
             win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
 
+            game::Input gameInput{};
+            // Saving input
+            // TODO: disable input while playbacking input to avoid overriding input and hitting the
+            // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
+            // headaches as well)
+            win32::InputRecorded inputRecorded{};
+
             gIsGameRunning = true;
             while (gIsGameRunning) {
                 const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
@@ -725,11 +797,11 @@ WinMain(
                     game = win32::LoadGameCode(srcDllPath, tempDllPath);
                 }
 
-                for (u32 i{}; i < ARRAY_COUNT(input.playerInputs[0].buttons); ++i) {
-                    input.playerInputs[0].buttons[i].halfTransitionCount = 0;
+                for (u32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
+                    gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
                 }
 
-                win32::ProcessPendingMessages(&input);
+                win32::ProcessPendingMessages(&gameInput, &inputRecorded);
 
                 // Directsound
                 // Circular buffer so we might get two regions to write to
@@ -763,9 +835,17 @@ WinMain(
                 screenBuff.memory = gScreenBuff.memory;
                 screenBuff.width = gScreenBuff.width;
                 screenBuff.height = gScreenBuff.height;
+                screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
                 screenBuff.pitch = gScreenBuff.pitch;
 
-                game.updateAndRender(&gameMemory, &screenBuff, &input);
+                if (inputRecorded.recordingIndex) {
+                    win32::RecordInput(&gameInput, &inputRecorded);
+                }
+                if (inputRecorded.playingIndex) {
+                    win32::PlaybackInput(&gameInput, &inputRecorded);
+                }
+
+                game.updateAndRender(&gameMemory, &screenBuff, &gameInput);
 
                 game::SoundOutputBuffer soundBuff{};
                 soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
@@ -795,8 +875,8 @@ WinMain(
                     //                    playCursor };
 
                     //                    char buf[256];
-                    //                    sprintf_s(buf, "LPC: %u, BTL: %u, BTW: %u, - PC: %u, WC:
-                    //                    %u, delta: %u\n",
+                    //                    sprintf_s(buf, "LPC: %u, BTL: %u, BTW: %u, - PC: %u,
+                    //                    WC: %u, delta: %u\n",
                     //                              lastPlayCursor, byteToLock, targetCursor,
                     //                              bytesToWrite, playCursor, writeCursor);
                     //                    OutputDebugStringA(buf);
@@ -808,8 +888,8 @@ WinMain(
                 }
 
                 // Performance
-                // We only query the performance once per frame so that we don't leave out the time
-                // between the frame's end and start
+                // We only query the performance once per frame so that we don't leave out the
+                // time between the frame's end and start
 
                 LARGE_INTEGER endCounter{ win32::GetWallClock() };
                 const f64 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
@@ -878,7 +958,7 @@ WinMain(
 
                 //const f64 ms{ 1000.0 * secondsElapsed };
                 //const f64 FPS{ 1000 / ms };
-#if 1
+#if 0
                 char buf[64]; // yikes...
                 sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS,
                           cycleElapsedM);

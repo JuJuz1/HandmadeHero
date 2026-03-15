@@ -38,7 +38,8 @@ rem /EXPORT to specify which functions to export with the dll
 rem could also specify in the source and is most recommended
 rem this way we get the maximum flexibility though and we don't boilerplate the source
 
-set commonCompilerWarnings=/W4 /WX /wd4201
+rem TODO: enable /WX back
+set commonCompilerWarnings=/W4 /wd4201
 set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
@@ -59,6 +60,8 @@ if ERRORLEVEL 1 (
 
 rem this requires specific locale...
 set timestamp=%DATE:~-4%%DATE:~6,2%%DATE:~3,2%_%TIME:~0,2%%TIME:~3,2%%TIME:~6,2%
+rem if the time is 0am-12am replace every space from the timestamp with 0 (to fix leading space from hour)
+set timestamp=%timestamp: =0%
 
 cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /PDB:handmade_%timestamp%.pdb %gameExportedFunctions% %commonLinkerFlags%
 if ERRORLEVEL 1 (
