@@ -146,8 +146,10 @@ INTERNAL void
 DisplayBufferWindow(HDC deviceContext, const OffScreenBuffer* screenBuff, i32 wndWidth,
                     i32 wndHeight) {
     // TODO: aspect ratio correction
-    StretchDIBits(deviceContext, 0, 0, wndWidth, wndHeight,    // dest
-                  0, 0, screenBuff->width, screenBuff->height, // src
+    // NOTE: buffer is locked for prototyping
+    // wndWidth, wndHeight
+    StretchDIBits(deviceContext, 0, 0, screenBuff->width, screenBuff->height, // dest
+                  0, 0, screenBuff->width, screenBuff->height,                // src
                   screenBuff->memory, &screenBuff->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -163,60 +165,59 @@ typedef DIRECT_SOUND_CREATE(direct_sound_create);
 INTERNAL void
 InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
-    if (dSoundLib) {
-        direct_sound_create* dSoundCreate{ reinterpret_cast<direct_sound_create*>(
-            GetProcAddress(dSoundLib, "DirectSoundCreate")) };
-        LPDIRECTSOUND dSound;
-
-        // For "both" buffers
-        WAVEFORMATEX waveFormat;
-        waveFormat.wFormatTag = WAVE_FORMAT_PCM;
-        waveFormat.nChannels = 2;
-        waveFormat.nSamplesPerSec = samplesPerSecond;
-        waveFormat.wBitsPerSample = 16;
-        waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
-        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
-        waveFormat.cbSize = 0;
-
-        if (dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
-            if (SUCCEEDED(dSound->SetCooperativeLevel(windowHandle, DSSCL_PRIORITY))) {
-                DSBUFFERDESC primaryBuffDescription{};
-                primaryBuffDescription.dwSize = sizeof(primaryBuffDescription);
-                primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
-
-                LPDIRECTSOUNDBUFFER primaryBuff;
-                if (SUCCEEDED(
-                        dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
-                    if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
-                        OutputDebugStringA("Primary buffer format was set\n");
-                    } else {
-                        // log, setting format failed
-                    }
-                } else {
-                    // log, creating primary sound buffer failed
-                }
-            } else {
-                // log, couldn't set cooperative
-            }
-
-            // Secondary buffer, this is where we write to!
-            DSBUFFERDESC secondaryBuffDescription{};
-            secondaryBuffDescription.dwSize = sizeof(secondaryBuffDescription);
-            secondaryBuffDescription.dwFlags = 0;
-            secondaryBuffDescription.dwBufferBytes = buffSize;
-            secondaryBuffDescription.lpwfxFormat = &waveFormat;
-
-            if (SUCCEEDED(
-                    dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
-                OutputDebugStringA("Secondary buffer format created\n");
-            } else {
-                // log, creating secondary sound buffer failed
-            }
-        } else {
-            // log, couldn't create dsound
-        }
-    } else {
+    if (!dSoundLib) {
         // TODO: log, couldn't load dll
+        return;
+    }
+
+    direct_sound_create* dSoundCreate{ reinterpret_cast<direct_sound_create*>(
+        GetProcAddress(dSoundLib, "DirectSoundCreate")) };
+    LPDIRECTSOUND dSound;
+
+    // For "both" buffers
+    WAVEFORMATEX waveFormat{};
+    waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+    waveFormat.nChannels = 2;
+    waveFormat.nSamplesPerSec = samplesPerSecond;
+    waveFormat.wBitsPerSample = 16;
+    waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
+    waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
+    waveFormat.cbSize = 0;
+
+    if (!(dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0)))) {
+        // log, function pointer invalid or the call failed
+        return;
+    }
+
+    if (!SUCCEEDED(dSound->SetCooperativeLevel(windowHandle, DSSCL_PRIORITY))) {
+        // log, setcooperativelevel failed
+        return;
+    }
+
+    DSBUFFERDESC primaryBuffDescription{};
+    primaryBuffDescription.dwSize = sizeof(primaryBuffDescription);
+    primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+    LPDIRECTSOUNDBUFFER primaryBuff;
+    if (SUCCEEDED(dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
+        if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
+            OutputDebugStringA("Primary buffer format was set\n");
+        } else {
+            // log, setting format failed
+        }
+    }
+
+    // Secondary buffer, this is where we write to!
+    DSBUFFERDESC secondaryBuffDescription{};
+    secondaryBuffDescription.dwSize = sizeof(secondaryBuffDescription);
+    secondaryBuffDescription.dwFlags = 0;
+    secondaryBuffDescription.dwBufferBytes = buffSize;
+    secondaryBuffDescription.lpwfxFormat = &waveFormat;
+
+    if (SUCCEEDED(dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
+        OutputDebugStringA("Secondary buffer format created\n");
+    } else {
+        // log, creating secondary sound buffer failed
     }
 }
 
@@ -459,26 +460,12 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
             gIsGameRunning = false;
         } break;
 
-        // SYSKEYDOWN is called whenever the key press includes alt
-        // all other keypresses go to the non-sys versions below
-        // This forces us to handle alt + f4 here...
         case WM_SYSKEYUP:
-        case WM_SYSKEYDOWN: {
-            if (vkCode == VK_F4 && isDown) {
-                OutputDebugStringA("VK_F4 SYSKEYDOWN\n");
-                // Should always be true here
-                const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
-                ASSERT(altPressed && "SYSKEYDOWN did not have the alt key pressed");
-                if (altPressed) {
-                    gIsGameRunning = false;
-                }
-            }
-        } break;
-
+        case WM_SYSKEYDOWN:
         case WM_KEYUP:
         case WM_KEYDOWN: {
-            // Ignore continuous messages!
-            if (wasDown == isDown) {
+            // Ignore continuous messages
+            if (isDown == wasDown) {
                 break;
             }
 
@@ -486,36 +473,51 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
             //sprintf_s(buf, "isDown: %d, wasDown: %d\n", isDown, wasDown);
             //OutputDebugStringA(buf);
 
-            if (vkCode == 'W') {
+            switch (vkCode) {
+            case 'W': {
                 OutputDebugStringA("W\n");
                 // This approach won't work for justPressed, we have to use halfTransitionCount
                 //input->playerInputs->up.pressed = true;
                 ProcessKeyboardMessage(&input->playerInputs->up, isDown);
-            } else if (vkCode == 'S') {
+            } break;
+            case 'S': {
                 OutputDebugStringA("S\n");
                 ProcessKeyboardMessage(&input->playerInputs->down, isDown);
-            } else if (vkCode == 'A') {
+            } break;
+            case 'A': {
                 OutputDebugStringA("A\n");
                 ProcessKeyboardMessage(&input->playerInputs->left, isDown);
-            } else if (vkCode == 'D') {
+            } break;
+            case 'D': {
                 OutputDebugStringA("D\n");
                 ProcessKeyboardMessage(&input->playerInputs->right, isDown);
-            } else if (vkCode == 'Q') {
+            } break;
+            case 'Q': {
                 OutputDebugStringA("Q\n");
                 ProcessKeyboardMessage(&input->playerInputs->Q, isDown);
-            } else if (vkCode == 'E') {
+            } break;
+            case 'E': {
                 OutputDebugStringA("E\n");
                 ProcessKeyboardMessage(&input->playerInputs->E, isDown);
-            } else if (vkCode == VK_SHIFT) {
+            } break;
+            case VK_SHIFT: {
                 OutputDebugStringA("VK_SHIFT\n");
                 ProcessKeyboardMessage(&input->playerInputs->shift, isDown);
-            }
+            } break;
+            case VK_F4: {
+                if (isDown) {
+                    OutputDebugStringA("VK_F4\n");
+                    const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
+                    if (altPressed) {
+                        gIsGameRunning = false;
+                    }
+                }
+            } break;
 #if HANDMADE_INTERNAL
-            else if (vkCode == 'L') {
+            case 'L': {
                 if (isDown) {
                     if (input->playerInputs->shift.endedDown) {
-                        // TODO: Clear recorded input from recordingIndex
-                        // atm we truncate all the input from the file and start again
+                        // TODO: Clear recorded input
                     } else {
                         if (allState->recordingIndex == 0) {
                             OutputDebugStringA("L: Recording STARTED!\n");
@@ -527,38 +529,48 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                         }
                     }
                 }
-            } else if (vkCode == 'P') {
+            } break;
+            case 'P': {
                 if (isDown) {
                     if (gIsGamePaused) {
                         OutputDebugStringA("P: Game unpaused!\n");
                     } else {
                         OutputDebugStringA("P: Game paused!\n");
                     }
-
                     gIsGamePaused = !gIsGamePaused;
                 }
-            }
+            } break;
 #endif
-            //} else if (vkCode == VK_UP) {
-            //    OutputDebugStringA("VK_UP\n");
-            //} else if (vkCode == VK_DOWN) {
-            //    OutputDebugStringA("VK_DOWN\n");
-            //} else if (vkCode == VK_LEFT) {
-            //    OutputDebugStringA("VK_LEFT\n");
-            //} else if (vkCode == VK_RIGHT) {
-            //    OutputDebugStringA("VK_RIGHT\n");
-            //} else if (vkCode == VK_ESCAPE) {
-            //    OutputDebugStringA("VK_ESCAPE\n");
-            //} else if (vkCode == VK_SPACE) {
-            //    OutputDebugStringA("VK_SPACE\n");
-            //}
-            //}
-            break;
+            case VK_UP: {
+                OutputDebugStringA("VK_UP\n");
+            } break;
+            case VK_DOWN: {
+                OutputDebugStringA("VK_DOWN\n");
+            } break;
+            case VK_LEFT: {
+                OutputDebugStringA("VK_LEFT\n");
+            } break;
+            case VK_RIGHT: {
+                OutputDebugStringA("VK_RIGHT\n");
+            } break;
+            case VK_ESCAPE: {
+                OutputDebugStringA("VK_ESCAPE\n");
+            } break;
+            case VK_SPACE: {
+                OutputDebugStringA("VK_SPACE\n");
+            } break;
+            default: {
+                char buf[32];
+                sprintf_s(buf, "vkCode: %u NOT HANDLED\n", vkCode);
+                OutputDebugStringA(buf);
+            } break;
+            }
+        } break;
+
         default: {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         } break;
-        }
         }
     }
 }

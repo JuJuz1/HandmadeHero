@@ -14,6 +14,7 @@ rem /GR- disable RTTI
 rem /Bt better output info
 rem /MT vs /MD https://learn.microsoft.com/en-us/cpp/build/reference/md-mt-ld-use-run-time-library?view=msvc-170
 rem by default the cli uses /MT
+rem we use /MTd to add extra checks
 
 rem https://learn.microsoft.com/en-us/cpp/build/reference/o-options-optimize-code?view=msvc-170
 rem /Oi generate intrinsic functions for appropriate function calls
@@ -40,7 +41,7 @@ rem this way we get the maximum flexibility though and we don't boilerplate the 
 
 rem TODO: enable /WX back
 set commonCompilerWarnings=/W4 /wd4201
-set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /Zi /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /MTd /Zi /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
 set gameExportedFunctions=/EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
@@ -58,12 +59,8 @@ if ERRORLEVEL 1 (
     echo [31m[1mwin32_handmade.cpp failed[0m[1m
 )
 
-rem this requires specific locale...
-set timestamp=%DATE:~-4%%DATE:~6,2%%DATE:~3,2%_%TIME:~0,2%%TIME:~3,2%%TIME:~6,2%
-rem if the time is 0am-12am replace every space from the timestamp with 0 (to fix leading space from hour)
-set timestamp=%timestamp: =0%
-
-cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /PDB:handmade_%timestamp%.pdb %gameExportedFunctions% %commonLinkerFlags%
+rem insert a random number to avoid name conflict when rebuilding
+cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
