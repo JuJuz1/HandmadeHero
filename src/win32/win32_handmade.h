@@ -4,9 +4,6 @@
 // Compiler switch
 #if HANDMADE_WIN32
 
-// NOTE: don't use MAX_PATH in user code as it can be dangerous
-#define WIN32_ALL_STATE_FILE_NAME_COUNT MAX_PATH
-
 namespace win32 {
 
 struct OffScreenBuffer {
@@ -27,6 +24,12 @@ struct SoundOutput {
     u32 runningSampleIndex;
 };
 
+struct DSoundParams {
+    DWORD byteToLock;
+    DWORD targetCursor;
+    DWORD bytesToWrite;
+};
+
 struct WindowDimension {
     i32 width;
     i32 height;
@@ -43,12 +46,18 @@ struct GameCode {
     bool32 isValid;
 };
 
+// NOTE: don't use MAX_PATH in user code as it can be dangerous
+GLOBAL u32 constexpr allStateFileNameCount{ MAX_PATH };
+
+// Buffers to store the game memory in memory instead of disk
 struct ReplayBuffer {
     HANDLE fileHandle;
     HANDLE memoryMap;
     void* memoryBlock;
-    char replayFilePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    char replayFilePath[allStateFileNameCount];
 };
+
+GLOBAL u8 constexpr replayBufferCount{ 4 };
 
 // NOTE: not really all state (yet?)
 struct AllState {
@@ -57,9 +66,9 @@ struct AllState {
 
     void* gameMemory;
     u64 memorySize;
-    ReplayBuffer replayBuffers[4];
+    ReplayBuffer replayBuffers[replayBufferCount];
 
-    char exePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    char exePath[allStateFileNameCount];
     char* exeFilename;
 
     u32 recordingIndex;

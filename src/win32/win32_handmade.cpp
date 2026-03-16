@@ -296,6 +296,32 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
     }
 }
 
+// Circular buffer so we might get two regions to write to
+INTERNAL DSoundParams
+ProcessDSoundParams(const SoundOutput* soundOutput, DWORD lastPlayCursor, bool32 isSoundValid) {
+    DSoundParams dSoundParams{};
+
+    if (isSoundValid) {
+        dSoundParams.byteToLock =
+            (soundOutput->runningSampleIndex * soundOutput->bytesPerSample) % soundOutput->buffSize;
+
+        dSoundParams.targetCursor =
+            (lastPlayCursor + (soundOutput->latencySampleCount * soundOutput->bytesPerSample)) %
+            soundOutput->buffSize;
+        // To the end and wrap behind playCursor
+        if (dSoundParams.byteToLock > dSoundParams.targetCursor) {
+            dSoundParams.bytesToWrite = soundOutput->buffSize - dSoundParams.byteToLock;
+            dSoundParams.bytesToWrite += dSoundParams.targetCursor;
+        } else {
+            dSoundParams.bytesToWrite = dSoundParams.targetCursor - dSoundParams.byteToLock;
+        }
+    } else {
+        // log, couldnt get curr pos
+    }
+
+    return dSoundParams;
+}
+
 // Callback for messages
 INTERNAL LRESULT CALLBACK
 MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -380,10 +406,11 @@ BuildGamePathFilename(const AllState* allState, const char* filename, char* dest
 }
 
 INTERNAL void
-GetInputFilePath(const AllState* allState, u32 slotIndex, char* dest, u32 destCount) {
-    // NOTE: Arbitrary slots not yet supported
-    ASSERT(slotIndex == 1);
-    BuildGamePathFilename(allState, "loop_edit.hmi", dest, destCount);
+GetInputFilePath(const AllState* allState, bool32 inputStream, u32 slotIndex, char* dest,
+                 u32 destCount) {
+    char temp[32];
+    wsprintfA(temp, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
+    BuildGamePathFilename(allState, temp, dest, destCount);
 }
 
 INTERNAL ReplayBuffer*
@@ -395,13 +422,11 @@ GetReplayBuffer(AllState* allState, u32 index) {
 
 INTERNAL void
 BeginRecordInput(AllState* allState, u32 recordingIndex) {
-    // NOTE: Write to disk lazily and store the game memory in RAM?
-    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
-
+    // TODO: cleanup the files after exiting the game
     allState->recordingIndex = recordingIndex;
 
-    char filePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
-    GetInputFilePath(allState, 1, filePath, sizeof(filePath));
+    char filePath[win32::allStateFileNameCount];
+    GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
     HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
         allState->recordingHandle = fileHandle;
@@ -409,41 +434,30 @@ BeginRecordInput(AllState* allState, u32 recordingIndex) {
         OutputDebugStringA("BeginRecordInput CreateFileA writing to file failed!\n");
     }
 
-    //const DWORD bytesToWrite{ static_cast<DWORD>(allState->memorySize) };
-    // 4GB limit with WriteFile, bytesToWrite would truncate if larger than 4GB
-    //ASSERT(allState->memorySize == bytesToWrite);
-    //DWORD bytesWritten;
     OutputDebugStringA("BeginRecordInput start recording input!\n");
-    //WriteFile(allState->recordingHandle, allState->gameMemory, bytesToWrite, &bytesWritten, 0);
 
-    // NOTE: storing the replay buffers in memory
-    // Move the recording handle to where the input starts
-    // SetFilePointerEx seems to cause slowing down, we don't actually need it
-    //LARGE_INTEGER filePosition{};
-    //filePosition.HighPart = allState->memorySize;
-    //if (SetFilePointerEx(allState->recordingHandle, filePosition, 0, FILE_BEGIN)) {
-    //    OutputDebugStringA("BeginInputPlayback SetFilePointerEx failed!\n");
-    //}
-
-    CopyMemory(allState->replayBuffers[recordingIndex].memoryBlock, allState->gameMemory,
-               allState->memorySize);
+    // Storing the replay buffers in memory now!
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
+    CopyMemory(replayBuffer->memoryBlock, allState->gameMemory, allState->memorySize);
 }
 
 INTERNAL void
 EndRecordInput(AllState* allState) {
-    CloseHandle(allState->recordingHandle);
+    if (allState->recordingHandle) {
+        CloseHandle(allState->recordingHandle);
+        allState->recordingHandle = INVALID_HANDLE_VALUE;
+    }
+
     allState->recordingIndex = 0;
     OutputDebugStringA("RecordInput ended!\n");
 }
 
 INTERNAL void
 BeginInputPlayback(AllState* allState, u32 playingIndex) {
-    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
-
     allState->playingIndex = playingIndex;
 
-    char filePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
-    GetInputFilePath(allState, 1, filePath, sizeof(filePath));
+    char filePath[allStateFileNameCount];
+    GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
     HANDLE fileHandle{ CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -452,23 +466,18 @@ BeginInputPlayback(AllState* allState, u32 playingIndex) {
         OutputDebugStringA("BeginInputPlayback CreateFileA reading file failed!\n");
     }
 
-    //const DWORD bytesToRead{ static_cast<DWORD>(allState->memorySize) };
-    //ASSERT(allState->memorySize == bytesToRead);
-    //DWORD bytesRead;
-    //ReadFile(allState->playingHandle, allState->gameMemory, bytesToRead, &bytesRead, 0);
-
-    //LARGE_INTEGER filePosition{};
-    //filePosition.HighPart = allState->memorySize;
-    //if (SetFilePointerEx(allState->playingHandle, filePosition, 0, FILE_BEGIN)) {
-    //    OutputDebugStringA("BeginInputPlayback SetFilePointerEx failed!\n");
-    //}
-
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     CopyMemory(allState->gameMemory, replayBuffer->memoryBlock, allState->memorySize);
 }
 
 INTERNAL void
 EndInputPlayback(AllState* allState) {
-    CloseHandle(allState->playingHandle);
+    if (allState->playingHandle) {
+        CloseHandle(allState->playingHandle);
+        // NOTE: not needed, helps debugging though
+        allState->playingHandle = INVALID_HANDLE_VALUE;
+    }
+
     allState->playingIndex = 0;
     OutputDebugStringA("PlaybackInput ended!\n");
 }
@@ -504,6 +513,11 @@ PlaybackInput(game::Input* input, AllState* allState) {
         // needed?
         ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0);
     }
+}
+
+INTERNAL void
+ClearInputMemory(game::Input* input) {
+    ZeroMemory(input, sizeof(*input));
 }
 
 // The fired message should never have the same state (wasDown == isDown)
@@ -590,15 +604,22 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
             case 'L': {
                 if (isDown) {
                     if (input->playerInputs->shift.endedDown) {
-                        // TODO: Clear recorded input
+                        // TODO: Clear recorded input, or switch index or something
                     } else {
-                        if (allState->recordingIndex == 0) {
-                            OutputDebugStringA("L: Recording STARTED!\n");
-                            BeginRecordInput(allState, 1);
+                        ClearInputMemory(input);
+
+                        if (allState->playingIndex == 0) {
+                            if (allState->recordingIndex == 0) {
+                                OutputDebugStringA("L: Recording STARTED!\n");
+                                BeginRecordInput(allState, 1);
+                            } else {
+                                OutputDebugStringA("L: Recording STOPPED!\n");
+                                EndRecordInput(allState);
+                                BeginInputPlayback(allState, 1);
+                            }
                         } else {
-                            OutputDebugStringA("L: Recording STOPPED!\n");
-                            EndRecordInput(allState);
-                            BeginInputPlayback(allState, 1);
+                            OutputDebugStringA("L: Playing STOPPED!\n");
+                            EndInputPlayback(allState);
                         }
                     }
                 }
@@ -732,9 +753,9 @@ WinMain(
     win32::GetExePathAndFilename(&allState);
 
     // NOTE: a little string processing cause we are handmade
-    char srcDllPath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    char srcDllPath[win32::allStateFileNameCount];
     win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
-    char tempDllPath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    char tempDllPath[win32::allStateFileNameCount];
     win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath, sizeof(tempDllPath));
 
     constexpr i32 startingWidth{ 1280 };
@@ -750,7 +771,9 @@ WinMain(
     windowClass.lpszClassName = name;
 
     // NOTE: This will not be used if we recap episode 20 audio fixes
-    constexpr u32 framesOfAudioLatency{ 4 }; // 3 seems to be enough for gameUpdateHz of 30, test 4
+    // 3 seems to be enough for monitorHz of 60 (gameUpdateHz 30), 5 for 144
+    // NOTE: audio is bugged when using the record and playback
+    constexpr u32 framesOfAudioLatency{ 5 };
 
     constexpr u32 desiredSchedulerMS{ 1 };
     const bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
@@ -845,10 +868,26 @@ WinMain(
     // Piggy time
     for (u32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
         win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
-        replayBuffer->memoryBlock =
-            VirtualAlloc(0, allState.memorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-        // NOTE: assert here to avoid asserting later when using
+        // Using memory mapping
+        char filePath[win32::allStateFileNameCount];
+        GetInputFilePath(&allState, false, i, filePath, sizeof(filePath));
+        HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE | GENERIC_READ, 0, 0, CREATE_ALWAYS,
+                                       0, 0) };
+        if (fileHandle != INVALID_HANDLE_VALUE) {
+            replayBuffer->fileHandle = fileHandle;
+        } else {
+            OutputDebugStringA("Replaybuffer mapping CreateFileA writing to file failed!\n");
+        }
+
+        DWORD maxSizeHigh{ (allState.memorySize >> 32) };
+        DWORD maxSizeLow{ allState.memorySize & 0xFFFFFFFF };
+        replayBuffer->memoryMap = CreateFileMappingA(replayBuffer->fileHandle, 0, PAGE_READWRITE,
+                                                     maxSizeHigh, maxSizeLow, 0);
+        replayBuffer->memoryBlock =
+            MapViewOfFile(replayBuffer->memoryMap, FILE_MAP_ALL_ACCESS, 0, 0, allState.memorySize);
+
+        // NOTE: assert here to avoid asserting later when using or switch to checking with if
         ASSERT(replayBuffer->memoryBlock);
     }
 
@@ -882,6 +921,10 @@ WinMain(
             gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
         }
 
+        win32::ProcessPendingMessages(&gameInput, &allState);
+
+        // Mouse input
+
         POINT mousePos;
         GetCursorPos(&mousePos);
         ScreenToClient(windowHandle, &mousePos);
@@ -905,37 +948,13 @@ WinMain(
         win32::ProcessKeyboardMessage(&gameInput.mouseButtons.x2,
                                       GetKeyState(VK_XBUTTON2) & (1 << 15));
 
-        win32::ProcessPendingMessages(&gameInput, &allState);
         if (gIsGamePaused) {
             continue;
         }
 
         // Directsound
-        // Circular buffer so we might get two regions to write to
-        // A single sample is one LEFT and RIGHT together
-        //  i16  i16 ...
-        // [LEFT RIGHT] LEFT RIGHT ...
-        DWORD byteToLock{};
-        DWORD targetCursor;
-        DWORD bytesToWrite{};
-
-        if (isSoundValid) {
-            byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) %
-                         soundOutput.buffSize;
-
-            targetCursor =
-                (lastPlayCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) %
-                soundOutput.buffSize;
-            // To the end and wrap behind playCursor
-            if (byteToLock > targetCursor) {
-                bytesToWrite = soundOutput.buffSize - byteToLock;
-                bytesToWrite += targetCursor;
-            } else {
-                bytesToWrite = targetCursor - byteToLock;
-            }
-        } else {
-            // log, couldnt get curr pos
-        }
+        win32::DSoundParams dSoundParams{ win32::ProcessDSoundParams(&soundOutput, lastPlayCursor,
+                                                                     isSoundValid) };
 
         // Call game code
 
@@ -961,7 +980,7 @@ WinMain(
 
         game::SoundOutputBuffer soundBuff{};
         soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
-        soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
+        soundBuff.sampleCount = dSoundParams.bytesToWrite / soundOutput.bytesPerSample;
         soundBuff.samples = soundBuffSamples;
 
         if (game.getSoundSamples) {
@@ -970,7 +989,8 @@ WinMain(
 
         if (isSoundValid) {
             // soundBuff now contains game generated output
-            win32::FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuff);
+            win32::FillSoundBuffer(&soundOutput, dSoundParams.byteToLock, dSoundParams.bytesToWrite,
+                                   &soundBuff);
             // TODO: look up episode 20 if we want to continue fixing the audio sync
             // For now we skip fixing the issues as it is very complicated and I think I
             // wouldn't get much out of it...
