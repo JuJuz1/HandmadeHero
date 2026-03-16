@@ -4,6 +4,9 @@
 // Compiler switch
 #if HANDMADE_WIN32
 
+// NOTE: don't use MAX_PATH in user code as it can be dangerous
+#define WIN32_ALL_STATE_FILE_NAME_COUNT MAX_PATH
+
 namespace win32 {
 
 struct OffScreenBuffer {
@@ -32,6 +35,8 @@ struct WindowDimension {
 struct GameCode {
     HMODULE dll;
     FILETIME lastWritetime;
+
+    // IMPORTANT: these can be 0 as we removed the stubs so we need to check before calling
     game::dll::update_and_render* updateAndRender;
     game::dll::get_sound_samples* getSoundSamples;
 
@@ -45,6 +50,9 @@ struct AllState {
 
     void* gameMemory;
     u64 memorySize;
+
+    char exePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    char* exeFilename;
 
     u32 recordingIndex;
     u32 playingIndex;

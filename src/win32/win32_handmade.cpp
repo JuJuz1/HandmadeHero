@@ -25,6 +25,8 @@ namespace platform_export {
 // and much safer...
 INTERNAL
 DEBUG_PRINT_INT(DEBUGPrintInt) {
+    UNUSED_PARAMS(threadContext);
+
     char buf[32];
     sprintf_s(buf, "%s: %d\n", valueName, value);
     OutputDebugStringA(buf);
@@ -32,6 +34,8 @@ DEBUG_PRINT_INT(DEBUGPrintInt) {
 
 INTERNAL
 DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
+    UNUSED_PARAMS(threadContext);
+
     char buf[32];
     sprintf_s(buf, "%s: %f\n", valueName, value);
     OutputDebugStringA(buf);
@@ -39,6 +43,8 @@ DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
 
 INTERNAL
 DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
+    UNUSED_PARAMS(threadContext);
+
     if (memory) {
         VirtualFree(memory, 0, MEM_RELEASE);
     }
@@ -46,44 +52,49 @@ DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
 
 INTERNAL
 DEBUG_READ_FILE(DEBUGReadFile) {
+    UNUSED_PARAMS(threadContext);
+
     DEBUGFileReadResult result{};
     // What an atrocious name for a function which requests to read a file...
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
-    if (fileHandle != INVALID_HANDLE_VALUE) {
-        LARGE_INTEGER fileSize;
-        if (GetFileSizeEx(fileHandle, &fileSize)) {
-            result.content =
-                VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            if (result.content) {
-                const u32 bytesToRead{ SafeTruncateU64toU32(fileSize.QuadPart) };
-                DWORD bytesRead;
-                // Consider the case where one could truncate the file after reading
-                if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
-                    bytesToRead == bytesRead) {
-                    // Success
-                    result.contentSize = bytesToRead;
-                } else {
-                    DEBUGFreeFileMemory(result.content);
-                    result.content = 0;
-                }
-            } else {
-                // TODO: log
-            }
-        } else {
-            // TODO: log
+    if (fileHandle == INVALID_HANDLE_VALUE) {
+        OutputDebugStringA("DEBUGReadFile file read failed!\n");
+        return result;
+    }
+
+    LARGE_INTEGER fileSize;
+    if (GetFileSizeEx(fileHandle, &fileSize)) {
+        result.content =
+            VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        if (!result.content) {
+            OutputDebugStringA("DEBUGReadFile VirtualAlloc failed!\n");
+            return result;
         }
 
-        CloseHandle(fileHandle);
+        const u32 bytesToRead{ SafeTruncateU64toU32(fileSize.QuadPart) };
+        DWORD bytesRead;
+        // Consider the case where one could truncate the file after reading
+        if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
+            bytesToRead == bytesRead) {
+            result.contentSize = bytesToRead;
+        } else {
+            DEBUGFreeFileMemory(threadContext, result.content);
+            result.content = 0;
+        }
     } else {
-        // TODO: log
+        // log
     }
+
+    CloseHandle(fileHandle);
 
     return result;
 }
 
 INTERNAL
 DEBUG_WRITE_FILE(DEBUGWriteFile) {
+    UNUSED_PARAMS(threadContext);
+
     bool32 result{};
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -92,12 +103,12 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
             // Success
             result = bytesWritten == fileSize;
         } else {
-            // TODO: log
+            // log
         }
 
         CloseHandle(fileHandle);
     } else {
-        // TODO: log
+        // log
     }
 
     return result;
@@ -166,7 +177,7 @@ INTERNAL void
 InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
     if (!dSoundLib) {
-        // TODO: log, couldn't load dll
+        // log, couldn't load dll
         return;
     }
 
@@ -174,17 +185,7 @@ InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
         GetProcAddress(dSoundLib, "DirectSoundCreate")) };
     LPDIRECTSOUND dSound;
 
-    // For "both" buffers
-    WAVEFORMATEX waveFormat{};
-    waveFormat.wFormatTag = WAVE_FORMAT_PCM;
-    waveFormat.nChannels = 2;
-    waveFormat.nSamplesPerSec = samplesPerSecond;
-    waveFormat.wBitsPerSample = 16;
-    waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
-    waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
-    waveFormat.cbSize = 0;
-
-    if (!(dSoundCreate && SUCCEEDED(dSoundCreate(0, &dSound, 0)))) {
+    if (!dSoundCreate || !SUCCEEDED(dSoundCreate(0, &dSound, 0))) {
         // log, function pointer invalid or the call failed
         return;
     }
@@ -197,6 +198,16 @@ InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     DSBUFFERDESC primaryBuffDescription{};
     primaryBuffDescription.dwSize = sizeof(primaryBuffDescription);
     primaryBuffDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+    // For "both" buffers
+    WAVEFORMATEX waveFormat{};
+    waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+    waveFormat.nChannels = 2;
+    waveFormat.nSamplesPerSec = samplesPerSecond;
+    waveFormat.wBitsPerSample = 16;
+    waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
+    waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
+    waveFormat.cbSize = 0;
 
     LPDIRECTSOUNDBUFFER primaryBuff;
     if (SUCCEEDED(dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
@@ -303,10 +314,11 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     } break;
     case WM_ACTIVATEAPP: {
         OutputDebugStringA("WM_ACTIVATEAPP\n");
+        // NOTE: modify these to preference, now disabled
         if (wParam) {
             SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 255, LWA_ALPHA);
         } else {
-            SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 64, LWA_ALPHA);
+            //SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 64, LWA_ALPHA);
         }
     } break;
 
@@ -350,13 +362,39 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 INTERNAL void
+GetExePathAndFilename(AllState* allState) {
+    GetModuleFileNameA(0, allState->exePath, sizeof(allState->exePath));
+    allState->exeFilename = allState->exePath;
+
+    for (char* scan{ allState->exePath }; *scan; ++scan) {
+        if (*scan == '\\') {
+            allState->exeFilename = scan + 1;
+        }
+    }
+}
+
+INTERNAL void
+BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, u32 destCount) {
+    CatStrings(allState->exePath, allState->exeFilename - allState->exePath, filename,
+               StrLength(filename), dest, destCount);
+}
+
+INTERNAL void
+GetInputFilePath(const AllState* allState, u32 slotIndex, char* dest, u32 destCount) {
+    // NOTE: Arbitrary slots not yet supported
+    ASSERT(slotIndex == 1);
+    BuildGamePathFilename(allState, "loop_edit.hmi", dest, destCount);
+}
+
+INTERNAL void
 BeginRecordInput(AllState* allState, u32 recordingIndex) {
     allState->recordingIndex = recordingIndex;
 
     // TODO: this should be in a specific directory to be cleaned up later
     // NOTE: Write to disk lazily and store the game memory in RAM?
-    const char* filename{ "foo.hmi" };
-    HANDLE fileHandle{ CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
+    char filePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    GetInputFilePath(allState, 1, filePath, sizeof(filePath));
+    HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
         allState->recordingHandle = fileHandle;
     } else {
@@ -382,8 +420,9 @@ INTERNAL void
 BeginInputPlayback(AllState* allState, u32 playingIndex) {
     allState->playingIndex = playingIndex;
 
-    const char* filename{ "foo.hmi" };
-    HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
+    char filePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    GetInputFilePath(allState, 1, filePath, sizeof(filePath));
+    HANDLE fileHandle{ CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
         allState->playingHandle = fileHandle;
@@ -411,7 +450,7 @@ RecordInput(const game::Input* input, AllState* allState) {
     DWORD bytesWritten;
     if (WriteFile(allState->recordingHandle, input, sizeof(*input), &bytesWritten, 0) &&
         bytesWritten == sizeof(*input)) {
-
+        // Success
     } else {
         OutputDebugStringA("RecordInput RecordInput writing to file failed!\n");
     }
@@ -424,14 +463,15 @@ PlaybackInput(game::Input* input, AllState* allState) {
          bytesRead == sizeof(*input))) {
         // Still input left
     } else {
-        // EOF or error
+        // EOF (bytesRead != sizeof(*input)) or error while reading
         const u32 playingIndex{ allState->playingIndex };
         EndInputPlayback(allState);
 
         // NOTE: add a check if we want to prevent looping, like some bool
         OutputDebugStringA("PlaybackInput starting loop again!\n");
         BeginInputPlayback(allState, playingIndex);
-        // Read the first frame again to fix 1 leaky frame, maybe not needed?
+        // NOTE: Read the first frame again to fix 1 leaky frame while the playback loops, maybe not
+        // needed?
         ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0);
     }
 }
@@ -439,9 +479,12 @@ PlaybackInput(game::Input* input, AllState* allState) {
 // The fired message should never have the same state (wasDown == isDown)
 INTERNAL void
 ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
-    ASSERT(button->endedDown != isDown);
-    button->endedDown = isDown;
-    ++button->halfTransitionCount;
+    // NOTE: maybe just use if instead of ASSERT
+    //ASSERT(button->endedDown != isDown);
+    if (button->endedDown != isDown) {
+        button->endedDown = isDown;
+        ++button->halfTransitionCount;
+    }
 }
 
 INTERNAL void
@@ -523,8 +566,8 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                             OutputDebugStringA("L: Recording STARTED!\n");
                             BeginRecordInput(allState, 1);
                         } else {
-                            EndRecordInput(allState);
                             OutputDebugStringA("L: Recording STOPPED!\n");
+                            EndRecordInput(allState);
                             BeginInputPlayback(allState, 1);
                         }
                     }
@@ -590,11 +633,10 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
 INTERNAL inline FILETIME
 GetLastWriteTime(const char* filename) {
     FILETIME lastWriteTime{};
-    WIN32_FIND_DATAA findData;
-    HANDLE fileHandle{ FindFirstFileA(filename, &findData) };
-    if (fileHandle != INVALID_HANDLE_VALUE) {
-        lastWriteTime = findData.ftLastWriteTime;
-        FindClose(fileHandle);
+
+    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+    if (GetFileAttributesExA(filename, GetFileExInfoStandard, &fileInfo)) {
+        lastWriteTime = fileInfo.ftLastWriteTime;
     }
 
     return lastWriteTime;
@@ -618,13 +660,14 @@ LoadGameCode(const char* srcDll, const char* tempDll) {
 
         gameCode.isValid = gameCode.updateAndRender && gameCode.getSoundSamples;
     } else {
-        // TODO: log
+        // log
         OutputDebugStringA("Failed to load handmade.dll!\n");
     }
 
     if (!gameCode.isValid) {
-        gameCode.updateAndRender = UpdateAndRenderStub;
-        gameCode.getSoundSamples = GetSoundSamplesStub;
+        OutputDebugStringA("gameCode is invalid, game functions are null!\n");
+        gameCode.updateAndRender = 0;
+        gameCode.getSoundSamples = 0;
     }
 
     return gameCode;
@@ -637,29 +680,9 @@ UnloadGameCode(GameCode* gamecode) {
         gamecode->dll = 0;
     }
 
-    gamecode->updateAndRender = game::dll::UpdateAndRenderStub;
-    gamecode->getSoundSamples = game::dll::GetSoundSamplesStub;
+    gamecode->updateAndRender = 0;
+    gamecode->getSoundSamples = 0;
     gamecode->isValid = false;
-}
-
-INTERNAL void
-CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
-           u64 destSize) {
-    // Space for null terminator
-    u64 total{ srcASize + srcBSize };
-    if (total >= destSize) {
-        total = destSize - 1;
-    }
-
-    for (u32 i{}; i < srcASize && i < total; ++i) {
-        *dest++ = *srcA++;
-    }
-
-    for (u32 i{}; i < srcBSize && i < total; ++i) {
-        *dest++ = *srcB++;
-    }
-
-    *dest++ = '\0';
 }
 
 } //namespace win32
@@ -675,26 +698,14 @@ WinMain(
 ) {
     // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
 
-    // NOTE: don't use MAX_PATH in user code as it can be dangerous
-    char exePath[MAX_PATH];
-    GetModuleFileNameA(0, exePath, sizeof(exePath));
-    const char* exeName{ exePath };
-    for (char* scan{ exePath }; *scan; ++scan) {
-        if (*scan == '\\') {
-            exeName = scan + 1;
-        }
-    }
+    win32::AllState allState{};
+    win32::GetExePathAndFilename(&allState);
 
     // NOTE: a little string processing cause we are handmade
-    const char srcDllFilename[] = "handmade.dll";
-    char srcDllPath[MAX_PATH];
-    win32::CatStrings(exePath, exeName - exePath, srcDllFilename, sizeof(srcDllFilename) - 1,
-                      srcDllPath, sizeof(srcDllPath));
-
-    const char tempDllFilename[] = "handmade_temp.dll";
-    char tempDllPath[MAX_PATH];
-    win32::CatStrings(exePath, exeName - exePath, tempDllFilename, sizeof(tempDllFilename) - 1,
-                      tempDllPath, sizeof(tempDllPath));
+    char srcDllPath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
+    char tempDllPath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+    win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath, sizeof(tempDllPath));
 
     constexpr i32 startingWidth{ 1280 };
     constexpr i32 startingHeight{ 720 };
@@ -707,12 +718,6 @@ WinMain(
 
     const char* name{ "Handmade Hero" };
     windowClass.lpszClassName = name;
-
-    // TODO: query this via Windows
-    // NOTE: in the future make the game function without a minimum frame rate
-    constexpr u32 monitorHz{ 60 };
-    constexpr u32 gameUpdateHz{ monitorHz / 2 }; // NOTE: Could this the same as monitorHz?
-    constexpr f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
     // NOTE: This will not be used if we recap episode 20 audio fixes
     constexpr u32 framesOfAudioLatency{ 4 }; // 3 seems to be enough for gameUpdateHz of 30, test 4
@@ -738,13 +743,27 @@ WinMain(
         return 0;
     }
 
+    // NOTE: in the future make the game function with arbitrary frame rate?
+    // Ideally yes, but in practice would need a lot of work
+    const HDC deviceContextRefreshRate{ GetDC(windowHandle) };
+    u32 monitorHz{ 60 };
+    const i32 win32MonitorHz{ GetDeviceCaps(deviceContextRefreshRate, VREFRESH) };
+    if (win32MonitorHz > 1) {
+        monitorHz = static_cast<u32>(win32MonitorHz);
+    }
+
+    const f32 gameUpdateHz{ monitorHz / 2.0f }; // NOTE: Could this the same as monitorHz?
+    const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
+    ReleaseDC(windowHandle, deviceContextRefreshRate);
+
     // DirectSound
     win32::SoundOutput soundOutput{};
     soundOutput.samplesPerSecond = 48000;
     soundOutput.bytesPerSample = sizeof(u16) * 2;
     soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
+    // NOTE: gameUpdateHz can be a float here... will be fixed later!
     soundOutput.latencySampleCount =
-        framesOfAudioLatency * soundOutput.samplesPerSecond / gameUpdateHz;
+        framesOfAudioLatency * soundOutput.samplesPerSecond / static_cast<u32>(gameUpdateHz);
 
     win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
     win32::ClearSoundBuffer(&soundOutput);
@@ -768,6 +787,7 @@ WinMain(
 
     // TODO: Variable memory allocation based on platform statistics
     const u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
+    // TODO: check usage for MEM_LARGE_PAGES
     gameMemory.permanentStorage =
         VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
@@ -775,7 +795,6 @@ WinMain(
     // TODO: disable input while playbacking input to avoid overriding input and hitting the
     // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
     // headaches as well)
-    win32::AllState allState{};
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
 
@@ -823,6 +842,29 @@ WinMain(
             gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
         }
 
+        POINT mousePos;
+        GetCursorPos(&mousePos);
+        ScreenToClient(windowHandle, &mousePos);
+        gameInput.mouseX = mousePos.x;
+        gameInput.mouseY = mousePos.y;
+        gameInput.mouseZ = 0;
+
+        for (u32 i{}; i < ARRAY_COUNT(gameInput.mouseButtons.buttons); ++i) {
+            gameInput.mouseButtons.buttons[i].halfTransitionCount = 0;
+        }
+
+        // NOTE: query these in ProcessPendingMessages?
+        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.left,
+                                      GetKeyState(VK_LBUTTON) & (1 << 15));
+        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.middle,
+                                      GetKeyState(VK_MBUTTON) & (1 << 15));
+        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.right,
+                                      GetKeyState(VK_RBUTTON) & (1 << 15));
+        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.x1,
+                                      GetKeyState(VK_XBUTTON1) & (1 << 15));
+        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.x2,
+                                      GetKeyState(VK_XBUTTON2) & (1 << 15));
+
         win32::ProcessPendingMessages(&gameInput, &allState);
         if (gIsGamePaused) {
             continue;
@@ -856,6 +898,9 @@ WinMain(
         }
 
         // Call game code
+
+        ThreadContext threadContext{};
+
         game::OffScreenBuffer screenBuff{};
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
@@ -870,14 +915,18 @@ WinMain(
             win32::PlaybackInput(&gameInput, &allState);
         }
 
-        game.updateAndRender(&gameMemory, &screenBuff, &gameInput);
+        if (game.updateAndRender) {
+            game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
+        }
 
         game::SoundOutputBuffer soundBuff{};
         soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
         soundBuff.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
         soundBuff.samples = soundBuffSamples;
 
-        game.getSoundSamples(&gameMemory, &soundBuff);
+        if (game.getSoundSamples) {
+            game.getSoundSamples(&threadContext, &gameMemory, &soundBuff);
+        }
 
         if (isSoundValid) {
             // soundBuff now contains game generated output
@@ -916,7 +965,7 @@ WinMain(
                     win32::GetSecondsElapsed(lastCounter, win32::GetWallClock());
             }
         } else {
-            //TODO: log the missed frame!!!
+            // log the missed frame!!!
         }
 #endif
 
@@ -925,8 +974,7 @@ WinMain(
         const f64 FPS{ 1000 / ms };
 
         auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
-
-        HDC deviceContext{ GetDC(windowHandle) };
+        const HDC deviceContext{ GetDC(windowHandle) };
         win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                    wndDimension.height);
         ReleaseDC(windowHandle, deviceContext);

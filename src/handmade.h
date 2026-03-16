@@ -43,7 +43,6 @@ HANDMADE_DEBUG:
 #define GIGABYTES(count) (MEGABYTES(count) * 1024LL)
 #define TERABYTES(count) (GIGABYTES(count) * 1024LL)
 
-// To suppress warnings on stub functions
 #define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
 
 // Typedefs for common types
@@ -66,6 +65,11 @@ typedef double f64;
 
 /// Services that the platform layer provides to the game ///
 
+// A thread context passed to game code and is used when calling back to platform-specific code
+struct ThreadContext {
+    u32 placeHolder;
+};
+
 namespace platform_export {
 
 struct DEBUGFileReadResult {
@@ -74,19 +78,19 @@ struct DEBUGFileReadResult {
 };
 
 // clang-format off
-#define DEBUG_PRINT_INT(name) void name(const char* valueName, i32 value)
+#define DEBUG_PRINT_INT(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
 typedef DEBUG_PRINT_INT(debug_print_int);
 
-#define DEBUG_PRINT_FLOAT(name) void name(const char* valueName, f32 value)
+#define DEBUG_PRINT_FLOAT(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
 typedef DEBUG_PRINT_FLOAT(debug_print_float);
 
-#define DEBUG_FREE_FILE_MEMORY(name) void name(void* memory)
+#define DEBUG_FREE_FILE_MEMORY(name) void name(ThreadContext* threadContext, void* memory)
 typedef DEBUG_FREE_FILE_MEMORY(debug_free_file_memory);
 
-#define DEBUG_READ_FILE(name) DEBUGFileReadResult name(const char* filename)
+#define DEBUG_READ_FILE(name) DEBUGFileReadResult name(ThreadContext* threadContext, const char* filename)
 typedef DEBUG_READ_FILE(debug_read_file);
 
-#define DEBUG_WRITE_FILE(name) bool32 name(const char* filename, void* memory, u32 fileSize)
+#define DEBUG_WRITE_FILE(name) bool32 name(ThreadContext* threadContext, const char* filename, void* memory, u32 fileSize)
 typedef DEBUG_WRITE_FILE(debug_write_file);
 // clang-format on
 
@@ -115,6 +119,38 @@ SafeTruncateF64toF32(f64 value) {
     ASSERT(value <= 3.402823466e+38);
     ASSERT(value >= -3.402823466e+38);
     return static_cast<f32>(value);
+}
+
+INTERNAL void
+CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
+           u64 destSize) {
+    // Space for null terminator
+    u64 total{ srcASize + srcBSize };
+    if (total >= destSize) {
+        total = destSize - 1;
+    }
+
+    for (u32 i{}; i < srcASize && i < total; ++i) {
+        *dest++ = *srcA++;
+    }
+
+    for (u32 i{}; i < srcBSize && i < total; ++i) {
+        *dest++ = *srcB++;
+    }
+
+    *dest++ = '\0';
+}
+
+INTERNAL u32
+StrLength(const char* str) {
+    ASSERT(str);
+
+    u32 len{};
+    while (*str++) {
+        len++;
+    }
+
+    return len;
 }
 
 /// Game specific code ///
@@ -162,11 +198,12 @@ struct SoundOutputBuffer {
 struct Button {
     bool32 endedDown; // If the button ended down during the frame
     // The amount of times the state changed during the frame, with this we can deduce
-    // if the button was just pressed, pressed continuosly or just released
+    // if the button was just pressed, pressed continuously or just released
     u32 halfTransitionCount;
 };
 
 GLOBAL constexpr u8 buttonCount{ 7 };
+GLOBAL constexpr u8 mouseButtonCount{ 5 };
 
 struct InputButtons {
     // A union allows us to do:
@@ -189,9 +226,28 @@ struct InputButtons {
     };
 };
 
+struct MouseButtons {
+    union {
+        Button buttons[mouseButtonCount];
+
+        struct {
+            Button left;
+            Button middle;
+            Button right;
+
+            // Side buttons
+            Button x1; // Closer
+            Button x2; // Further
+        };
+    };
+};
+
 struct Input {
     // TODO: insert frame statistics
     InputButtons playerInputs[playerCount];
+
+    MouseButtons mouseButtons;
+    i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
 };
 
 static_assert(sizeof(InputButtons) == sizeof(Button) * buttonCount,
@@ -204,20 +260,13 @@ static_assert(sizeof(InputButtons) == sizeof(Button) * buttonCount,
 namespace dll {
 
 // clang-format off
-#define GET_SOUND_SAMPLES(name) void name(GameMemory* memory, const SoundOutputBuffer* soundBuff)
+#define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, const SoundOutputBuffer* soundBuff)
 typedef GET_SOUND_SAMPLES(get_sound_samples);
-GET_SOUND_SAMPLES(GetSoundSamplesStub) {
-    UNUSED_PARAMS(memory, soundBuff);
-}
 
 //void GetSoundSamples(GameMemory* memory, const SoundOutputBuffer* soundBuff);
 
-#define UPDATE_AND_RENDER(name) void name(GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
+#define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
 typedef UPDATE_AND_RENDER(update_and_render);
-UPDATE_AND_RENDER(UpdateAndRenderStub) {
-    //ASSERT(!"UpdateAndRenderStub called!");
-    UNUSED_PARAMS(memory, screenBuff, input);
-}
 
 // clang-format on
 

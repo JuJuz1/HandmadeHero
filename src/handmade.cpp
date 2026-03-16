@@ -99,6 +99,8 @@ RenderPlayer(const OffScreenBuffer* screenBuff, u32 playerPosX, u32 playerPosY, 
 
 // NOTE: use extern "C" to avoid name mangling
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
+    UNUSED_PARAMS(threadContext);
+
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     OutputSound(gameState, soundBuff);
 }
@@ -120,10 +122,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         gameState->playerPosY = 100;
 
         const char* fileName{ __FILE__ };
-        const auto readResult{ memory->DEBUGReadFile(fileName) };
+        const auto readResult{ memory->DEBUGReadFile(threadContext, fileName) };
         if (readResult.content) {
-            memory->DEBUGWriteFile("test.out", readResult.content, readResult.contentSize);
-            memory->DEBUGFreeFileMemory(readResult.content);
+            memory->DEBUGWriteFile(threadContext, "test.out", readResult.content,
+                                   readResult.contentSize);
+            memory->DEBUGFreeFileMemory(threadContext, readResult.content);
         }
 
         // TODO: maybe make platform set this
@@ -131,7 +134,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     // NOTE: if many players -> loop through input->playerInputs
-    const InputButtons* input0{ &input->playerInputs[0] };
+    const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
     // Input (Godot style)
     //if Input.just_pressed("A")  <==> endedDown && halfTransitionCount > 0
@@ -145,23 +148,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr u32 playerMoveAmount{ 5 };
     constexpr u32 playerMoveShiftModifier{ 3 };
 
-    if (input::ActionPressed(&input0->up)) {
+    if (input::ActionPressed(&input0Keyboard->up)) {
         gameState->yOffset -= gradientOffset;
         playerVelocityY -= playerMoveAmount;
     }
-    if (input::ActionPressed(&input0->down)) {
+    if (input::ActionPressed(&input0Keyboard->down)) {
         gameState->yOffset += gradientOffset;
         playerVelocityY += playerMoveAmount;
     }
-    if (input::ActionPressed(&input0->left)) {
+    if (input::ActionPressed(&input0Keyboard->left)) {
         gameState->xOffset -= gradientOffset;
         playerVelocityX -= playerMoveAmount;
     }
-    if (input::ActionPressed(&input0->right)) {
+    if (input::ActionPressed(&input0Keyboard->right)) {
         playerVelocityX += playerMoveAmount;
     }
     // Shift
-    if (input::ActionPressed(&input0->shift)) {
+    if (input::ActionPressed(&input0Keyboard->shift)) {
         playerVelocityX *= playerMoveShiftModifier;
         playerVelocityY *= playerMoveShiftModifier;
     }
@@ -169,12 +172,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     gameState->playerPosX += playerVelocityX;
     gameState->playerPosY += playerVelocityY;
 
-    constexpr u32 toneHzOffset{ 30 };
-    //memory->DEBUGPrintInt("toneHz", gameState->toneHz);
+    // Mouse
+    //gameState->playerPosX = input->mouseX;
+    //gameState->playerPosY = input->mouseY;
 
-    if (input::ActionJustPressed(&input0->E)) {
+    constexpr u32 toneHzOffset{ 30 };
+    //memory->DEBUGPrintInt(threadContext, "toneHz", gameState->toneHz);
+
+    if (input::ActionJustPressed(&input0Keyboard->E)) {
         gameState->toneHz += toneHzOffset;
-    } else if (input::ActionJustPressed(&input0->Q)) {
+    } else if (input::ActionJustPressed(&input0Keyboard->Q)) {
         if (gameState->toneHz > toneHzOffset) {
             gameState->toneHz -= toneHzOffset;
         } else {
@@ -187,6 +194,28 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     DrawGradient(screenBuff, gameState->xOffset, gameState->yOffset);
     RenderPlayer(screenBuff, gameState->playerPosX, gameState->playerPosY, 0xFFFFFFFF);
+    // Mouse
+    RenderPlayer(screenBuff, input->mouseX, input->mouseY, 0xFFFF2222);
+
+    for (u32 i{}; i < ARRAY_COUNT(input->mouseButtons.buttons); ++i) {
+        RenderPlayer(screenBuff, input->mouseX + i * 20, input->mouseY - i * 10, i * 20000);
+    }
+
+    if (input::ActionPressed(&input->mouseButtons.left)) {
+        RenderPlayer(screenBuff, input->mouseX + 100, input->mouseY, 0xFF11111);
+    }
+    if (input::ActionPressed(&input->mouseButtons.middle)) {
+        RenderPlayer(screenBuff, input->mouseX, input->mouseY - 200, 0x991199);
+    }
+    if (input::ActionPressed(&input->mouseButtons.right)) {
+        RenderPlayer(screenBuff, input->mouseX + 500, input->mouseY + 100, 0xFF55555);
+    }
+    if (input::ActionPressed(&input->mouseButtons.x1)) {
+        RenderPlayer(screenBuff, input->mouseX - 250, input->mouseY + 100, 0xFF55555);
+    }
+    if (input::ActionPressed(&input->mouseButtons.x2)) {
+        RenderPlayer(screenBuff, input->mouseX + 75, input->mouseY + 100, 0xFF55555);
+    }
 }
 
 } //namespace game

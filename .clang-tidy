@@ -38,6 +38,10 @@ Checks: >
   -readability-magic-numbers,
   -readability-uppercase-literal-suffix
 
+CheckOptions:
+  - key: readability-function-cognitive-complexity.Threshold
+    value: '50'
+
 WarningsAsErrors: ''
 HeaderFileExtensions:
   - h
