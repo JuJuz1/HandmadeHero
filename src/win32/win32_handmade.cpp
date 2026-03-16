@@ -386,12 +386,20 @@ GetInputFilePath(const AllState* allState, u32 slotIndex, char* dest, u32 destCo
     BuildGamePathFilename(allState, "loop_edit.hmi", dest, destCount);
 }
 
+INTERNAL ReplayBuffer*
+GetReplayBuffer(AllState* allState, u32 index) {
+    ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
+    ReplayBuffer* replayBuffer{ &allState->replayBuffers[index] };
+    return replayBuffer;
+}
+
 INTERNAL void
 BeginRecordInput(AllState* allState, u32 recordingIndex) {
+    // NOTE: Write to disk lazily and store the game memory in RAM?
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
+
     allState->recordingIndex = recordingIndex;
 
-    // TODO: this should be in a specific directory to be cleaned up later
-    // NOTE: Write to disk lazily and store the game memory in RAM?
     char filePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
     GetInputFilePath(allState, 1, filePath, sizeof(filePath));
     HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
@@ -401,12 +409,24 @@ BeginRecordInput(AllState* allState, u32 recordingIndex) {
         OutputDebugStringA("BeginRecordInput CreateFileA writing to file failed!\n");
     }
 
-    const DWORD bytesToWrite{ static_cast<DWORD>(allState->memorySize) };
+    //const DWORD bytesToWrite{ static_cast<DWORD>(allState->memorySize) };
     // 4GB limit with WriteFile, bytesToWrite would truncate if larger than 4GB
-    ASSERT(allState->memorySize == bytesToWrite);
-    DWORD bytesWritten;
+    //ASSERT(allState->memorySize == bytesToWrite);
+    //DWORD bytesWritten;
     OutputDebugStringA("BeginRecordInput start recording input!\n");
-    WriteFile(allState->recordingHandle, allState->gameMemory, bytesToWrite, &bytesWritten, 0);
+    //WriteFile(allState->recordingHandle, allState->gameMemory, bytesToWrite, &bytesWritten, 0);
+
+    // NOTE: storing the replay buffers in memory
+    // Move the recording handle to where the input starts
+    // SetFilePointerEx seems to cause slowing down, we don't actually need it
+    //LARGE_INTEGER filePosition{};
+    //filePosition.HighPart = allState->memorySize;
+    //if (SetFilePointerEx(allState->recordingHandle, filePosition, 0, FILE_BEGIN)) {
+    //    OutputDebugStringA("BeginInputPlayback SetFilePointerEx failed!\n");
+    //}
+
+    CopyMemory(allState->replayBuffers[recordingIndex].memoryBlock, allState->gameMemory,
+               allState->memorySize);
 }
 
 INTERNAL void
@@ -418,6 +438,8 @@ EndRecordInput(AllState* allState) {
 
 INTERNAL void
 BeginInputPlayback(AllState* allState, u32 playingIndex) {
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
+
     allState->playingIndex = playingIndex;
 
     char filePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
@@ -430,10 +452,18 @@ BeginInputPlayback(AllState* allState, u32 playingIndex) {
         OutputDebugStringA("BeginInputPlayback CreateFileA reading file failed!\n");
     }
 
-    const DWORD bytesToRead{ static_cast<DWORD>(allState->memorySize) };
-    ASSERT(allState->memorySize == bytesToRead);
-    DWORD bytesRead;
-    ReadFile(allState->playingHandle, allState->gameMemory, bytesToRead, &bytesRead, 0);
+    //const DWORD bytesToRead{ static_cast<DWORD>(allState->memorySize) };
+    //ASSERT(allState->memorySize == bytesToRead);
+    //DWORD bytesRead;
+    //ReadFile(allState->playingHandle, allState->gameMemory, bytesToRead, &bytesRead, 0);
+
+    //LARGE_INTEGER filePosition{};
+    //filePosition.HighPart = allState->memorySize;
+    //if (SetFilePointerEx(allState->playingHandle, filePosition, 0, FILE_BEGIN)) {
+    //    OutputDebugStringA("BeginInputPlayback SetFilePointerEx failed!\n");
+    //}
+
+    CopyMemory(allState->gameMemory, replayBuffer->memoryBlock, allState->memorySize);
 }
 
 INTERNAL void
@@ -783,20 +813,13 @@ WinMain(
     game::GameMemory gameMemory{};
     gameMemory.permanentStorageSize = MEGABYTES(64);
     gameMemory.transientStorageSize =
-        MEGABYTES(128); // NOTE: changed from GIGABYTES(1) to speed up recording
+        GIGABYTES(1); // NOTE: MEGABYTES(128); changed from GIGABYTES(1) to speed up recording
 
     // TODO: Variable memory allocation based on platform statistics
     const u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
     // TODO: check usage for MEM_LARGE_PAGES
     gameMemory.permanentStorage =
         VirtualAlloc(baseAddress, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-
-    // Saving game memory and input
-    // TODO: disable input while playbacking input to avoid overriding input and hitting the
-    // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
-    // headaches as well)
-    allState.gameMemory = gameMemory.permanentStorage;
-    allState.memorySize = totalSize;
 
     gameMemory.transientStorage =
         static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
@@ -811,6 +834,23 @@ WinMain(
     gameMemory.DEBUGWriteFile = platform_export::DEBUGWriteFile;
     gameMemory.DEBUGPrintInt = platform_export::DEBUGPrintInt;
     gameMemory.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+
+    // Saving game memory and input
+    // TODO: disable input while playbacking input to avoid overriding input and hitting the
+    // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
+    // headaches as well)
+    allState.gameMemory = gameMemory.permanentStorage;
+    allState.memorySize = totalSize;
+
+    // Piggy time
+    for (u32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
+        win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
+        replayBuffer->memoryBlock =
+            VirtualAlloc(0, allState.memorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+        // NOTE: assert here to avoid asserting later when using
+        ASSERT(replayBuffer->memoryBlock);
+    }
 
     // Performance statistics
     LARGE_INTEGER freqCounter;
@@ -853,7 +893,7 @@ WinMain(
             gameInput.mouseButtons.buttons[i].halfTransitionCount = 0;
         }
 
-        // NOTE: query these in ProcessPendingMessages?
+        // NOTE: query these in ProcessPendingMessages so everything is in one place?
         win32::ProcessKeyboardMessage(&gameInput.mouseButtons.left,
                                       GetKeyState(VK_LBUTTON) & (1 << 15));
         win32::ProcessKeyboardMessage(&gameInput.mouseButtons.middle,

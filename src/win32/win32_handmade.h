@@ -43,6 +43,13 @@ struct GameCode {
     bool32 isValid;
 };
 
+struct ReplayBuffer {
+    HANDLE fileHandle;
+    HANDLE memoryMap;
+    void* memoryBlock;
+    char replayFilePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
+};
+
 // NOTE: not really all state (yet?)
 struct AllState {
     //game::Input* input;
@@ -50,6 +57,7 @@ struct AllState {
 
     void* gameMemory;
     u64 memorySize;
+    ReplayBuffer replayBuffers[4];
 
     char exePath[WIN32_ALL_STATE_FILE_NAME_COUNT];
     char* exeFilename;
