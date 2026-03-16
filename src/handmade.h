@@ -158,7 +158,7 @@ StrLength(const char* str) {
 namespace game {
 
 // TODO: experiment with more than 1
-GLOBAL constexpr u8 playerCount{ 1 };
+GLOBAL constexpr u32 playerCount{ 1 };
 
 // All the memory the game needs
 struct GameMemory {
@@ -202,8 +202,8 @@ struct Button {
     u32 halfTransitionCount;
 };
 
-GLOBAL constexpr u8 buttonCount{ 7 };
-GLOBAL constexpr u8 mouseButtonCount{ 5 };
+GLOBAL constexpr u32 buttonCount{ 7 };
+GLOBAL constexpr u32 mouseButtonCount{ 5 };
 
 struct InputButtons {
     // A union allows us to do:

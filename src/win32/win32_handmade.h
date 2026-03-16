@@ -57,7 +57,7 @@ struct ReplayBuffer {
     char replayFilePath[allStateFileNameCount];
 };
 
-GLOBAL u8 constexpr replayBufferCount{ 4 };
+GLOBAL u32 constexpr replayBufferCount{ 4 };
 
 // NOTE: not really all state (yet?)
 struct AllState {

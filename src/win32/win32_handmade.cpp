@@ -148,14 +148,14 @@ ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
     const u32 bmMemorySize{ screenBuff->width * screenBuff->height * screenBuff->bytesPerPixel };
     // Allocate the memory for use immediately (MEM_COMMIT)
     screenBuff->memory = VirtualAlloc(0, bmMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    screenBuff->pitch = screenBuff->width * screenBuff->bytesPerPixel;
+    screenBuff->pitch = screenBuff->width * static_cast<i32>(screenBuff->bytesPerPixel);
 
     // TODO: clear to black probably
 }
 
 INTERNAL void
-DisplayBufferWindow(HDC deviceContext, const OffScreenBuffer* screenBuff, i32 wndWidth,
-                    i32 wndHeight) {
+DisplayBufferWindow(const HDC deviceContext, // clang-tidy NOLINT
+                    const OffScreenBuffer* screenBuff, i32 wndWidth, i32 wndHeight) {
     // TODO: aspect ratio correction
     // NOTE: buffer is locked for prototyping
     // wndWidth, wndHeight
@@ -172,7 +172,6 @@ DisplayBufferWindow(HDC deviceContext, const OffScreenBuffer* screenBuff, i32 wn
 typedef DIRECT_SOUND_CREATE(direct_sound_create);
 // clang-format on
 
-//TODO: consider cleaning up, starting to become a mess
 INTERNAL void
 InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
@@ -274,7 +273,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
         i16* destSample{ static_cast<i16*>(region1) };
         const i16* srcSample{ sourceBuff->samples };
 
-        // TODO: collapse loops to one
+        // NOTE: collapse loops to one?
         for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
             *destSample++ = *srcSample++;
             *destSample++ = *srcSample++;
@@ -372,7 +371,7 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         OutputDebugStringA("WM_PAINT\n");
 
         PAINTSTRUCT paint;
-        HDC deviceContext{ BeginPaint(hWnd, &paint) };
+        const HDC deviceContext{ BeginPaint(hWnd, &paint) }; // clang-tidy NOLINT
 
         auto wndDimension{ GetWindowDimensions(hWnd) };
         DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
@@ -422,7 +421,7 @@ GetReplayBuffer(AllState* allState, u32 index) {
 
 INTERNAL void
 BeginRecordInput(AllState* allState, u32 recordingIndex) {
-    // TODO: cleanup the files after exiting the game
+    // TODO: cleanup the files after exiting the game?
     allState->recordingIndex = recordingIndex;
 
     char filePath[win32::allStateFileNameCount];
@@ -437,7 +436,7 @@ BeginRecordInput(AllState* allState, u32 recordingIndex) {
     OutputDebugStringA("BeginRecordInput start recording input!\n");
 
     // Storing the replay buffers in memory now!
-    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
+    const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
     CopyMemory(replayBuffer->memoryBlock, allState->gameMemory, allState->memorySize);
 }
 
@@ -466,7 +465,7 @@ BeginInputPlayback(AllState* allState, u32 playingIndex) {
         OutputDebugStringA("BeginInputPlayback CreateFileA reading file failed!\n");
     }
 
-    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
+    const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     CopyMemory(allState->gameMemory, replayBuffer->memoryBlock, allState->memorySize);
 }
 
@@ -520,11 +519,33 @@ ClearInputMemory(game::Input* input) {
     ZeroMemory(input, sizeof(*input));
 }
 
+INTERNAL void
+HandleRecordButton(AllState* allState, game::Input* input) {
+    if (input->playerInputs->shift.endedDown) {
+        // TODO: Clear recorded input, or switch index or something
+    } else {
+        ClearInputMemory(input);
+
+        if (allState->playingIndex == 0) {
+            if (allState->recordingIndex == 0) {
+                OutputDebugStringA("L: Recording STARTED!\n");
+                BeginRecordInput(allState, 1);
+            } else {
+                OutputDebugStringA("L: Recording STOPPED!\n");
+                EndRecordInput(allState);
+                BeginInputPlayback(allState, 1);
+            }
+        } else {
+            OutputDebugStringA("L: Playing STOPPED!\n");
+            EndInputPlayback(allState);
+        }
+    }
+}
+
 // The fired message should never have the same state (wasDown == isDown)
 INTERNAL void
 ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
-    // NOTE: maybe just use if instead of ASSERT
-    //ASSERT(button->endedDown != isDown);
+    // NOTE: maybe just use if instead of ASSERT due to the way we do mouse input polling atm
     if (button->endedDown != isDown) {
         button->endedDown = isDown;
         ++button->halfTransitionCount;
@@ -603,25 +624,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
 #if HANDMADE_INTERNAL
             case 'L': {
                 if (isDown) {
-                    if (input->playerInputs->shift.endedDown) {
-                        // TODO: Clear recorded input, or switch index or something
-                    } else {
-                        ClearInputMemory(input);
-
-                        if (allState->playingIndex == 0) {
-                            if (allState->recordingIndex == 0) {
-                                OutputDebugStringA("L: Recording STARTED!\n");
-                                BeginRecordInput(allState, 1);
-                            } else {
-                                OutputDebugStringA("L: Recording STOPPED!\n");
-                                EndRecordInput(allState);
-                                BeginInputPlayback(allState, 1);
-                            }
-                        } else {
-                            OutputDebugStringA("L: Playing STOPPED!\n");
-                            EndInputPlayback(allState);
-                        }
-                    }
+                    HandleRecordButton(allState, input);
                 }
             } break;
             case 'P': {
@@ -717,8 +720,6 @@ LoadGameCode(const char* srcDll, const char* tempDll) {
 
     if (!gameCode.isValid) {
         OutputDebugStringA("gameCode is invalid, game functions are null!\n");
-        gameCode.updateAndRender = 0;
-        gameCode.getSoundSamples = 0;
     }
 
     return gameCode;
@@ -798,14 +799,15 @@ WinMain(
 
     // NOTE: in the future make the game function with arbitrary frame rate?
     // Ideally yes, but in practice would need a lot of work
-    const HDC deviceContextRefreshRate{ GetDC(windowHandle) };
+    const HDC deviceContextRefreshRate{ GetDC(windowHandle) }; // clang-tidy NOLINT
     u32 monitorHz{ 60 };
     const i32 win32MonitorHz{ GetDeviceCaps(deviceContextRefreshRate, VREFRESH) };
     if (win32MonitorHz > 1) {
         monitorHz = static_cast<u32>(win32MonitorHz);
     }
 
-    const f32 gameUpdateHz{ monitorHz / 2.0f }; // NOTE: Could this the same as monitorHz?
+    // NOTE : Could this be the same as monitorHz?
+    const f32 gameUpdateHz{ static_cast<f32>(monitorHz) / 2.0f };
     const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
     ReleaseDC(windowHandle, deviceContextRefreshRate);
 
@@ -848,24 +850,21 @@ WinMain(
         static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
     if (!(soundBuffSamples && gameMemory.permanentStorage && gameMemory.transientStorage)) {
         // at least one of these failed, the game will not run correctly (or at all!)
-        // TODO: better assertion
+        // NOTE: better assertion?
         ASSERT(!"One or more of the game memory allocations failed!");
     }
 
+    // Platform exports
     gameMemory.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
     gameMemory.DEBUGReadFile = platform_export::DEBUGReadFile;
     gameMemory.DEBUGWriteFile = platform_export::DEBUGWriteFile;
     gameMemory.DEBUGPrintInt = platform_export::DEBUGPrintInt;
     gameMemory.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
 
-    // Saving game memory and input
-    // TODO: disable input while playbacking input to avoid overriding input and hitting the
-    // assert of wasDown != isDown in ProcessKeyboardMessage (likely to cause bugs and
-    // headaches as well)
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
 
-    // Piggy time
+    // Saving game memory in memory, piggy time!
     for (u32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
         win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
@@ -880,10 +879,10 @@ WinMain(
             OutputDebugStringA("Replaybuffer mapping CreateFileA writing to file failed!\n");
         }
 
-        DWORD maxSizeHigh{ (allState.memorySize >> 32) };
-        DWORD maxSizeLow{ allState.memorySize & 0xFFFFFFFF };
+        LARGE_INTEGER size;
+        size.QuadPart = static_cast<i64>(allState.memorySize);
         replayBuffer->memoryMap = CreateFileMappingA(replayBuffer->fileHandle, 0, PAGE_READWRITE,
-                                                     maxSizeHigh, maxSizeLow, 0);
+                                                     size.HighPart, size.LowPart, 0);
         replayBuffer->memoryBlock =
             MapViewOfFile(replayBuffer->memoryMap, FILE_MAP_ALL_ACCESS, 0, 0, allState.memorySize);
 
@@ -953,12 +952,10 @@ WinMain(
         }
 
         // Directsound
-        win32::DSoundParams dSoundParams{ win32::ProcessDSoundParams(&soundOutput, lastPlayCursor,
-                                                                     isSoundValid) };
+        const win32::DSoundParams dSoundParams{ win32::ProcessDSoundParams(
+            &soundOutput, lastPlayCursor, isSoundValid) };
 
         // Call game code
-
-        ThreadContext threadContext{};
 
         game::OffScreenBuffer screenBuff{};
         screenBuff.memory = gScreenBuff.memory;
@@ -973,6 +970,8 @@ WinMain(
         if (allState.playingIndex) {
             win32::PlaybackInput(&gameInput, &allState);
         }
+
+        ThreadContext threadContext{};
 
         if (game.updateAndRender) {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
@@ -1034,7 +1033,7 @@ WinMain(
         const f64 FPS{ 1000 / ms };
 
         auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
-        const HDC deviceContext{ GetDC(windowHandle) };
+        const HDC deviceContext{ GetDC(windowHandle) }; // clang-tidy NOLINT
         win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                    wndDimension.height);
         ReleaseDC(windowHandle, deviceContext);
@@ -1051,6 +1050,7 @@ WinMain(
         const u64 endCycleCount{ __rdtsc() };
         const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) / 1000 * 1000 };
 
+        // True timing before sleep
         //const f64 ms{ 1000.0 * secondsElapsed };
         //const f64 FPS{ 1000 / ms };
         char buf[64]; // yikes...

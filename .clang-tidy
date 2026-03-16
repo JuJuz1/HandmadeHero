@@ -13,6 +13,7 @@ Checks: >
 
   bugprone-*,
   -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
 
   clang-analyzer-*,
   performance-*,

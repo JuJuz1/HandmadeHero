@@ -136,12 +136,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
-    // Input (Godot style)
-    //if Input.just_pressed("A")  <==> endedDown && halfTransitionCount > 0
-    //if Input.pressed("A")       <==> endedDown
-    //if Input.just_released("A") <==> !endedDown && halfTransitionCount > 0
-    // Managed to get the same functionality done!
-
     constexpr u32 gradientOffset{ 5 };
 
     u32 playerVelocityX{}, playerVelocityY{};
@@ -198,7 +192,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     RenderPlayer(screenBuff, input->mouseX, input->mouseY, 0xFFFF2222);
 
     for (u32 i{}; i < ARRAY_COUNT(input->mouseButtons.buttons); ++i) {
-        RenderPlayer(screenBuff, input->mouseX + i * 20, input->mouseY - i * 10, i * 20000);
+        RenderPlayer(screenBuff, input->mouseX + (i * 20), input->mouseY - (i * 10), i * 20000);
     }
 
     if (input::ActionPressed(&input->mouseButtons.left)) {
