@@ -50,7 +50,7 @@ set buildFailed=0
 
 rem delete all .pdb files
 rem replace the game's one with a new timestamped version to enable instantenous updating
-del *.pdb
+del *.pdb >nul 2>nul
 
 rem compile the platform and the game as seperate to allow DLL tricks
 cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %win32Libraries% %commonLinkerFlags%

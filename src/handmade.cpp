@@ -32,10 +32,11 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
 
     for (u32 i{ 0 }; i < buff->sampleCount; ++i) {
         // Sine wave
-        const f32 sineValue{ sinf(gameState->tSine) };
-        i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
 #if 1
-        sampleValue = 0;
+        const i16 sampleValue{};
+#else
+        const f32 sineValue{ sinf(gameState->tSine) };
+        const i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
 #endif
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;

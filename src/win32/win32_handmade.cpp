@@ -355,16 +355,16 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     } break;
 
     case WM_SYSKEYDOWN: {
-        ASSERT(!"Keyboard input came through a non-dispatch message!");
+        ASSERT(!"WM_SYSKEYDOWN Keyboard input came through a non-dispatch message!");
     } break;
     case WM_SYSKEYUP: {
-        ASSERT(!"Keyboard input came through a non-dispatch message!");
+        ASSERT(!"WM_SYSKEYUP Keyboard input came through a non-dispatch message!");
     } break;
     case WM_KEYDOWN: {
-        ASSERT(!"Keyboard input came through a non-dispatch message!");
+        ASSERT(!"WM_KEYDOWN Keyboard input came through a non-dispatch message!");
     } break;
     case WM_KEYUP: {
-        ASSERT(!"Keyboard input came through a non-dispatch message!");
+        ASSERT(!"WM_KEYUP Keyboard input came through a non-dispatch message!");
     } break;
 
     case WM_PAINT: {
@@ -422,7 +422,7 @@ GetReplayBuffer(AllState* allState, u32 index) {
 INTERNAL void
 BeginRecordInput(AllState* allState, u32 recordingIndex) {
     // TODO: cleanup the files after exiting the game?
-    allState->recordingIndex = recordingIndex;
+    allState->recordingIndex = static_cast<i32>(recordingIndex);
 
     char filePath[win32::allStateFileNameCount];
     GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
@@ -436,24 +436,40 @@ BeginRecordInput(AllState* allState, u32 recordingIndex) {
     OutputDebugStringA("BeginRecordInput start recording input!\n");
 
     // Storing the replay buffers in memory now!
-    const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
     CopyMemory(replayBuffer->memoryBlock, allState->gameMemory, allState->memorySize);
+
+    // To guard against selecting a buffer which has not yet been recorded to
+    if (!replayBuffer->isRecordedAtLeastOnce) {
+        replayBuffer->isRecordedAtLeastOnce = true;
+    }
 }
 
 INTERNAL void
 EndRecordInput(AllState* allState) {
-    if (allState->recordingHandle) {
+    if (allState->recordingHandle != INVALID_HANDLE_VALUE) {
         CloseHandle(allState->recordingHandle);
         allState->recordingHandle = INVALID_HANDLE_VALUE;
     }
 
-    allState->recordingIndex = 0;
-    OutputDebugStringA("RecordInput ended!\n");
+    allState->recordingIndex = REPLAY_BUFFER_NOT_RECORDING;
+    OutputDebugStringA("EndRecordInput end!\n");
 }
 
 INTERNAL void
 BeginInputPlayback(AllState* allState, u32 playingIndex) {
-    allState->playingIndex = playingIndex;
+    OutputDebugStringA("BeginInputPlayback start\n");
+
+    const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
+    if (!replayBuffer->isRecordedAtLeastOnce) {
+        char buf[32];
+        wsprintfA(buf, "Can't playback buffer %u as it has not yet been recorded to!\n",
+                  playingIndex);
+        OutputDebugStringA(buf);
+        return;
+    }
+
+    allState->playingIndex = static_cast<i32>(playingIndex);
 
     char filePath[allStateFileNameCount];
     GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
@@ -465,20 +481,18 @@ BeginInputPlayback(AllState* allState, u32 playingIndex) {
         OutputDebugStringA("BeginInputPlayback CreateFileA reading file failed!\n");
     }
 
-    const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     CopyMemory(allState->gameMemory, replayBuffer->memoryBlock, allState->memorySize);
 }
 
 INTERNAL void
 EndInputPlayback(AllState* allState) {
-    if (allState->playingHandle) {
+    if (allState->playingHandle != INVALID_HANDLE_VALUE) {
         CloseHandle(allState->playingHandle);
-        // NOTE: not needed, helps debugging though
         allState->playingHandle = INVALID_HANDLE_VALUE;
     }
 
-    allState->playingIndex = 0;
-    OutputDebugStringA("PlaybackInput ended!\n");
+    allState->playingIndex = REPLAY_BUFFER_NOT_PLAYING;
+    OutputDebugStringA("EndInputPlayback end!\n");
 }
 
 // These functions are the ones called in the loop
@@ -497,12 +511,12 @@ RecordInput(const game::Input* input, AllState* allState) {
 INTERNAL void
 PlaybackInput(game::Input* input, AllState* allState) {
     DWORD bytesRead;
-    if ((ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0) &&
-         bytesRead == sizeof(*input))) {
+    if ((ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0)) &&
+        bytesRead == sizeof(*input)) {
         // Still input left
     } else {
         // EOF (bytesRead != sizeof(*input)) or error while reading
-        const u32 playingIndex{ allState->playingIndex };
+        const i32 playingIndex{ allState->playingIndex };
         EndInputPlayback(allState);
 
         // NOTE: add a check if we want to prevent looping, like some bool
@@ -520,25 +534,61 @@ ClearInputMemory(game::Input* input) {
 }
 
 INTERNAL void
-HandleRecordButton(AllState* allState, game::Input* input) {
-    if (input->playerInputs->shift.endedDown) {
-        // TODO: Clear recorded input, or switch index or something
-    } else {
-        ClearInputMemory(input);
+HandleRecordButton(AllState* allState, game::Input* input, u32 selectedIndex) {
+    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ClearInputMemory(input);
 
-        if (allState->playingIndex == 0) {
-            if (allState->recordingIndex == 0) {
-                OutputDebugStringA("L: Recording STARTED!\n");
-                BeginRecordInput(allState, 1);
-            } else {
-                OutputDebugStringA("L: Recording STOPPED!\n");
-                EndRecordInput(allState);
-                BeginInputPlayback(allState, 1);
-            }
+    char buf[64];
+
+    if (allState->playingIndex == REPLAY_BUFFER_NOT_PLAYING) {
+        if (allState->recordingIndex == REPLAY_BUFFER_NOT_RECORDING) {
+            wsprintfA(buf, "L: Recording STARTED, selected: %u!\n", selectedIndex);
+            OutputDebugStringA(buf);
+            BeginRecordInput(allState, selectedIndex);
         } else {
-            OutputDebugStringA("L: Playing STOPPED!\n");
-            EndInputPlayback(allState);
+            wsprintfA(buf, "L: Recording STOPPED, selected: %u!\n", selectedIndex);
+            OutputDebugStringA(buf);
+            EndRecordInput(allState);
+            BeginInputPlayback(allState, selectedIndex);
         }
+    } else {
+        wsprintfA(buf, "L: PLAYING STOPPED, selected: %u!\n", selectedIndex);
+        OutputDebugStringA(buf);
+        EndInputPlayback(allState);
+    }
+}
+
+INTERNAL void
+HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedIndex,
+                         u32 shiftPressed) {
+    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ClearInputMemory(input);
+
+    if (allState->recordingIndex == selectedIndex) {
+        OutputDebugStringA("Selected same index when recording -> playback\n");
+        EndRecordInput(allState);
+        BeginInputPlayback(allState, selectedIndex);
+        return;
+    }
+
+    allState->selectedIndex = selectedIndex;
+    char buf[32];
+    wsprintfA(buf, "Selected %u\n", selectedIndex);
+    OutputDebugStringA(buf);
+
+    // Always clear previous input playback, had some problems when doing this only when not playing
+    // and still didn't work properly sometimes
+    EndInputPlayback(allState);
+
+    if (shiftPressed) {
+        BeginRecordInput(allState, selectedIndex);
+    } else {
+        const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, selectedIndex) };
+        if (replayBuffer->isRecordedAtLeastOnce) {
+            BeginInputPlayback(allState, allState->selectedIndex);
+        }
+
+        // Otherwise just select the buffer
     }
 }
 
@@ -562,6 +612,10 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
         const u32 vkCode{ static_cast<u32>(message.wParam) };
         const bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
         const bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
+
+        const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
+        // A way to poll the key immediately
+        const bool32 shiftPressed{ (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) != 0 };
 
         switch (message.message) {
         case WM_QUIT: {
@@ -615,18 +669,39 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
             case VK_F4: {
                 if (isDown) {
                     OutputDebugStringA("VK_F4\n");
-                    const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
                     if (altPressed) {
                         gIsGameRunning = false;
                     }
                 }
             } break;
 #if HANDMADE_INTERNAL
+            // NOTE: now that I have setup multiple buffers to use think about this again
             case 'L': {
                 if (isDown) {
-                    HandleRecordButton(allState, input);
+                    HandleRecordButton(allState, input, allState->selectedIndex);
                 }
             } break;
+            case '1': {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 0, shiftPressed);
+                }
+            } break;
+            case '2': {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 1, shiftPressed);
+                }
+            } break;
+            case '3': {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
+                }
+                break;
+            case '4': {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
+                }
+            } break;
+
             case 'P': {
                 if (isDown) {
                     if (gIsGamePaused) {
@@ -634,6 +709,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                     } else {
                         OutputDebugStringA("P: Game paused!\n");
                     }
+
                     gIsGamePaused = !gIsGamePaused;
                 }
             } break;
@@ -662,12 +738,14 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                 OutputDebugStringA(buf);
             } break;
             }
-        } break;
+            }
+            break;
 
         default: {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         } break;
+        }
         }
     }
 }
@@ -890,6 +968,9 @@ WinMain(
         ASSERT(replayBuffer->memoryBlock);
     }
 
+    allState.recordingIndex = REPLAY_BUFFER_NOT_RECORDING;
+    allState.playingIndex = REPLAY_BUFFER_NOT_PLAYING;
+
     // Performance statistics
     LARGE_INTEGER freqCounter;
     QueryPerformanceFrequency(&freqCounter);
@@ -964,10 +1045,10 @@ WinMain(
         screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
-        if (allState.recordingIndex) {
+        if (allState.recordingIndex != REPLAY_BUFFER_NOT_RECORDING) {
             win32::RecordInput(&gameInput, &allState);
         }
-        if (allState.playingIndex) {
+        if (allState.playingIndex != REPLAY_BUFFER_NOT_PLAYING) {
             win32::PlaybackInput(&gameInput, &allState);
         }
 

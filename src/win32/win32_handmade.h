@@ -55,9 +55,13 @@ struct ReplayBuffer {
     HANDLE memoryMap;
     void* memoryBlock;
     char replayFilePath[allStateFileNameCount];
+
+    bool32 isRecordedAtLeastOnce;
 };
 
 GLOBAL u32 constexpr replayBufferCount{ 4 };
+#define REPLAY_BUFFER_NOT_RECORDING (-1)
+#define REPLAY_BUFFER_NOT_PLAYING (-1)
 
 // NOTE: not really all state (yet?)
 struct AllState {
@@ -71,8 +75,9 @@ struct AllState {
     char exePath[allStateFileNameCount];
     char* exeFilename;
 
-    u32 recordingIndex;
-    u32 playingIndex;
+    u32 selectedIndex; // Modifiable index to switch selected replay buffer
+    i32 recordingIndex;
+    i32 playingIndex;
     HANDLE recordingHandle;
     HANDLE playingHandle;
 };
