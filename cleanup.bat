@@ -1,6 +1,5 @@
 @echo off
-echo Cleaning up Microsoft Visual C++ (MSVC)
-echo compiler toolset generated files
+echo Cleaning up build files
 echo.
 
 rem move to recycling bin

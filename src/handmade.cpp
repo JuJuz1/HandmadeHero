@@ -98,6 +98,28 @@ RenderPlayer(const OffScreenBuffer* screenBuff, u32 playerPosX, u32 playerPosY, 
     }
 }
 
+INTERNAL void
+InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* threadContext) {
+    // The memory is already zeroed
+    //gameState->xOffset = 0;
+    //gameState->yOffset = 0;
+    gameState->toneHz = 256;
+    //gameState->tSine = 0;
+    gameState->playerPosX = 200;
+    gameState->playerPosY = 100;
+
+    const char* fileName{ __FILE__ };
+    const auto readResult{ memory->DEBUGReadFile(threadContext, fileName) };
+    if (readResult.content) {
+        memory->DEBUGWriteFile(threadContext, "test.out", readResult.content,
+                               readResult.contentSize);
+        memory->DEBUGFreeFileMemory(threadContext, readResult.content);
+    }
+
+    // TODO: maybe make platform set this
+    memory->isInitialized = true;
+}
+
 // NOTE: use extern "C" to avoid name mangling
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
     UNUSED_PARAMS(threadContext);
@@ -111,48 +133,35 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: this macro depends on the order of the buttons inside InputButtons
     ASSERT(&input->playerInputs[0].E - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
+    ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==
+           ARRAY_COUNT(input->mouseButtons.buttons) - 1);
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     if (!memory->isInitialized) {
-        // The memory is already zeroed
-        //gameState->xOffset = 0;
-        //gameState->yOffset = 0;
-        gameState->toneHz = 256;
-        //gameState->tSine = 0;
-        gameState->playerPosX = 200;
-        gameState->playerPosY = 100;
-
-        const char* fileName{ __FILE__ };
-        const auto readResult{ memory->DEBUGReadFile(threadContext, fileName) };
-        if (readResult.content) {
-            memory->DEBUGWriteFile(threadContext, "test.out", readResult.content,
-                                   readResult.contentSize);
-            memory->DEBUGFreeFileMemory(threadContext, readResult.content);
-        }
-
-        // TODO: maybe make platform set this
-        memory->isInitialized = true;
+        InitializeGameState(gameState, memory, threadContext);
     }
+
+    const f32 delta{ memory->frameDeltaTime };
 
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
-    constexpr u32 gradientOffset{ 5 };
+    constexpr f32 gradientOffset{ 50.0f };
 
-    u32 playerVelocityX{}, playerVelocityY{};
-    constexpr u32 playerMoveAmount{ 5 };
-    constexpr u32 playerMoveShiftModifier{ 3 };
+    f32 playerVelocityX{}, playerVelocityY{};
+    constexpr f32 playerMoveAmount{ 80.0f };
+    constexpr f32 playerMoveShiftModifier{ 4.0f };
 
     if (input::ActionPressed(&input0Keyboard->up)) {
-        gameState->yOffset -= gradientOffset;
+        gameState->yOffset -= gradientOffset * delta;
         playerVelocityY -= playerMoveAmount;
     }
     if (input::ActionPressed(&input0Keyboard->down)) {
-        gameState->yOffset += gradientOffset;
+        gameState->yOffset += gradientOffset * delta;
         playerVelocityY += playerMoveAmount;
     }
     if (input::ActionPressed(&input0Keyboard->left)) {
-        gameState->xOffset -= gradientOffset;
+        gameState->xOffset -= gradientOffset * delta;
         playerVelocityX -= playerMoveAmount;
     }
     if (input::ActionPressed(&input0Keyboard->right)) {
@@ -164,12 +173,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityY *= playerMoveShiftModifier;
     }
 
-    gameState->playerPosX += playerVelocityX;
-    gameState->playerPosY += playerVelocityY;
-
-    // Mouse
-    //gameState->playerPosX = input->mouseX;
-    //gameState->playerPosY = input->mouseY;
+    gameState->playerPosX += playerVelocityX * delta;
+    gameState->playerPosY += playerVelocityY * delta;
 
     constexpr u32 toneHzOffset{ 30 };
     //memory->DEBUGPrintInt(threadContext, "toneHz", gameState->toneHz);
@@ -188,7 +193,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //OutputSound(soundBuff, gameState->toneHz);
 
     DrawGradient(screenBuff, gameState->xOffset, gameState->yOffset);
-    RenderPlayer(screenBuff, gameState->playerPosX, gameState->playerPosY, 0xFFFFFFFF);
+    RenderPlayer(screenBuff, static_cast<u32>(gameState->playerPosX),
+                 static_cast<u32>(gameState->playerPosY), 0xFFFFFFFF);
     // Mouse
     RenderPlayer(screenBuff, input->mouseX, input->mouseY, 0xFFFF2222);
 

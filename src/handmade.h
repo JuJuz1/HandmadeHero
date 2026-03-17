@@ -4,6 +4,17 @@
 #include <cmath> // TODO: write own sinf
 #include <cstdint>
 
+/*
+This file acts as the shared interface between the platform layer and the game code
+
+- It declares the functions the platform calls into the game (UpdateAndRender, etc.)
+- It declares the services the game can call back into the platform (file I/O, debug, etc.)
+- It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
+
+This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without restarting
+the platform layer
+*/
+
 // Ensure we are compiling as 64-bit for now...
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
@@ -177,6 +188,9 @@ struct GameMemory {
     platform_export::debug_write_file* DEBUGWriteFile;
     platform_export::debug_print_int* DEBUGPrintInt;
     platform_export::debug_print_float* DEBUGPrintFloat;
+
+    // Moved here from Input as we clear the input memory during recording and replaying
+    f32 frameDeltaTime;
 };
 
 // Struct to hold screen buffer info
@@ -276,14 +290,14 @@ typedef UPDATE_AND_RENDER(update_and_render);
 } //namespace dll
 
 struct GameState {
-    u32 xOffset;
-    u32 yOffset;
+    f32 xOffset;
+    f32 yOffset;
     u32 toneHz;
 
     f32 tSine;
 
-    u32 playerPosX;
-    u32 playerPosY;
+    f32 playerPosX;
+    f32 playerPosY;
 };
 
 } //namespace game

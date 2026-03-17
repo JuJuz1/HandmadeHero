@@ -1,16 +1,17 @@
-/*
-Episode 11: Important topics about making code cross-platform
-This is not a final platform layer!
-*/
-
 #include "handmade.h"
 
+// Windows stuff
 #include <dsound.h>
 #include <windows.h>
 
 #include <cstdio>
 
 #include "win32_handmade.h"
+
+/*
+Episode 11: Important topics about making code cross-platform
+This is not a final platform layer!
+*/
 
 GLOBAL bool32 gIsGameRunning;
 GLOBAL bool32 gIsGamePaused;
@@ -453,13 +454,10 @@ EndRecordInput(AllState* allState) {
     }
 
     allState->recordingIndex = REPLAY_BUFFER_NOT_RECORDING;
-    OutputDebugStringA("EndRecordInput end!\n");
 }
 
 INTERNAL void
 BeginInputPlayback(AllState* allState, u32 playingIndex) {
-    OutputDebugStringA("BeginInputPlayback start\n");
-
     const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     if (!replayBuffer->isRecordedAtLeastOnce) {
         char buf[32];
@@ -492,7 +490,6 @@ EndInputPlayback(AllState* allState) {
     }
 
     allState->playingIndex = REPLAY_BUFFER_NOT_PLAYING;
-    OutputDebugStringA("EndInputPlayback end!\n");
 }
 
 // These functions are the ones called in the loop
@@ -930,7 +927,8 @@ WinMain(
     game::GameMemory gameMemory{};
     gameMemory.permanentStorageSize = MEGABYTES(64);
     gameMemory.transientStorageSize =
-        GIGABYTES(1); // NOTE: MEGABYTES(128); changed from GIGABYTES(1) to speed up recording
+        MEGABYTES(128); // NOTE: MEGABYTES(128); changed from GIGABYTES(1) to speed up recording
+    // TODO: change this according to the maximum needed amount in the future!
 
     // TODO: Variable memory allocation based on platform statistics
     const u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
@@ -955,6 +953,8 @@ WinMain(
 
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
+
+    gameMemory.frameDeltaTime = targetSecondsPerFrame;
 
     // Saving game memory in memory, piggy time!
     for (u32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
