@@ -848,8 +848,8 @@ WinMain(
     char tempDllPath[win32::allStateFileNameCount];
     win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath, sizeof(tempDllPath));
 
-    constexpr i32 startingWidth{ 1280 };
-    constexpr i32 startingHeight{ 720 };
+    constexpr i32 startingWidth{ 960 };
+    constexpr i32 startingHeight{ 540 };
     win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     WNDCLASSA windowClass{};

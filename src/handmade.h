@@ -132,6 +132,12 @@ SafeTruncateF64toF32(f64 value) {
     return static_cast<f32>(value);
 }
 
+INTERNAL inline i32
+RoundF32ToI32(f32 value) {
+    // TODO: intrinsic?
+    return static_cast<i32>(value + 0.5f);
+}
+
 INTERNAL void
 CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
            u64 destSize) {

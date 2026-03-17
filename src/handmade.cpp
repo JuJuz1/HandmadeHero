@@ -49,21 +49,36 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
 }
 
 INTERNAL void
-RenderPlayer(const OffScreenBuffer* screenBuff, u32 playerPosX, u32 playerPosY, u32 color) {
-    constexpr u32 playerDimension{ 16 }; // Width and height
+DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 maxX, f32 minY, f32 maxY,
+              u32 color) {
+    i32 roundedMinX{ RoundF32ToI32(minX) };
+    i32 roundedMaxX{ RoundF32ToI32(maxX) };
+    i32 roundedMinY{ RoundF32ToI32(minY) };
+    i32 roundedMaxY{ RoundF32ToI32(maxY) };
+
+    if (roundedMinX < 0) {
+        roundedMinX = 0;
+    }
+    if (roundedMinY < 0) {
+        roundedMinY = 0;
+    }
+
+    // Not including fill
+    if (roundedMaxX > screenBuff->width) {
+        roundedMaxX = screenBuff->width;
+    }
+    if (roundedMaxY > screenBuff->height) {
+        roundedMaxY = screenBuff->height;
+    }
 
     u8* memory{ static_cast<u8*>(screenBuff->memory) };
+    u8* row{ memory + (roundedMinX * screenBuff->bytesPerPixel) +
+             (roundedMinY * screenBuff->pitch) };
 
-    u8* row{ memory + (playerPosY * screenBuff->pitch) };
-    const u8* buffEnd{ memory + (screenBuff->pitch * screenBuff->height) };
-
-    for (u32 y{}; y < playerDimension; ++y) {
-        u8* pixel{ row + (playerPosX * screenBuff->bytesPerPixel) };
-        for (u32 x{}; x < playerDimension; ++x) {
-            if (pixel >= screenBuff->memory && pixel < buffEnd) {
-                *reinterpret_cast<u32*>(pixel) = color;
-                pixel += screenBuff->bytesPerPixel;
-            }
+    for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
+            *pixel++ = color;
         }
 
         row += screenBuff->pitch;
@@ -73,6 +88,7 @@ RenderPlayer(const OffScreenBuffer* screenBuff, u32 playerPosX, u32 playerPosY, 
 INTERNAL void
 InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* threadContext) {
     // TODO: maybe make platform set this
+    gameState->toneHz = 256;
     memory->isInitialized = true;
 }
 
@@ -93,6 +109,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
+
+    DrawRectangle(screenBuff, 0.0f, static_cast<f32>(screenBuff->width), 0.0f,
+                  static_cast<f32>(screenBuff->height), 0xFFFF);
+    DrawRectangle(screenBuff, 100.2f, 200.0f, 250.0f, 300.0f, 0xFF);
 }
 
 // NOTE: use extern "C" to avoid name mangling
