@@ -570,6 +570,9 @@ HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedInd
         EndRecordInput(allState);
         BeginInputPlayback(allState, selectedIndex);
         return;
+    } else if (!(allState->recordingIndex == REPLAY_BUFFER_NOT_RECORDING)) {
+        OutputDebugStringA("Can't switch buffer while recording!\n");
+        return;
     }
 
     allState->selectedIndex = selectedIndex;
