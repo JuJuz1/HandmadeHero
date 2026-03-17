@@ -80,6 +80,8 @@ struct AllState {
     i32 playingIndex;
     HANDLE recordingHandle;
     HANDLE playingHandle;
+
+    bool32 isReplayLooping;
 };
 
 } //namespace win32

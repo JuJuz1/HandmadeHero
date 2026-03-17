@@ -498,7 +498,7 @@ EndInputPlayback(AllState* allState) {
 // These functions are the ones called in the loop
 
 INTERNAL void
-RecordInput(const game::Input* input, AllState* allState) {
+RecordInput(AllState* allState, const game::Input* input) {
     DWORD bytesWritten;
     if (WriteFile(allState->recordingHandle, input, sizeof(*input), &bytesWritten, 0) &&
         bytesWritten == sizeof(*input)) {
@@ -509,7 +509,7 @@ RecordInput(const game::Input* input, AllState* allState) {
 }
 
 INTERNAL void
-PlaybackInput(game::Input* input, AllState* allState) {
+PlaybackInput(AllState* allState, game::Input* input) {
     DWORD bytesRead;
     if ((ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0)) &&
         bytesRead == sizeof(*input)) {
@@ -519,12 +519,13 @@ PlaybackInput(game::Input* input, AllState* allState) {
         const i32 playingIndex{ allState->playingIndex };
         EndInputPlayback(allState);
 
-        // NOTE: add a check if we want to prevent looping, like some bool
-        OutputDebugStringA("PlaybackInput starting loop again!\n");
-        BeginInputPlayback(allState, playingIndex);
-        // NOTE: Read the first frame again to fix 1 leaky frame while the playback loops, maybe not
-        // needed?
-        ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0);
+        if (allState->isReplayLooping) {
+            OutputDebugStringA("PlaybackInput starting loop again!\n");
+            BeginInputPlayback(allState, playingIndex);
+            // NOTE: Read the first frame again to fix 1 leaky frame while the playback loops, maybe
+            // not needed?
+            ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0);
+        }
     }
 }
 
@@ -564,7 +565,7 @@ HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedInd
     ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
     ClearInputMemory(input);
 
-    if (allState->recordingIndex == selectedIndex) {
+    if (allState->recordingIndex == static_cast<i32>(selectedIndex)) {
         OutputDebugStringA("Selected same index when recording -> playback\n");
         EndRecordInput(allState);
         BeginInputPlayback(allState, selectedIndex);
@@ -614,7 +615,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
         const bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
 
         const bool32 altPressed{ (message.lParam & (1 << 29)) != 0 };
-        // A way to poll the key immediately
+        // A way to poll the key immediately, used for record and playback feature
         const bool32 shiftPressed{ (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) != 0 };
 
         switch (message.message) {
@@ -678,7 +679,17 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
             // NOTE: now that I have setup multiple buffers to use think about this again
             case 'L': {
                 if (isDown) {
-                    HandleRecordButton(allState, input, allState->selectedIndex);
+                    if (shiftPressed) {
+                        if (allState->isReplayLooping) {
+                            OutputDebugStringA("Shift + L: Disable replay loop!\n");
+                        } else {
+                            OutputDebugStringA("Shift + L: Enable replay loop!\n");
+                        }
+
+                        allState->isReplayLooping = !allState->isReplayLooping;
+                    } else {
+                        HandleRecordButton(allState, input, allState->selectedIndex);
+                    }
                 }
             } break;
             case '1': {
@@ -970,6 +981,7 @@ WinMain(
 
     allState.recordingIndex = REPLAY_BUFFER_NOT_RECORDING;
     allState.playingIndex = REPLAY_BUFFER_NOT_PLAYING;
+    allState.isReplayLooping = true;
 
     // Performance statistics
     LARGE_INTEGER freqCounter;
@@ -1046,10 +1058,9 @@ WinMain(
         screenBuff.pitch = gScreenBuff.pitch;
 
         if (allState.recordingIndex != REPLAY_BUFFER_NOT_RECORDING) {
-            win32::RecordInput(&gameInput, &allState);
-        }
-        if (allState.playingIndex != REPLAY_BUFFER_NOT_PLAYING) {
-            win32::PlaybackInput(&gameInput, &allState);
+            win32::RecordInput(&allState, &gameInput);
+        } else if (allState.playingIndex != REPLAY_BUFFER_NOT_PLAYING) {
+            win32::PlaybackInput(&allState, &gameInput);
         }
 
         ThreadContext threadContext{};
