@@ -49,11 +49,11 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
 }
 
 INTERNAL void
-DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 maxX, f32 minY, f32 maxY,
+DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f32 maxY,
               u32 color) {
     i32 roundedMinX{ RoundF32ToI32(minX) };
-    i32 roundedMaxX{ RoundF32ToI32(maxX) };
     i32 roundedMinY{ RoundF32ToI32(minY) };
+    i32 roundedMaxX{ RoundF32ToI32(maxX) };
     i32 roundedMaxY{ RoundF32ToI32(maxY) };
 
     if (roundedMinX < 0) {
@@ -112,7 +112,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     DrawRectangle(screenBuff, 0.0f, static_cast<f32>(screenBuff->width), 0.0f,
                   static_cast<f32>(screenBuff->height), 0xFFFF);
-    DrawRectangle(screenBuff, 100.2f, 200.0f, 250.0f, 300.0f, 0xFF);
+    DrawRectangle(screenBuff, 100.2f, -2.0f, 250.0f, 300.0f, 0xFF);
 }
 
 // NOTE: use extern "C" to avoid name mangling
