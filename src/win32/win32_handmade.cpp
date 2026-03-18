@@ -212,9 +212,8 @@ InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     LPDIRECTSOUNDBUFFER primaryBuff;
     if (SUCCEEDED(dSound->CreateSoundBuffer(&primaryBuffDescription, &primaryBuff, 0))) {
         if (SUCCEEDED(primaryBuff->SetFormat(&waveFormat))) {
-            OutputDebugStringA("Primary buffer format was set\n");
         } else {
-            // log, setting format failed
+            OutputDebugStringA("Primary buffer format was not set!\n");
         }
     }
 
@@ -226,9 +225,8 @@ InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
     secondaryBuffDescription.lpwfxFormat = &waveFormat;
 
     if (SUCCEEDED(dSound->CreateSoundBuffer(&secondaryBuffDescription, &gSecondaryBuff, 0))) {
-        OutputDebugStringA("Secondary buffer format created\n");
     } else {
-        // log, creating secondary sound buffer failed
+        OutputDebugStringA("Secondary buffer format not created!\n");
     }
 }
 
@@ -339,7 +337,7 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         gIsGameRunning = false;
     } break;
     case WM_ACTIVATEAPP: {
-        OutputDebugStringA("WM_ACTIVATEAPP\n");
+        //OutputDebugStringA("WM_ACTIVATEAPP\n");
         // NOTE: modify these to preference, now disabled
         if (wParam) {
             SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 255, LWA_ALPHA);
@@ -349,10 +347,10 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     } break;
 
     case WM_MOVE: {
-        OutputDebugStringA("WM_MOVE\n");
+        //OutputDebugStringA("WM_MOVE\n");
     } break;
     case WM_SIZE: {
-        OutputDebugStringA("WM_SIZE\n");
+        //OutputDebugStringA("WM_SIZE\n");
     } break;
 
     case WM_SYSKEYDOWN: {
@@ -369,7 +367,7 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     } break;
 
     case WM_PAINT: {
-        OutputDebugStringA("WM_PAINT\n");
+        //OutputDebugStringA("WM_PAINT\n");
 
         PAINTSTRUCT paint;
         const HDC deviceContext{ BeginPaint(hWnd, &paint) }; // clang-tidy NOLINT
@@ -519,8 +517,8 @@ PlaybackInput(AllState* allState, game::Input* input) {
         if (allState->isReplayLooping) {
             OutputDebugStringA("PlaybackInput starting loop again!\n");
             BeginInputPlayback(allState, playingIndex);
-            // NOTE: Read the first frame again to fix 1 leaky frame while the playback loops, maybe
-            // not needed?
+            // NOTE: Read the first frame again to fix 1 leaky frame while the playback loops,
+            // maybe not needed?
             ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0);
         }
     }
@@ -574,11 +572,11 @@ HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedInd
 
     allState->selectedIndex = selectedIndex;
     char buf[32];
-    wsprintfA(buf, "Selected %u\n", selectedIndex);
+    wsprintfA(buf, "Replay buffer %u selected\n", selectedIndex);
     OutputDebugStringA(buf);
 
-    // Always clear previous input playback, had some problems when doing this only when not playing
-    // and still didn't work properly sometimes
+    // Always clear previous input playback, had some problems when doing this only when not
+    // playing and still didn't work properly sometimes
     EndInputPlayback(allState);
 
     if (shiftPressed) {
