@@ -138,6 +138,12 @@ RoundF32ToI32(f32 value) {
     return static_cast<i32>(value + 0.5f);
 }
 
+INTERNAL inline u32
+RoundF32ToU32(f32 value) {
+    ASSERT(value >= 0);
+    return static_cast<u32>(value + 0.5f);
+}
+
 INTERNAL void
 CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
            u64 destSize) {
@@ -194,9 +200,6 @@ struct GameMemory {
     platform_export::debug_write_file* DEBUGWriteFile;
     platform_export::debug_print_int* DEBUGPrintInt;
     platform_export::debug_print_float* DEBUGPrintFloat;
-
-    // Moved here from Input as we clear the input memory during recording and replaying
-    f32 frameDeltaTime;
 };
 
 // Struct to hold screen buffer info
@@ -263,11 +266,12 @@ struct MouseButtons {
 };
 
 struct Input {
-    // TODO: insert frame statistics
     InputButtons playerInputs[playerCount];
 
     MouseButtons mouseButtons;
     i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
+
+    f32 frameDeltaTime;
 };
 
 static_assert(sizeof(InputButtons) == sizeof(Button) * buttonCount,
@@ -296,12 +300,6 @@ typedef UPDATE_AND_RENDER(update_and_render);
 } //namespace dll
 
 struct GameState {
-    f32 xOffset;
-    f32 yOffset;
-    u32 toneHz;
-
-    f32 tSine;
-
     f32 playerPosX;
     f32 playerPosY;
 };

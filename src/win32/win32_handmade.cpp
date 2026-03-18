@@ -595,7 +595,7 @@ HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedInd
 
 // The fired message should never have the same state (wasDown == isDown)
 INTERNAL void
-ProcessKeyboardMessage(game::Button* button, bool32 isDown) {
+ProcessInputMessage(game::Button* button, bool32 isDown) {
     // NOTE: maybe just use if instead of ASSERT due to the way we do mouse input polling atm
     if (button->endedDown != isDown) {
         button->endedDown = isDown;
@@ -641,31 +641,31 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                 OutputDebugStringA("W\n");
                 // This approach won't work for justPressed, we have to use halfTransitionCount
                 //input->playerInputs->up.pressed = true;
-                ProcessKeyboardMessage(&input->playerInputs->up, isDown);
+                ProcessInputMessage(&input->playerInputs->up, isDown);
             } break;
             case 'S': {
                 OutputDebugStringA("S\n");
-                ProcessKeyboardMessage(&input->playerInputs->down, isDown);
+                ProcessInputMessage(&input->playerInputs->down, isDown);
             } break;
             case 'A': {
                 OutputDebugStringA("A\n");
-                ProcessKeyboardMessage(&input->playerInputs->left, isDown);
+                ProcessInputMessage(&input->playerInputs->left, isDown);
             } break;
             case 'D': {
                 OutputDebugStringA("D\n");
-                ProcessKeyboardMessage(&input->playerInputs->right, isDown);
+                ProcessInputMessage(&input->playerInputs->right, isDown);
             } break;
             case 'Q': {
                 OutputDebugStringA("Q\n");
-                ProcessKeyboardMessage(&input->playerInputs->Q, isDown);
+                ProcessInputMessage(&input->playerInputs->Q, isDown);
             } break;
             case 'E': {
                 OutputDebugStringA("E\n");
-                ProcessKeyboardMessage(&input->playerInputs->E, isDown);
+                ProcessInputMessage(&input->playerInputs->E, isDown);
             } break;
             case VK_SHIFT: {
                 OutputDebugStringA("VK_SHIFT\n");
-                ProcessKeyboardMessage(&input->playerInputs->shift, isDown);
+                ProcessInputMessage(&input->playerInputs->shift, isDown);
             } break;
             case VK_F4: {
                 if (isDown) {
@@ -886,6 +886,7 @@ WinMain(
         return 0;
     }
 
+    char buf[64];
     // NOTE: in the future make the game function with arbitrary frame rate?
     // Ideally yes, but in practice would need a lot of work
     const HDC deviceContextRefreshRate{ GetDC(windowHandle) }; // clang-tidy NOLINT
@@ -893,7 +894,13 @@ WinMain(
     const i32 win32MonitorHz{ GetDeviceCaps(deviceContextRefreshRate, VREFRESH) };
     if (win32MonitorHz > 1) {
         monitorHz = static_cast<u32>(win32MonitorHz);
+        sprintf_s(buf, "Detected valid monitorHz: %u\n", monitorHz);
+        //monitorHz = 60; // To test delta time
+    } else {
+        sprintf_s(buf, "Using default monitorHz: %u\n", monitorHz);
     }
+
+    OutputDebugStringA(buf);
 
     // NOTE : Could this be the same as monitorHz?
     const f32 gameUpdateHz{ static_cast<f32>(monitorHz) / 2.0f };
@@ -953,8 +960,6 @@ WinMain(
 
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
-
-    gameMemory.frameDeltaTime = targetSecondsPerFrame;
 
     // Saving game memory in memory, piggy time!
     for (u32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
@@ -1032,16 +1037,16 @@ WinMain(
         }
 
         // NOTE: query these in ProcessPendingMessages so everything is in one place?
-        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.left,
-                                      GetKeyState(VK_LBUTTON) & (1 << 15));
-        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.middle,
-                                      GetKeyState(VK_MBUTTON) & (1 << 15));
-        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.right,
-                                      GetKeyState(VK_RBUTTON) & (1 << 15));
-        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.x1,
-                                      GetKeyState(VK_XBUTTON1) & (1 << 15));
-        win32::ProcessKeyboardMessage(&gameInput.mouseButtons.x2,
-                                      GetKeyState(VK_XBUTTON2) & (1 << 15));
+        win32::ProcessInputMessage(&gameInput.mouseButtons.left,
+                                   GetKeyState(VK_LBUTTON) & (1 << 15));
+        win32::ProcessInputMessage(&gameInput.mouseButtons.middle,
+                                   GetKeyState(VK_MBUTTON) & (1 << 15));
+        win32::ProcessInputMessage(&gameInput.mouseButtons.right,
+                                   GetKeyState(VK_RBUTTON) & (1 << 15));
+        win32::ProcessInputMessage(&gameInput.mouseButtons.x1,
+                                   GetKeyState(VK_XBUTTON1) & (1 << 15));
+        win32::ProcessInputMessage(&gameInput.mouseButtons.x2,
+                                   GetKeyState(VK_XBUTTON2) & (1 << 15));
 
         if (gIsGamePaused) {
             continue;
@@ -1067,6 +1072,10 @@ WinMain(
         }
 
         ThreadContext threadContext{};
+
+        // NOTE: can be moved to AllState to not assign every frame, although the optimizer probably
+        // optimizes this out anyway...
+        gameInput.frameDeltaTime = targetSecondsPerFrame;
 
         if (game.updateAndRender) {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
@@ -1143,15 +1152,19 @@ WinMain(
         }
 
         const u64 endCycleCount{ __rdtsc() };
-        const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) / 1000 * 1000 };
+        const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) /
+                                 (1000 * 1000) };
 
         // True timing before sleep
         //const f64 ms{ 1000.0 * secondsElapsed };
         //const f64 FPS{ 1000 / ms };
-        char buf[64]; // yikes...
-        sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS, cycleElapsedM);
+
 #if 0 // NOTE: if some macro?
-        OutputDebugStringA(buf);
+        {
+            char buf[64]; // yikes...
+            sprintf_s(buf, "frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS, cycleElapsedM);
+            OutputDebugStringA(buf);
+        }
 #endif
 
         lastCycleCount = endCycleCount;

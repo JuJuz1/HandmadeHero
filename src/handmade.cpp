@@ -23,9 +23,9 @@ ActionReleased(const Button* button) {
 
 // Write the sound data to buff
 INTERNAL void
-OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
+OutputSound(GameState* gameState, const SoundOutputBuffer* buff, u32 toneHz) {
     constexpr i32 toneVolume{ 3000 };
-    const u32 wavePeriod{ buff->samplesPerSecond / gameState->toneHz };
+    const u32 wavePeriod{ buff->samplesPerSecond / toneHz };
 
     // NOTE: invalid semantics as buff is const but we copy the pointer...
     i16* sampleOut{ buff->samples };
@@ -41,16 +41,16 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff) {
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;
 
-        gameState->tSine += 2 * PI32f / static_cast<f32>(wavePeriod);
-        if (gameState->tSine > 2 * PI32f) {
-            gameState->tSine -= 2 * PI32f;
-        }
+        //gameState->tSine += 2 * PI32f / static_cast<f32>(wavePeriod);
+        //if (gameState->tSine > 2 * PI32f) {
+        //    gameState->tSine -= 2 * PI32f;
+        //}
     }
 }
 
 INTERNAL void
-DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f32 maxY,
-              u32 color) {
+DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f32 maxY, f32 r,
+              f32 g, f32 b) {
     i32 roundedMinX{ RoundF32ToI32(minX) };
     i32 roundedMinY{ RoundF32ToI32(minY) };
     i32 roundedMaxX{ RoundF32ToI32(maxX) };
@@ -63,13 +63,17 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
         roundedMinY = 0;
     }
 
-    // Not including fill
+    // Not including fill pixel
     if (roundedMaxX > screenBuff->width) {
         roundedMaxX = screenBuff->width;
     }
     if (roundedMaxY > screenBuff->height) {
         roundedMaxY = screenBuff->height;
     }
+
+    // AA RR GG BB
+    const u32 color{ (RoundF32ToU32(r * 255.0f) << 16) | (RoundF32ToU32(g * 255.0f) << 8) |
+                     (RoundF32ToU32(b * 255.0f) << 0) };
 
     u8* memory{ static_cast<u8*>(screenBuff->memory) };
     u8* row{ memory + (roundedMinX * screenBuff->bytesPerPixel) +
@@ -88,8 +92,10 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
 INTERNAL void
 InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* threadContext) {
     // TODO: maybe make platform set this
-    gameState->toneHz = 256;
     memory->isInitialized = true;
+
+    gameState->playerPosX = 100.0f;
+    gameState->playerPosY = 200.0f;
 }
 
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
@@ -105,14 +111,75 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitializeGameState(gameState, memory, threadContext);
     }
 
-    const f32 delta{ memory->frameDeltaTime };
+    const f32 delta{ input->frameDeltaTime };
 
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
-    DrawRectangle(screenBuff, 0.0f, static_cast<f32>(screenBuff->width), 0.0f,
-                  static_cast<f32>(screenBuff->height), 0xFFFF);
-    DrawRectangle(screenBuff, 100.2f, -2.0f, 250.0f, 300.0f, 0xFF);
+    f32 playerVelocityX{}, playerVelocityY{};
+    constexpr f32 playerSpeed{ 200 }; // Pixels per second
+    if (input::ActionPressed(&input0Keyboard->up)) {
+        playerVelocityY -= playerSpeed;
+    }
+    if (input::ActionPressed(&input0Keyboard->down)) {
+        playerVelocityY += playerSpeed;
+    }
+    if (input::ActionPressed(&input0Keyboard->left)) {
+        playerVelocityX -= playerSpeed;
+    }
+    if (input::ActionPressed(&input0Keyboard->right)) {
+        playerVelocityX += playerSpeed;
+    }
+
+    gameState->playerPosX += playerVelocityX * delta;
+    gameState->playerPosY += playerVelocityY * delta;
+
+    DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
+                  static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
+
+    u32 tilemap[9][17]{ { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+                        { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+                        { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+                        { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                        { 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 },
+                        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
+                        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                        { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
+                        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 } };
+
+    constexpr f32 upperLeftX{ -30 };
+    constexpr f32 upperLeftY{ 0 };
+    constexpr u32 tileWidth{ 60 };
+    constexpr u32 tileHeight{ 60 };
+
+    // sizeof(tilemap) / sizeof(tilemap[0])
+    for (u32 row{}; row < 9; ++row) {
+        for (u32 column{}; column < 17; ++column) {
+            const u32 tileID{ tilemap[row][column] };
+            f32 gray{ tileID ? 1.0f : 0.5f };
+
+            const f32 minX{ upperLeftX + (static_cast<f32>(column) * tileWidth) };
+            const f32 minY{ upperLeftY + (static_cast<f32>(row) * tileHeight) };
+            const f32 maxX{ minX + tileWidth };
+            const f32 maxY{ minY + tileHeight };
+
+            DrawRectangle(screenBuff, minX, minY, maxX, maxY, .1f, gray, gray);
+        }
+    }
+
+    // Drawing player
+    constexpr f32 playerR{ .5f };
+    constexpr f32 playerG{ .1f };
+    constexpr f32 playerB{ .5f };
+
+    constexpr f32 playerWidth{ tileWidth * 0.75f };
+    constexpr f32 playerHeight{ tileHeight * 0.9f };
+
+    const f32 playerPosLeft{ gameState->playerPosX - (0.5f * playerWidth) };
+    const f32 playerPosTop{ gameState->playerPosY - playerHeight };
+
+    DrawRectangle(screenBuff, playerPosLeft, playerPosTop, playerPosLeft + playerWidth,
+                  gameState->playerPosY, playerR, playerG, playerB);
 }
 
 // NOTE: use extern "C" to avoid name mangling
@@ -120,7 +187,7 @@ extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
     UNUSED_PARAMS(threadContext);
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
-    OutputSound(gameState, soundBuff);
+    OutputSound(gameState, soundBuff, 256);
 }
 
 } //namespace game
