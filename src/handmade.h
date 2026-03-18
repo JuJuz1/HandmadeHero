@@ -32,7 +32,7 @@ HANDMADE_DEBUG:
 // TODO: use these ASSERT(s) vs assert from <cassert>?
 // probably just make this better to include more information (error messages and variadic arguments
 // of values?)
-#ifdef HANDMADE_DEBUG
+#if HANDMADE_DEBUG
 // clang-format off
 #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; } // clang-tidy NOLINT
 // clang-format on
@@ -72,14 +72,14 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-#if HANDMADE_INTERNAL
-
 /// Services that the platform layer provides to the game ///
 
 // A thread context passed to game code and is used when calling back to platform-specific code
 struct ThreadContext {
     u32 placeHolder;
 };
+
+#if HANDMADE_INTERNAL
 
 namespace platform_export {
 
@@ -193,6 +193,7 @@ struct GameMemory {
 
     bool32 isInitialized;
 
+#if HANDMADE_INTERNAL
     // Exported functions for the game
 
     platform_export::debug_free_file_memory* DEBUGFreeFileMemory;
@@ -200,6 +201,7 @@ struct GameMemory {
     platform_export::debug_write_file* DEBUGWriteFile;
     platform_export::debug_print_int* DEBUGPrintInt;
     platform_export::debug_print_float* DEBUGPrintFloat;
+#endif
 };
 
 // Struct to hold screen buffer info
@@ -295,15 +297,9 @@ namespace dll {
 #define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, const SoundOutputBuffer* soundBuff)
 typedef GET_SOUND_SAMPLES(get_sound_samples);
 
-//void GetSoundSamples(GameMemory* memory, const SoundOutputBuffer* soundBuff);
-
 #define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
 typedef UPDATE_AND_RENDER(update_and_render);
-
 // clang-format on
-
-// Game's "main loop"
-//void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input);
 
 } //namespace dll
 

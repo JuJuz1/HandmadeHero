@@ -19,10 +19,6 @@ rem we use /MTd to add extra checks
 rem https://learn.microsoft.com/en-us/cpp/build/reference/o-options-optimize-code?view=msvc-170
 rem /Oi generate intrinsic functions for appropriate function calls
 
-rem /wd4201 nonstandard extension used: nameless struct/union
-rem /wd4127 conditional expression is constant NOT USED
-rem TODO: this is raised from ASSERT(false...) -> fix ASSERT
-
 rem /nologo don't show compiler version and info
 
 rem /Fm map file https://learn.microsoft.com/fi-fi/cpp/build/reference/fm-name-mapfile?view=msvc-150
@@ -39,8 +35,11 @@ rem /EXPORT to specify which functions to export with the dll
 rem could also specify in the source and is most recommended
 rem this way we get the maximum flexibility though and we don't boilerplate the source
 
-rem TODO: enable /WX back
-set commonCompilerWarnings=/W4 /wd4201
+rem /wd4201 nonstandard extension used: nameless struct/union
+rem /wd4127 conditional expression is constant NOT USED
+rem TODO: this is raised from ASSERT(false...) -> fix ASSERT
+rem TODO: enable /WX back, remove /wd4505 /wd4100 /wd4189
+set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
 set commonCompilerFlags=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /MTd /Zi /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO

@@ -20,6 +20,8 @@ GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
 
+#if HANDMADE_INTERNAL
+
 namespace platform_export {
 
 // TODO: make these more generic (and allow variadic arguments?)
@@ -116,6 +118,8 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
 }
 
 } //namespace platform_export
+
+#endif // HANDMADE_INTERNAL
 
 namespace win32 {
 
@@ -673,6 +677,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                     }
                 }
             } break;
+
 #if HANDMADE_INTERNAL
             // NOTE: now that I have setup multiple buffers to use think about this again
             case 'L': {
@@ -704,7 +709,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
                 }
-                break;
+            } break;
             case '4': {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
@@ -723,6 +728,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                 }
             } break;
 #endif
+
             case VK_UP: {
                 OutputDebugStringA("VK_UP\n");
             } break;
@@ -747,14 +753,12 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
                 OutputDebugStringA(buf);
             } break;
             }
-            }
-            break;
+        } break;
 
         default: {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         } break;
-        }
         }
     }
 }
@@ -949,12 +953,14 @@ WinMain(
         ASSERT(!"One or more of the game memory allocations failed!");
     }
 
+#if HANDMADE_INTERNAL
     // Platform exports
     gameMemory.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
     gameMemory.DEBUGReadFile = platform_export::DEBUGReadFile;
     gameMemory.DEBUGWriteFile = platform_export::DEBUGWriteFile;
     gameMemory.DEBUGPrintInt = platform_export::DEBUGPrintInt;
     gameMemory.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+#endif
 
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
