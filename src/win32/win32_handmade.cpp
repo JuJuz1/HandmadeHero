@@ -423,7 +423,7 @@ BeginRecordInput(AllState* allState, u32 recordingIndex) {
     // TODO: cleanup the files after exiting the game?
     allState->recordingIndex = static_cast<i32>(recordingIndex);
 
-    char filePath[win32::allStateFileNameCount];
+    char filePath[win32::all_State_File_Name_Count];
     GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
     HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -451,7 +451,7 @@ EndRecordInput(AllState* allState) {
         allState->recordingHandle = INVALID_HANDLE_VALUE;
     }
 
-    allState->recordingIndex = REPLAY_BUFFER_NOT_RECORDING;
+    allState->recordingIndex = replay_Buffer_Not_Recording;
 }
 
 INTERNAL void
@@ -467,7 +467,7 @@ BeginInputPlayback(AllState* allState, u32 playingIndex) {
 
     allState->playingIndex = static_cast<i32>(playingIndex);
 
-    char filePath[allStateFileNameCount];
+    char filePath[all_State_File_Name_Count];
     GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
     HANDLE fileHandle{ CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
@@ -487,7 +487,7 @@ EndInputPlayback(AllState* allState) {
         allState->playingHandle = INVALID_HANDLE_VALUE;
     }
 
-    allState->playingIndex = REPLAY_BUFFER_NOT_PLAYING;
+    allState->playingIndex = replay_Buffer_Not_Playing;
 }
 
 // These functions are the ones called in the loop
@@ -536,8 +536,8 @@ HandleRecordButton(AllState* allState, game::Input* input, u32 selectedIndex) {
 
     char buf[64];
 
-    if (allState->playingIndex == REPLAY_BUFFER_NOT_PLAYING) {
-        if (allState->recordingIndex == REPLAY_BUFFER_NOT_RECORDING) {
+    if (allState->playingIndex == replay_Buffer_Not_Playing) {
+        if (allState->recordingIndex == replay_Buffer_Not_Recording) {
             wsprintfA(buf, "L: Recording STARTED, selected: %u!\n", selectedIndex);
             OutputDebugStringA(buf);
             BeginRecordInput(allState, selectedIndex);
@@ -565,7 +565,7 @@ HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedInd
         EndRecordInput(allState);
         BeginInputPlayback(allState, selectedIndex);
         return;
-    } else if (!(allState->recordingIndex == REPLAY_BUFFER_NOT_RECORDING)) {
+    } else if (!(allState->recordingIndex == replay_Buffer_Not_Recording)) {
         OutputDebugStringA("Can't switch buffer while recording!\n");
         return;
     }
@@ -841,9 +841,9 @@ WinMain(
     win32::GetExePathAndFilename(&allState);
 
     // NOTE: a little string processing cause we are handmade
-    char srcDllPath[win32::allStateFileNameCount];
+    char srcDllPath[win32::all_State_File_Name_Count];
     win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
-    char tempDllPath[win32::allStateFileNameCount];
+    char tempDllPath[win32::all_State_File_Name_Count];
     win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath, sizeof(tempDllPath));
 
     constexpr i32 startingWidth{ 960 };
@@ -964,7 +964,7 @@ WinMain(
         win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
         // Using memory mapping
-        char filePath[win32::allStateFileNameCount];
+        char filePath[win32::all_State_File_Name_Count];
         GetInputFilePath(&allState, false, i, filePath, sizeof(filePath));
         HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE | GENERIC_READ, 0, 0, CREATE_ALWAYS,
                                        0, 0) };
@@ -985,8 +985,8 @@ WinMain(
         ASSERT(replayBuffer->memoryBlock);
     }
 
-    allState.recordingIndex = REPLAY_BUFFER_NOT_RECORDING;
-    allState.playingIndex = REPLAY_BUFFER_NOT_PLAYING;
+    allState.recordingIndex = win32::replay_Buffer_Not_Recording;
+    allState.playingIndex = win32::replay_Buffer_Not_Playing;
     allState.isReplayLooping = true;
 
     // Performance statistics
@@ -1063,9 +1063,9 @@ WinMain(
         screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
-        if (allState.recordingIndex != REPLAY_BUFFER_NOT_RECORDING) {
+        if (allState.recordingIndex != win32::replay_Buffer_Not_Recording) {
             win32::RecordInput(&allState, &gameInput);
-        } else if (allState.playingIndex != REPLAY_BUFFER_NOT_PLAYING) {
+        } else if (allState.playingIndex != win32::replay_Buffer_Not_Playing) {
             win32::PlaybackInput(&allState, &gameInput);
         }
 

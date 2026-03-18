@@ -101,6 +101,7 @@ InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* thr
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
+    // Already used static_assert in handmade.h to handle this, but let it be asserted here as well
     ASSERT(&input->playerInputs[0].E - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
     ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==

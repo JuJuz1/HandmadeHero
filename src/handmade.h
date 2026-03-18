@@ -181,7 +181,7 @@ StrLength(const char* str) {
 namespace game {
 
 // TODO: experiment with more than 1
-GLOBAL constexpr u32 playerCount{ 1 };
+GLOBAL constexpr u32 player_Count{ 1 };
 
 // All the memory the game needs
 struct GameMemory {
@@ -225,15 +225,15 @@ struct Button {
     u32 halfTransitionCount;
 };
 
-GLOBAL constexpr u32 buttonCount{ 7 };
-GLOBAL constexpr u32 mouseButtonCount{ 5 };
+GLOBAL constexpr u32 button_Count{ 7 };
+GLOBAL constexpr u32 mouse_Button_Count{ 5 };
 
 struct InputButtons {
     // A union allows us to do:
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[buttonCount];
+        Button buttons[button_Count];
 
         struct {
             Button up;
@@ -251,7 +251,7 @@ struct InputButtons {
 
 struct MouseButtons {
     union {
-        Button buttons[mouseButtonCount];
+        Button buttons[mouse_Button_Count];
 
         struct {
             Button left;
@@ -266,7 +266,7 @@ struct MouseButtons {
 };
 
 struct Input {
-    InputButtons playerInputs[playerCount];
+    InputButtons playerInputs[player_Count];
 
     MouseButtons mouseButtons;
     i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
@@ -274,8 +274,16 @@ struct Input {
     f32 frameDeltaTime;
 };
 
-static_assert(sizeof(InputButtons) == sizeof(Button) * buttonCount,
+static_assert(sizeof(InputButtons) == sizeof(Button) * button_Count,
               "Inputbuttons count doesn't match the amount of buttons declared!");
+static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
+              "MouseButtons count doesn't match the amount of buttons declared!");
+
+// The game state
+struct GameState {
+    f32 playerPosX;
+    f32 playerPosY;
+};
 
 // We use the style 2 (Game as a service to the OS) described in the series
 
@@ -298,11 +306,6 @@ typedef UPDATE_AND_RENDER(update_and_render);
 //void UpdateAndRender(GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input);
 
 } //namespace dll
-
-struct GameState {
-    f32 playerPosX;
-    f32 playerPosY;
-};
 
 } //namespace game
 
