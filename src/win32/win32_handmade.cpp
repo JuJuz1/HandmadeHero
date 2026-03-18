@@ -161,11 +161,20 @@ ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
 INTERNAL void
 DisplayBufferWindow(const HDC deviceContext, // clang-tidy NOLINT
                     const OffScreenBuffer* screenBuff, i32 wndWidth, i32 wndHeight) {
+    constexpr i32 offsetX{ 50 };
+    constexpr i32 offsetY{ 50 };
+
+    // Only clear parts we are not writing to get rid of flickering
+    PatBlt(deviceContext, 0, 0, wndWidth, offsetY, BLACKNESS);
+    PatBlt(deviceContext, 0, 0, offsetX, wndHeight, BLACKNESS);
+    PatBlt(deviceContext, offsetX, offsetY + screenBuff->height, wndWidth, wndHeight, BLACKNESS);
+    PatBlt(deviceContext, offsetX + screenBuff->width, 0, wndWidth, wndHeight, BLACKNESS);
+
     // TODO: aspect ratio correction
     // NOTE: buffer is locked for prototyping
     // wndWidth, wndHeight
-    StretchDIBits(deviceContext, 0, 0, screenBuff->width, screenBuff->height, // dest
-                  0, 0, screenBuff->width, screenBuff->height,                // src
+    StretchDIBits(deviceContext, offsetX, offsetY, screenBuff->width, screenBuff->height, // dest
+                  0, 0, screenBuff->width, screenBuff->height,                            // src
                   screenBuff->memory, &screenBuff->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -891,9 +900,9 @@ WinMain(
     char buf[64];
     // NOTE: in the future make the game function with arbitrary frame rate?
     // Ideally yes, but in practice would need a lot of work
-    const HDC deviceContextRefreshRate{ GetDC(windowHandle) }; // clang-tidy NOLINT
+    const HDC deviceContext{ GetDC(windowHandle) }; // clang-tidy NOLINT
     u32 monitorHz{ 60 };
-    const i32 win32MonitorHz{ GetDeviceCaps(deviceContextRefreshRate, VREFRESH) };
+    const i32 win32MonitorHz{ GetDeviceCaps(deviceContext, VREFRESH) };
     if (win32MonitorHz > 1) {
         monitorHz = static_cast<u32>(win32MonitorHz);
         sprintf_s(buf, "Detected valid monitorHz: %u\n", monitorHz);
@@ -907,7 +916,6 @@ WinMain(
     // NOTE : Could this be the same as monitorHz?
     const f32 gameUpdateHz{ static_cast<f32>(monitorHz) / 2.0f };
     const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
-    ReleaseDC(windowHandle, deviceContextRefreshRate);
 
     // DirectSound
     win32::SoundOutput soundOutput{};
@@ -1141,10 +1149,8 @@ WinMain(
         const f64 FPS{ 1000 / ms };
 
         auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
-        const HDC deviceContext{ GetDC(windowHandle) }; // clang-tidy NOLINT
         win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                    wndDimension.height);
-        ReleaseDC(windowHandle, deviceContext);
 
         DWORD playCursor;
         DWORD writeCursor;
@@ -1176,6 +1182,8 @@ WinMain(
         const LARGE_INTEGER resetCounter{ win32::GetWallClock() };
         lastCounter = resetCounter;
     }
+
+    ReleaseDC(windowHandle, deviceContext);
 
     return 0;
 }

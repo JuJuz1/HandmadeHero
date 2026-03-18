@@ -98,6 +98,26 @@ InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* thr
     gameState->playerPosY = 200.0f;
 }
 
+INTERNAL bool32
+IsTilemapPointEmpty(const TilemapData* tilemapData, f32 x, f32 y) {
+    // Move to world coordinates by subtracting the possible screen offsets
+    const i32 playerTileX{ TruncateF32ToI32((x - tilemapData->upperLeftX) /
+                                            static_cast<i32>(tilemapData->tileWidth)) };
+    const i32 playerTileY{ TruncateF32ToI32((y - tilemapData->upperLeftY) /
+                                            static_cast<i32>(tilemapData->tileHeight)) };
+
+    bool32 isValid{};
+    if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemapData->columns) &&
+        playerTileY >= 0 && playerTileY < static_cast<i32>(tilemapData->rows)) {
+        const u32 tilemapValue{
+            tilemapData->tiles[(tilemapData->columns * playerTileY) + playerTileX]
+        };
+        isValid = (tilemapValue == 0);
+    }
+
+    return isValid;
+}
+
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
@@ -112,13 +132,38 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitializeGameState(gameState, memory, threadContext);
     }
 
+    constexpr u32 tileMapRows{ 9 };
+    constexpr u32 tileMapColumns{ 17 };
+    u32 tilemapData[tileMapRows][tileMapColumns]{
+        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+        { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+        { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+        { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+        { 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 },
+        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
+        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+        { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
+        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
+    };
+
+    TilemapData tilemap{};
+
+    tilemap.tiles = reinterpret_cast<u32*>(tilemapData);
+    tilemap.rows = tileMapRows;
+    tilemap.columns = tileMapColumns;
+
+    tilemap.upperLeftX = -30; // Move half tileWidth right
+    tilemap.upperLeftY = 0;
+    tilemap.tileWidth = 60;
+    tilemap.tileHeight = 60;
+
     const f32 delta{ input->frameDeltaTime };
 
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
     f32 playerVelocityX{}, playerVelocityY{};
-    constexpr f32 playerSpeed{ 200 }; // Pixels per second
+    constexpr f32 playerSpeed{ 150 }; // Pixels per second
     if (input::ActionPressed(&input0Keyboard->up)) {
         playerVelocityY -= playerSpeed;
     }
@@ -132,49 +177,43 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityX += playerSpeed;
     }
 
-    gameState->playerPosX += playerVelocityX * delta;
-    gameState->playerPosY += playerVelocityY * delta;
+    const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
+    const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
 
+    if (IsTilemapPointEmpty(&tilemap, newPlayerX, newPlayerY)) {
+        gameState->playerPosX = newPlayerX;
+        gameState->playerPosY = newPlayerY;
+    }
+
+    memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
+    memory->DEBUGPrintFloat(threadContext, "playerY", gameState->playerPosY);
+
+    // Background
     DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
                   static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
 
-    u32 tilemap[9][17]{ { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
-                        { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
-                        { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
-                        { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
-                        { 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 },
-                        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
-                        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
-                        { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
-                        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 } };
-
-    constexpr f32 upperLeftX{ -30 };
-    constexpr f32 upperLeftY{ 0 };
-    constexpr u32 tileWidth{ 60 };
-    constexpr u32 tileHeight{ 60 };
-
     // sizeof(tilemap) / sizeof(tilemap[0])
-    for (u32 row{}; row < 9; ++row) {
-        for (u32 column{}; column < 17; ++column) {
-            const u32 tileID{ tilemap[row][column] };
+    for (u32 row{}; row < tilemap.rows; ++row) {
+        for (u32 column{}; column < tilemap.columns; ++column) {
+            const u32 tileID{ tilemap.tiles[row * tilemap.columns + column] };
             f32 gray{ tileID ? 1.0f : 0.5f };
 
-            const f32 minX{ upperLeftX + (static_cast<f32>(column) * tileWidth) };
-            const f32 minY{ upperLeftY + (static_cast<f32>(row) * tileHeight) };
-            const f32 maxX{ minX + tileWidth };
-            const f32 maxY{ minY + tileHeight };
+            const f32 minX{ tilemap.upperLeftX + (static_cast<f32>(column) * tilemap.tileWidth) };
+            const f32 minY{ tilemap.upperLeftY + (static_cast<f32>(row) * tilemap.tileHeight) };
+            const f32 maxX{ minX + tilemap.tileWidth };
+            const f32 maxY{ minY + tilemap.tileHeight };
 
             DrawRectangle(screenBuff, minX, minY, maxX, maxY, .1f, gray, gray);
         }
     }
 
     // Drawing player
-    constexpr f32 playerR{ .5f };
-    constexpr f32 playerG{ .1f };
-    constexpr f32 playerB{ .5f };
+    constexpr f32 playerR{ 0.5f };
+    constexpr f32 playerG{ 0.1f };
+    constexpr f32 playerB{ 0.5f };
 
-    constexpr f32 playerWidth{ tileWidth * 0.75f };
-    constexpr f32 playerHeight{ tileHeight * 0.9f };
+    const f32 playerWidth{ tilemap.tileWidth * 0.75f };
+    const f32 playerHeight{ tilemap.tileHeight * 0.9f };
 
     const f32 playerPosLeft{ gameState->playerPosX - (0.5f * playerWidth) };
     const f32 playerPosTop{ gameState->playerPosY - playerHeight };

@@ -133,15 +133,26 @@ SafeTruncateF64toF32(f64 value) {
 }
 
 INTERNAL inline i32
-RoundF32ToI32(f32 value) {
-    // TODO: intrinsic?
-    return static_cast<i32>(value + 0.5f);
+TruncateF32ToI32(f32 value) {
+    return static_cast<i32>(value);
+}
+
+INTERNAL inline u32
+TruncateF32ToU32(f32 value) {
+    ASSERT(value >= 0);
+    return static_cast<u32>(value);
 }
 
 INTERNAL inline u32
 RoundF32ToU32(f32 value) {
     ASSERT(value >= 0);
     return static_cast<u32>(value + 0.5f);
+}
+
+INTERNAL inline i32
+RoundF32ToI32(f32 value) {
+    // TODO: intrinsic?
+    return static_cast<i32>(value + 0.5f);
 }
 
 INTERNAL void
@@ -285,6 +296,17 @@ static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
 struct GameState {
     f32 playerPosX;
     f32 playerPosY;
+};
+
+struct TilemapData {
+    u32* tiles;
+    u32 rows;
+    u32 columns;
+
+    f32 upperLeftX;
+    f32 upperLeftY;
+    f32 tileWidth;
+    f32 tileHeight;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
