@@ -100,11 +100,12 @@ InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* thr
 
 INTERNAL Tilemap*
 GetTileMap(const World* world, i32 tilemapX, i32 tilemapY) {
+    ASSERT(tilemapX >= 0 && tilemapY >= 0);
     Tilemap* tilemap{};
 
-    if (tilemapX >= 0 && tilemapX < static_cast<i32>(world->tilemapColumns) && tilemapY >= 0 &&
-        tilemapY < static_cast<i32>(world->tilemapRows)) {
-        tilemap = &world->tilemaps[(world->tilemapRows * tilemapY) + tilemapX];
+    if (tilemapX >= 0 && tilemapX < static_cast<i32>(world->tilemapCountY) && tilemapY >= 0 &&
+        tilemapY < static_cast<i32>(world->tilemapCountX)) {
+        tilemap = &world->tilemaps[(world->tilemapCountX * tilemapY) + tilemapX];
     }
 
     return tilemap;
@@ -118,13 +119,13 @@ GetTilemapValue(const Tilemap* tilemap, i32 tileX, i32 tileY) {
 }
 
 INTERNAL bool32
-IsTilemapPointEmpty(const Tilemap* tilemap, f32 x, f32 y) {
+IsTilemapPointEmpty(const Tilemap* tilemap, f32 testX, f32 testY) {
     bool32 isValid{};
 
     // Move to world coordinates by subtracting the possible rendering offsets
-    const i32 playerTileX{ TruncateF32ToI32((x - tilemap->upperLeftX) /
+    const i32 playerTileX{ TruncateF32ToI32((testX - tilemap->upperLeftX) /
                                             static_cast<i32>(tilemap->tileWidth)) };
-    const i32 playerTileY{ TruncateF32ToI32((y - tilemap->upperLeftY) /
+    const i32 playerTileY{ TruncateF32ToI32((testY - tilemap->upperLeftY) /
                                             static_cast<i32>(tilemap->tileHeight)) };
     if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemap->columns) && playerTileY >= 0 &&
         playerTileY < static_cast<i32>(tilemap->rows)) {
@@ -136,14 +137,14 @@ IsTilemapPointEmpty(const Tilemap* tilemap, f32 x, f32 y) {
 }
 
 INTERNAL bool32
-IsWorldPointEmpty(const World* world, i32 tilemapX, i32 tilemapY, f32 x, f32 y) {
+IsWorldPointEmpty(const World* world, i32 tilemapX, i32 tilemapY, f32 testX, f32 testY) {
     bool32 isValid{};
     const Tilemap* tilemap{ GetTileMap(world, tilemapX, tilemapY) };
 
     if (tilemap) {
-        const i32 playerTileX{ TruncateF32ToI32((x - tilemap->upperLeftX) /
+        const i32 playerTileX{ TruncateF32ToI32((testX - tilemap->upperLeftX) /
                                                 static_cast<i32>(tilemap->tileWidth)) };
-        const i32 playerTileY{ TruncateF32ToI32((y - tilemap->upperLeftY) /
+        const i32 playerTileY{ TruncateF32ToI32((testY - tilemap->upperLeftY) /
                                                 static_cast<i32>(tilemap->tileHeight)) };
         if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemap->columns) &&
             playerTileY >= 0 && playerTileY < static_cast<i32>(tilemap->rows)) {
@@ -231,6 +232,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     World world{};
     world.tilemaps = reinterpret_cast<Tilemap*>(tilemaps);
+    world.tilemapCountX = 2;
+    world.tilemapCountY = 2;
 
     const f32 delta{ input->frameDeltaTime };
 
@@ -238,7 +241,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
     f32 playerVelocityX{}, playerVelocityY{};
-    constexpr f32 playerSpeed{ 150 }; // Pixels per second
+    constexpr f32 playerSpeed{ 120 }; // Pixels per second
     if (input::ActionPressed(&input0Keyboard->up)) {
         playerVelocityY -= playerSpeed;
     }
@@ -252,17 +255,24 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityX += playerSpeed;
     }
 
-    const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
-    const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
-
     const f32 playerWidth{ currentTilemap->tileWidth * 0.75f };
     const f32 playerHeight{ currentTilemap->tileHeight * 0.9f };
 
-    if (IsTilemapPointEmpty(currentTilemap, newPlayerX, newPlayerY) &&
-        IsTilemapPointEmpty(currentTilemap, newPlayerX - (playerWidth * 0.5f), newPlayerY) &&
-        IsTilemapPointEmpty(currentTilemap, newPlayerX + (playerWidth * 0.5f), newPlayerY)) {
-        gameState->playerPosX = newPlayerX;
-        gameState->playerPosY = newPlayerY;
+    constexpr u32 tries{ 6 };
+    for (u32 i{}; i < tries; ++i) {
+        const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
+        const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
+
+        if (IsTilemapPointEmpty(currentTilemap, newPlayerX, newPlayerY) &&
+            IsTilemapPointEmpty(currentTilemap, newPlayerX - (playerWidth * 0.5f), newPlayerY) &&
+            IsTilemapPointEmpty(currentTilemap, newPlayerX + (playerWidth * 0.5f), newPlayerY)) {
+            gameState->playerPosX = newPlayerX;
+            gameState->playerPosY = newPlayerY;
+            break;
+        } else {
+            playerVelocityX *= 0.7f;
+            playerVelocityY *= 0.7f;
+        }
     }
 
     memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
@@ -294,7 +304,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
 
-    const f32 playerPosLeft{ gameState->playerPosX - (0.5f * playerWidth) };
+    const f32 playerPosLeft{ gameState->playerPosX - (playerWidth * 0.5f) };
     const f32 playerPosTop{ gameState->playerPosY - playerHeight };
 
     DrawRectangle(screenBuff, playerPosLeft, playerPosTop, playerPosLeft + playerWidth,

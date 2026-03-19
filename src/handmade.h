@@ -311,8 +311,8 @@ struct Tilemap {
 
 struct World {
     Tilemap* tilemaps;
-    u32 tilemapRows;
-    u32 tilemapColumns;
+    u32 tilemapCountX;
+    u32 tilemapCountY;
     u32 currentTilemapIndex;
 };
 
