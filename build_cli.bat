@@ -41,7 +41,7 @@ rem TODO: this is raised from ASSERT(false...) -> fix ASSERT
 rem TODO: enable /WX back, remove /wd4505 /wd4100 /wd4189
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
 set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
-set commonCompilerFlags=%commonCompilerDefines% /MTd /Zi /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set commonCompilerFlags=%commonCompilerDefines% /MTd /Zi /FC /Fm /Od /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
 
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib

@@ -27,6 +27,15 @@ namespace platform_export {
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
 INTERNAL
+DEBUG_PRINT(DEBUGPrint) {
+    UNUSED_PARAMS(threadContext);
+
+    char buf[128];
+    sprintf_s(buf, "%s\n", message);
+    OutputDebugStringA(buf);
+}
+
+INTERNAL
 DEBUG_PRINT_INT(DEBUGPrintInt) {
     UNUSED_PARAMS(threadContext);
 
@@ -964,11 +973,12 @@ WinMain(
 
 #if HANDMADE_INTERNAL
     // Platform exports
-    gameMemory.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
-    gameMemory.DEBUGReadFile = platform_export::DEBUGReadFile;
-    gameMemory.DEBUGWriteFile = platform_export::DEBUGWriteFile;
-    gameMemory.DEBUGPrintInt = platform_export::DEBUGPrintInt;
-    gameMemory.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+    gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
+    gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
+    gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
+    gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
+    gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+    gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
 #endif
 
     allState.gameMemory = gameMemory.permanentStorage;

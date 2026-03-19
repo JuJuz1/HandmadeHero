@@ -2,6 +2,12 @@
 
 namespace game {
 
+GLOBAL ThreadContext* gThreadContext;
+GLOBAL GameMemory* gMemory;
+
+// NOTE: just a hacky way to print things from game code
+#define DEBUG_PLATFORM_PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
+
 namespace input {
 
 INTERNAL bool32
@@ -94,6 +100,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // TODO: maybe make platform set this
     memory->isInitialized = true;
 
+    gThreadContext = threadContext;
+    gMemory = memory;
+
     //gameState->playerTilemapX = 0;
     //gameState->playerTilemapY = 0;
     gameState->playerPosX = 150.0f;
@@ -145,38 +154,43 @@ GetCanonicalPosition(const World* world, RawWorldPosition rawPos) {
     canPos.tilemapX = rawPos.tilemapX;
     canPos.tilemapY = rawPos.tilemapY;
 
-    const f32 x{ rawPos.x - world->upperLeftX };
-    const f32 y{ rawPos.y - world->upperLeftY };
+    const f32 x{ rawPos.rawPlayerPosX - world->upperLeftX };
+    const f32 y{ rawPos.rawPlayerPosY - world->upperLeftY };
+
     canPos.tileX = FloorF32ToI32(x / world->tileWidth);
     canPos.tileY = FloorF32ToI32(y / world->tileHeight);
 
     // Tile-relative
-    canPos.x = x - canPos.tileX * world->tileWidth;
-    canPos.y = y - canPos.tileY * world->tileHeight;
+    canPos.tileRelativePosX = x - (canPos.tileX * world->tileWidth);
+    canPos.tileRelativePosY = y - (canPos.tileY * world->tileHeight);
 
     // Relative positions must be within the tile size
-    ASSERT(canPos.x >= 0 && canPos.x < world->tileWidth);
-    ASSERT(canPos.y >= 0 && canPos.y < world->tileHeight);
+    ASSERT(canPos.tileRelativePosX >= 0 && canPos.tileRelativePosX < world->tileWidth);
+    ASSERT(canPos.tileRelativePosY >= 0 && canPos.tileRelativePosY < world->tileHeight);
 
     // Up
     if (canPos.tileY < 0) {
         canPos.tileY = world->tilemapRows + canPos.tileY;
         --canPos.tilemapY;
-    }
-    // Left
-    if (canPos.tileX < 0) {
-        canPos.tileX = world->tilemapColumns + canPos.tileX;
-        --canPos.tilemapX;
-    }
-    // Right
-    if (canPos.tileX >= static_cast<i32>(world->tilemapColumns)) {
-        canPos.tileX = canPos.tileX - world->tilemapColumns;
-        ++canPos.tilemapX;
+        DEBUG_PLATFORM_PRINT("Tilemap detected: up");
     }
     // Down
     if (canPos.tileY >= static_cast<i32>(world->tilemapRows)) {
         canPos.tileY = canPos.tileY - world->tilemapRows;
         ++canPos.tilemapY;
+        DEBUG_PLATFORM_PRINT("Tilemap detected: down");
+    }
+    // Left
+    if (canPos.tileX < 0) {
+        canPos.tileX = world->tilemapColumns + canPos.tileX;
+        --canPos.tilemapX;
+        DEBUG_PLATFORM_PRINT("Tilemap detected: left");
+    }
+    // Right
+    if (canPos.tileX >= static_cast<i32>(world->tilemapColumns)) {
+        canPos.tileX = canPos.tileX - world->tilemapColumns;
+        ++canPos.tilemapX;
+        DEBUG_PLATFORM_PRINT("Tilemap detected: right");
     }
 
     return canPos;
@@ -189,11 +203,13 @@ IsWorldPointEmpty(const World* world, RawWorldPosition rawPos) {
     const Tilemap* tilemap{ GetTileMap(world, canPos.tilemapX, canPos.tilemapY) };
     if (!tilemap) {
         // invalid tilemapX or tilemapY
+        DEBUG_PLATFORM_PRINT("Invalid tilemapX or tilemapY");
     }
 
     return IsTilemapPointEmpty(world, tilemap, canPos.tileX, canPos.tileY);
 }
 
+// NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
@@ -279,7 +295,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
     f32 playerVelocityX{}, playerVelocityY{};
-    constexpr f32 playerSpeed{ 30 }; // Pixels per second
+    constexpr f32 playerSpeed{ 120 }; // Pixels per second
     if (input::ActionPressed(&input0Keyboard->up)) {
         playerVelocityY -= playerSpeed;
     }
@@ -303,16 +319,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
     const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
 
-    const RawWorldPosition rawPlayerPos{ gameState->playerTilemapX, gameState->playerTilemapY,
-                                         newPlayerX, newPlayerY };
+    const RawWorldPosition rawPlayerPos{ static_cast<i32>(gameState->playerTilemapX),
+                                         static_cast<i32>(gameState->playerTilemapY), newPlayerX,
+                                         newPlayerY };
 
     RawWorldPosition rawPlayerPosLeft{ rawPlayerPos };
-    rawPlayerPosLeft.x -= playerWidth * 0.5f;
+    rawPlayerPosLeft.rawPlayerPosX -= playerWidth * 0.5f;
     RawWorldPosition rawPlayerPosRight = rawPlayerPos;
-    rawPlayerPosRight.x += playerWidth * 0.5f;
-
-    //constexpr u32 tries{ 6 };
-    //for (u32 i{}; i < tries; ++i) {
+    rawPlayerPosRight.rawPlayerPosX += playerWidth * 0.5f;
 
     if (IsWorldPointEmpty(&world, rawPlayerPos) && IsWorldPointEmpty(&world, rawPlayerPosLeft) &&
         IsWorldPointEmpty(&world, rawPlayerPosRight)) {
@@ -320,20 +334,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         gameState->playerTilemapX = canPos.tilemapX;
         gameState->playerTilemapY = canPos.tilemapY;
-        gameState->playerPosX = world.upperLeftX + (canPos.tileX * world.tileWidth) + canPos.x;
-        gameState->playerPosY = world.upperLeftY + (canPos.tileY * world.tileHeight) + canPos.y;
-
-        //break;
-        //} else {
-        //    rawPos.x = newPlayerX * 0.7;
-        //    rawPosLeft.x = (newPlayerX - (playerWidth * 0.5f)) * 0.7;
-
-        //playerVelocityY *= 0.7f;
-        //}
+        gameState->playerPosX =
+            world.upperLeftX + (canPos.tileX * world.tileWidth) + canPos.tileRelativePosX;
+        gameState->playerPosY =
+            world.upperLeftY + (canPos.tileY * world.tileHeight) + canPos.tileRelativePosY;
     }
 
-    memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
-    memory->DEBUGPrintFloat(threadContext, "playerY", gameState->playerPosY);
+    //memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
+    //memory->DEBUGPrintFloat(threadContext, "playerY", gameState->playerPosY);
 
     // Background
     DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
@@ -366,7 +374,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                   gameState->playerPosY, playerR, playerG, playerB);
 }
 
-// NOTE: use extern "C" to avoid name mangling
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
     UNUSED_PARAMS(threadContext);
 

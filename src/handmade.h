@@ -89,6 +89,9 @@ struct DEBUGFileReadResult {
 };
 
 // clang-format off
+#define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* message)
+typedef DEBUG_PRINT(debug_print);
+
 #define DEBUG_PRINT_INT(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
 typedef DEBUG_PRINT_INT(debug_print_int);
 
@@ -104,6 +107,17 @@ typedef DEBUG_READ_FILE(debug_read_file);
 #define DEBUG_WRITE_FILE(name) bool32 name(ThreadContext* threadContext, const char* filename, void* memory, u32 fileSize)
 typedef DEBUG_WRITE_FILE(debug_write_file);
 // clang-format on
+
+// Exported functions for the game
+struct PlatformExports {
+    platform_export::debug_print* DEBUGPrint;
+    platform_export::debug_print_int* DEBUGPrintInt;
+    platform_export::debug_print_float* DEBUGPrintFloat;
+
+    platform_export::debug_free_file_memory* DEBUGFreeFileMemory;
+    platform_export::debug_read_file* DEBUGReadFile;
+    platform_export::debug_write_file* DEBUGWriteFile;
+};
 
 } //namespace platform_export
 
@@ -217,13 +231,7 @@ struct GameMemory {
     bool32 isInitialized;
 
 #if HANDMADE_INTERNAL
-    // Exported functions for the game
-
-    platform_export::debug_free_file_memory* DEBUGFreeFileMemory;
-    platform_export::debug_read_file* DEBUGReadFile;
-    platform_export::debug_write_file* DEBUGWriteFile;
-    platform_export::debug_print_int* DEBUGPrintInt;
-    platform_export::debug_print_float* DEBUGPrintFloat;
+    platform_export::PlatformExports exports;
 #endif
 };
 
@@ -315,25 +323,25 @@ struct GameState {
 };
 
 struct CanonicalWorldPosition {
-    u32 tilemapX;
-    u32 tilemapY;
+    i32 tilemapX;
+    i32 tilemapY;
 
     // Tile indexes in a given tilemap
-    u32 tileX;
-    u32 tileY;
+    i32 tileX;
+    i32 tileY;
 
     // Tile-relative x and y
-    f32 x;
-    f32 y;
+    f32 tileRelativePosX;
+    f32 tileRelativePosY;
 };
 
 struct RawWorldPosition {
-    u32 tilemapX;
-    u32 tilemapY;
+    i32 tilemapX;
+    i32 tilemapY;
 
     // Tile-map relative x and y (raw position values)
-    f32 x;
-    f32 y;
+    f32 rawPlayerPosX;
+    f32 rawPlayerPosY;
 };
 
 struct Tilemap {
