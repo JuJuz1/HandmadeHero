@@ -90,69 +90,108 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
 }
 
 INTERNAL void
-InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* threadContext) {
+InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
     // TODO: maybe make platform set this
     memory->isInitialized = true;
 
+    //gameState->playerTilemapX = 0;
+    //gameState->playerTilemapY = 0;
     gameState->playerPosX = 150.0f;
     gameState->playerPosY = 200.0f;
 }
 
 INTERNAL Tilemap*
 GetTileMap(const World* world, i32 tilemapX, i32 tilemapY) {
-    ASSERT(tilemapX >= 0 && tilemapY >= 0);
     Tilemap* tilemap{};
 
-    if (tilemapX >= 0 && tilemapX < static_cast<i32>(world->tilemapCountY) && tilemapY >= 0 &&
-        tilemapY < static_cast<i32>(world->tilemapCountX)) {
+    if (tilemapX >= 0 && tilemapX < static_cast<i32>(world->tilemapCountX) && tilemapY >= 0 &&
+        tilemapY < static_cast<i32>(world->tilemapCountY)) {
         tilemap = &world->tilemaps[(world->tilemapCountX * tilemapY) + tilemapX];
     }
 
     return tilemap;
 }
 
-INTERNAL inline u32
-GetTilemapValue(const Tilemap* tilemap, i32 tileX, i32 tileY) {
-    // NOTE: no checks
-    const u32 tilemapValue{ tilemap->tiles[(tilemap->columns * tileY) + tileX] };
+INTERNAL u32
+GetTilemapValue(const World* world, const Tilemap* tilemap, i32 tileX, i32 tileY) {
+    ASSERT(tilemap);
+    ASSERT(tileX >= 0 && tileX < static_cast<i32>(world->tilemapColumns) && tileY >= 0 &&
+           tileY < static_cast<i32>(world->tilemapRows));
+
+    const u32 tilemapValue{ tilemap->tiles[(world->tilemapColumns * tileY) + tileX] };
     return tilemapValue;
 }
 
 INTERNAL bool32
-IsTilemapPointEmpty(const Tilemap* tilemap, f32 testX, f32 testY) {
-    bool32 isValid{};
+IsTilemapPointEmpty(const World* world, const Tilemap* tilemap, i32 testTilemapX,
+                    i32 testTilemapY) {
+    bool32 isEmpty{};
 
-    // Move to world coordinates by subtracting the possible rendering offsets
-    const i32 playerTileX{ TruncateF32ToI32((testX - tilemap->upperLeftX) /
-                                            static_cast<i32>(tilemap->tileWidth)) };
-    const i32 playerTileY{ TruncateF32ToI32((testY - tilemap->upperLeftY) /
-                                            static_cast<i32>(tilemap->tileHeight)) };
-    if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemap->columns) && playerTileY >= 0 &&
-        playerTileY < static_cast<i32>(tilemap->rows)) {
-        const u32 tilemapValue{ GetTilemapValue(tilemap, playerTileX, playerTileY) };
-        isValid = (tilemapValue == 0);
+    if (tilemap) {
+        if (testTilemapX >= 0 && testTilemapX < static_cast<i32>(world->tilemapColumns) &&
+            testTilemapY >= 0 && testTilemapY < static_cast<i32>(world->tilemapRows)) {
+            const u32 tilemapValue{ GetTilemapValue(world, tilemap, testTilemapX, testTilemapY) };
+            isEmpty = (tilemapValue == 0);
+        }
     }
 
-    return isValid;
+    return isEmpty;
+}
+
+INTERNAL CanonicalWorldPosition
+GetCanonicalPosition(const World* world, RawWorldPosition rawPos) {
+    CanonicalWorldPosition canPos{};
+
+    canPos.tilemapX = rawPos.tilemapX;
+    canPos.tilemapY = rawPos.tilemapY;
+
+    const f32 x{ rawPos.x - world->upperLeftX };
+    const f32 y{ rawPos.y - world->upperLeftY };
+    canPos.tileX = FloorF32ToI32(x / world->tileWidth);
+    canPos.tileY = FloorF32ToI32(y / world->tileHeight);
+
+    // Tile-relative
+    canPos.x = x - canPos.tileX * world->tileWidth;
+    canPos.y = y - canPos.tileY * world->tileHeight;
+
+    // Relative positions must be within the tile size
+    ASSERT(canPos.x >= 0 && canPos.x < world->tileWidth);
+    ASSERT(canPos.y >= 0 && canPos.y < world->tileHeight);
+
+    // Up
+    if (canPos.tileY < 0) {
+        canPos.tileY = world->tilemapRows + canPos.tileY;
+        --canPos.tilemapY;
+    }
+    // Left
+    if (canPos.tileX < 0) {
+        canPos.tileX = world->tilemapColumns + canPos.tileX;
+        --canPos.tilemapX;
+    }
+    // Right
+    if (canPos.tileX >= static_cast<i32>(world->tilemapColumns)) {
+        canPos.tileX = canPos.tileX - world->tilemapColumns;
+        ++canPos.tilemapX;
+    }
+    // Down
+    if (canPos.tileY >= static_cast<i32>(world->tilemapRows)) {
+        canPos.tileY = canPos.tileY - world->tilemapRows;
+        ++canPos.tilemapY;
+    }
+
+    return canPos;
 }
 
 INTERNAL bool32
-IsWorldPointEmpty(const World* world, i32 tilemapX, i32 tilemapY, f32 testX, f32 testY) {
-    bool32 isValid{};
-    const Tilemap* tilemap{ GetTileMap(world, tilemapX, tilemapY) };
+IsWorldPointEmpty(const World* world, RawWorldPosition rawPos) {
+    const auto canPos{ GetCanonicalPosition(world, rawPos) };
 
-    if (tilemap) {
-        const i32 playerTileX{ TruncateF32ToI32((testX - tilemap->upperLeftX) /
-                                                static_cast<i32>(tilemap->tileWidth)) };
-        const i32 playerTileY{ TruncateF32ToI32((testY - tilemap->upperLeftY) /
-                                                static_cast<i32>(tilemap->tileHeight)) };
-        if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemap->columns) &&
-            playerTileY >= 0 && playerTileY < static_cast<i32>(tilemap->rows)) {
-            const u32 tilemapValue{ GetTilemapValue(tilemap, playerTileX, playerTileY) };
-            isValid = (tilemapValue == 0);
-        }
+    const Tilemap* tilemap{ GetTileMap(world, canPos.tilemapX, canPos.tilemapY) };
+    if (!tilemap) {
+        // invalid tilemapX or tilemapY
     }
-    return isValid;
+
+    return IsTilemapPointEmpty(world, tilemap, canPos.tileX, canPos.tileY);
 }
 
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
@@ -166,7 +205,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     if (!memory->isInitialized) {
-        InitializeGameState(gameState, memory, threadContext);
+        InitializeGameState(threadContext, gameState, memory);
     }
 
     constexpr u32 tileMapRows{ 9 };
@@ -175,7 +214,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                               { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
                                               { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
                                               { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
-                                              { 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1 },
+                                              { 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 },
                                               { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
                                               { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
                                               { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
@@ -205,7 +244,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                               { 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1 },
                                               { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1 },
                                               { 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
-                                              { 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1 },
+                                              { 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1 },
                                               { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
                                               { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
                                               { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
@@ -213,35 +252,34 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                                 1 } };
 
     Tilemap tilemaps[2][2];
-
-    Tilemap* tilemap00{ &tilemaps[0][0] };
-    tilemap00->tiles = reinterpret_cast<u32*>(tiles00);
-    tilemap00->rows = tileMapRows;
-    tilemap00->columns = tileMapColumns;
-
-    tilemap00->upperLeftX = -30; // Move half tileWidth right
-    tilemap00->upperLeftY = 0;
-    tilemap00->tileWidth = 60;
-    tilemap00->tileHeight = 60;
-
+    tilemaps[0][0].tiles = reinterpret_cast<u32*>(tiles00);
     tilemaps[1][0].tiles = reinterpret_cast<u32*>(tiles10);
-    tilemaps[0][1].tiles = reinterpret_cast<u32*>(tiles01);
     tilemaps[1][1].tiles = reinterpret_cast<u32*>(tiles11);
-
-    Tilemap* currentTilemap{ tilemap00 };
+    tilemaps[0][1].tiles = reinterpret_cast<u32*>(tiles01);
 
     World world{};
     world.tilemaps = reinterpret_cast<Tilemap*>(tilemaps);
     world.tilemapCountX = 2;
     world.tilemapCountY = 2;
 
-    const f32 delta{ input->frameDeltaTime };
+    world.tilemapRows = tileMapRows;
+    world.tilemapColumns = tileMapColumns;
 
+    world.upperLeftX = -30; // Move half tileWidth right
+    world.upperLeftY = 0;
+    world.tileWidth = 60;
+    world.tileHeight = 60;
+
+    Tilemap* currentTilemap{ GetTileMap(&world, gameState->playerTilemapX,
+                                        gameState->playerTilemapY) };
+    ASSERT(currentTilemap);
+
+    const f32 delta{ input->frameDeltaTime };
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
     f32 playerVelocityX{}, playerVelocityY{};
-    constexpr f32 playerSpeed{ 120 }; // Pixels per second
+    constexpr f32 playerSpeed{ 30 }; // Pixels per second
     if (input::ActionPressed(&input0Keyboard->up)) {
         playerVelocityY -= playerSpeed;
     }
@@ -254,25 +292,44 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     if (input::ActionPressed(&input0Keyboard->right)) {
         playerVelocityX += playerSpeed;
     }
+    if (input::ActionPressed(&input0Keyboard->shift)) {
+        playerVelocityX *= 5;
+        playerVelocityY *= 5;
+    }
 
-    const f32 playerWidth{ currentTilemap->tileWidth * 0.75f };
-    const f32 playerHeight{ currentTilemap->tileHeight * 0.9f };
+    const f32 playerWidth{ world.tileWidth * 0.75f };
+    const f32 playerHeight{ world.tileHeight * 0.9f };
 
-    constexpr u32 tries{ 6 };
-    for (u32 i{}; i < tries; ++i) {
-        const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
-        const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
+    const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
+    const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
 
-        if (IsTilemapPointEmpty(currentTilemap, newPlayerX, newPlayerY) &&
-            IsTilemapPointEmpty(currentTilemap, newPlayerX - (playerWidth * 0.5f), newPlayerY) &&
-            IsTilemapPointEmpty(currentTilemap, newPlayerX + (playerWidth * 0.5f), newPlayerY)) {
-            gameState->playerPosX = newPlayerX;
-            gameState->playerPosY = newPlayerY;
-            break;
-        } else {
-            playerVelocityX *= 0.7f;
-            playerVelocityY *= 0.7f;
-        }
+    const RawWorldPosition rawPlayerPos{ gameState->playerTilemapX, gameState->playerTilemapY,
+                                         newPlayerX, newPlayerY };
+
+    RawWorldPosition rawPlayerPosLeft{ rawPlayerPos };
+    rawPlayerPosLeft.x -= playerWidth * 0.5f;
+    RawWorldPosition rawPlayerPosRight = rawPlayerPos;
+    rawPlayerPosRight.x += playerWidth * 0.5f;
+
+    //constexpr u32 tries{ 6 };
+    //for (u32 i{}; i < tries; ++i) {
+
+    if (IsWorldPointEmpty(&world, rawPlayerPos) && IsWorldPointEmpty(&world, rawPlayerPosLeft) &&
+        IsWorldPointEmpty(&world, rawPlayerPosRight)) {
+        const auto canPos{ GetCanonicalPosition(&world, rawPlayerPos) };
+
+        gameState->playerTilemapX = canPos.tilemapX;
+        gameState->playerTilemapY = canPos.tilemapY;
+        gameState->playerPosX = world.upperLeftX + (canPos.tileX * world.tileWidth) + canPos.x;
+        gameState->playerPosY = world.upperLeftY + (canPos.tileY * world.tileHeight) + canPos.y;
+
+        //break;
+        //} else {
+        //    rawPos.x = newPlayerX * 0.7;
+        //    rawPosLeft.x = (newPlayerX - (playerWidth * 0.5f)) * 0.7;
+
+        //playerVelocityY *= 0.7f;
+        //}
     }
 
     memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
@@ -283,17 +340,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                   static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
 
     // sizeof(tilemap) / sizeof(tilemap[0])
-    for (u32 row{}; row < currentTilemap->rows; ++row) {
-        for (u32 column{}; column < currentTilemap->columns; ++column) {
-            const u32 tileID{ currentTilemap->tiles[row * currentTilemap->columns + column] };
+    for (u32 row{}; row < world.tilemapRows; ++row) {
+        for (u32 column{}; column < world.tilemapColumns; ++column) {
+            const u32 tileID{ currentTilemap->tiles[row * world.tilemapColumns + column] };
             f32 gray{ tileID ? 1.0f : 0.5f };
 
-            const f32 minX{ currentTilemap->upperLeftX +
-                            (static_cast<f32>(column) * currentTilemap->tileWidth) };
-            const f32 minY{ currentTilemap->upperLeftY +
-                            (static_cast<f32>(row) * currentTilemap->tileHeight) };
-            const f32 maxX{ minX + currentTilemap->tileWidth };
-            const f32 maxY{ minY + currentTilemap->tileHeight };
+            const f32 minX{ world.upperLeftX + (static_cast<f32>(column) * world.tileWidth) };
+            const f32 minY{ world.upperLeftY + (static_cast<f32>(row) * world.tileHeight) };
+            const f32 maxX{ minX + world.tileWidth };
+            const f32 maxY{ minY + world.tileHeight };
 
             DrawRectangle(screenBuff, minX, minY, maxX, maxY, .1f, gray, gray);
         }

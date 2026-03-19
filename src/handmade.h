@@ -134,6 +134,7 @@ SafeTruncateF64toF32(f64 value) {
 
 INTERNAL inline i32
 TruncateF32ToI32(f32 value) {
+    // NOTE: truncate always truncates towards 0, even when value is negative
     return static_cast<i32>(value);
 }
 
@@ -141,6 +142,17 @@ INTERNAL inline u32
 TruncateF32ToU32(f32 value) {
     ASSERT(value >= 0);
     return static_cast<u32>(value);
+}
+
+INTERNAL inline i32
+FloorF32ToI32(f32 value) {
+    return static_cast<i32>(floorf(value));
+}
+
+INTERNAL inline u32
+FloorF32ToU32(f32 value) {
+    ASSERT(value >= 0);
+    return static_cast<u32>(floorf(value));
 }
 
 INTERNAL inline u32
@@ -294,26 +306,52 @@ static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
 
 // The game state
 struct GameState {
+    // Current tilemap indexes
+    u32 playerTilemapX;
+    u32 playerTilemapY;
+
     f32 playerPosX;
     f32 playerPosY;
 };
 
+struct CanonicalWorldPosition {
+    u32 tilemapX;
+    u32 tilemapY;
+
+    // Tile indexes in a given tilemap
+    u32 tileX;
+    u32 tileY;
+
+    // Tile-relative x and y
+    f32 x;
+    f32 y;
+};
+
+struct RawWorldPosition {
+    u32 tilemapX;
+    u32 tilemapY;
+
+    // Tile-map relative x and y (raw position values)
+    f32 x;
+    f32 y;
+};
+
 struct Tilemap {
     u32* tiles;
-    u32 rows;
-    u32 columns;
-
-    f32 upperLeftX;
-    f32 upperLeftY;
-    f32 tileWidth;
-    f32 tileHeight;
 };
 
 struct World {
     Tilemap* tilemaps;
     u32 tilemapCountX;
     u32 tilemapCountY;
-    u32 currentTilemapIndex;
+
+    u32 tilemapRows;
+    u32 tilemapColumns;
+
+    f32 upperLeftX;
+    f32 upperLeftY;
+    f32 tileWidth;
+    f32 tileHeight;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
