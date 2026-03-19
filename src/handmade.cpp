@@ -94,27 +94,63 @@ InitializeGameState(GameState* gameState, GameMemory* memory, ThreadContext* thr
     // TODO: maybe make platform set this
     memory->isInitialized = true;
 
-    gameState->playerPosX = 100.0f;
+    gameState->playerPosX = 150.0f;
     gameState->playerPosY = 200.0f;
 }
 
-INTERNAL bool32
-IsTilemapPointEmpty(const TilemapData* tilemapData, f32 x, f32 y) {
-    // Move to world coordinates by subtracting the possible screen offsets
-    const i32 playerTileX{ TruncateF32ToI32((x - tilemapData->upperLeftX) /
-                                            static_cast<i32>(tilemapData->tileWidth)) };
-    const i32 playerTileY{ TruncateF32ToI32((y - tilemapData->upperLeftY) /
-                                            static_cast<i32>(tilemapData->tileHeight)) };
+INTERNAL Tilemap*
+GetTileMap(const World* world, i32 tilemapX, i32 tilemapY) {
+    Tilemap* tilemap{};
 
+    if (tilemapX >= 0 && tilemapX < static_cast<i32>(world->tilemapColumns) && tilemapY >= 0 &&
+        tilemapY < static_cast<i32>(world->tilemapRows)) {
+        tilemap = &world->tilemaps[(world->tilemapRows * tilemapY) + tilemapX];
+    }
+
+    return tilemap;
+}
+
+INTERNAL inline u32
+GetTilemapValue(const Tilemap* tilemap, i32 tileX, i32 tileY) {
+    // NOTE: no checks
+    const u32 tilemapValue{ tilemap->tiles[(tilemap->columns * tileY) + tileX] };
+    return tilemapValue;
+}
+
+INTERNAL bool32
+IsTilemapPointEmpty(const Tilemap* tilemap, f32 x, f32 y) {
     bool32 isValid{};
-    if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemapData->columns) &&
-        playerTileY >= 0 && playerTileY < static_cast<i32>(tilemapData->rows)) {
-        const u32 tilemapValue{
-            tilemapData->tiles[(tilemapData->columns * playerTileY) + playerTileX]
-        };
+
+    // Move to world coordinates by subtracting the possible rendering offsets
+    const i32 playerTileX{ TruncateF32ToI32((x - tilemap->upperLeftX) /
+                                            static_cast<i32>(tilemap->tileWidth)) };
+    const i32 playerTileY{ TruncateF32ToI32((y - tilemap->upperLeftY) /
+                                            static_cast<i32>(tilemap->tileHeight)) };
+    if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemap->columns) && playerTileY >= 0 &&
+        playerTileY < static_cast<i32>(tilemap->rows)) {
+        const u32 tilemapValue{ GetTilemapValue(tilemap, playerTileX, playerTileY) };
         isValid = (tilemapValue == 0);
     }
 
+    return isValid;
+}
+
+INTERNAL bool32
+IsWorldPointEmpty(const World* world, i32 tilemapX, i32 tilemapY, f32 x, f32 y) {
+    bool32 isValid{};
+    const Tilemap* tilemap{ GetTileMap(world, tilemapX, tilemapY) };
+
+    if (tilemap) {
+        const i32 playerTileX{ TruncateF32ToI32((x - tilemap->upperLeftX) /
+                                                static_cast<i32>(tilemap->tileWidth)) };
+        const i32 playerTileY{ TruncateF32ToI32((y - tilemap->upperLeftY) /
+                                                static_cast<i32>(tilemap->tileHeight)) };
+        if (playerTileX >= 0 && playerTileX < static_cast<i32>(tilemap->columns) &&
+            playerTileY >= 0 && playerTileY < static_cast<i32>(tilemap->rows)) {
+            const u32 tilemapValue{ GetTilemapValue(tilemap, playerTileX, playerTileY) };
+            isValid = (tilemapValue == 0);
+        }
+    }
     return isValid;
 }
 
@@ -134,28 +170,67 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     constexpr u32 tileMapRows{ 9 };
     constexpr u32 tileMapColumns{ 17 };
-    u32 tilemapData[tileMapRows][tileMapColumns]{
-        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
-        { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
-        { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
-        { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
-        { 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 },
-        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
-        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
-        { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
-        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
-    };
+    u32 tiles00[tileMapRows][tileMapColumns]{ { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1,
+                                                1 } };
+    u32 tiles10[tileMapRows][tileMapColumns]{ { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                                                1 } };
+    u32 tiles11[tileMapRows][tileMapColumns]{ { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                                                1 } };
+    u32 tiles01[tileMapRows][tileMapColumns]{ { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1 },
+                                              { 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1 },
+                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1,
+                                                1 } };
 
-    TilemapData tilemap{};
+    Tilemap tilemaps[2][2];
 
-    tilemap.tiles = reinterpret_cast<u32*>(tilemapData);
-    tilemap.rows = tileMapRows;
-    tilemap.columns = tileMapColumns;
+    Tilemap* tilemap00{ &tilemaps[0][0] };
+    tilemap00->tiles = reinterpret_cast<u32*>(tiles00);
+    tilemap00->rows = tileMapRows;
+    tilemap00->columns = tileMapColumns;
 
-    tilemap.upperLeftX = -30; // Move half tileWidth right
-    tilemap.upperLeftY = 0;
-    tilemap.tileWidth = 60;
-    tilemap.tileHeight = 60;
+    tilemap00->upperLeftX = -30; // Move half tileWidth right
+    tilemap00->upperLeftY = 0;
+    tilemap00->tileWidth = 60;
+    tilemap00->tileHeight = 60;
+
+    tilemaps[1][0].tiles = reinterpret_cast<u32*>(tiles10);
+    tilemaps[0][1].tiles = reinterpret_cast<u32*>(tiles01);
+    tilemaps[1][1].tiles = reinterpret_cast<u32*>(tiles11);
+
+    Tilemap* currentTilemap{ tilemap00 };
+
+    World world{};
+    world.tilemaps = reinterpret_cast<Tilemap*>(tilemaps);
 
     const f32 delta{ input->frameDeltaTime };
 
@@ -180,7 +255,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
     const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
 
-    if (IsTilemapPointEmpty(&tilemap, newPlayerX, newPlayerY)) {
+    const f32 playerWidth{ currentTilemap->tileWidth * 0.75f };
+    const f32 playerHeight{ currentTilemap->tileHeight * 0.9f };
+
+    if (IsTilemapPointEmpty(currentTilemap, newPlayerX, newPlayerY) &&
+        IsTilemapPointEmpty(currentTilemap, newPlayerX - (playerWidth * 0.5f), newPlayerY) &&
+        IsTilemapPointEmpty(currentTilemap, newPlayerX + (playerWidth * 0.5f), newPlayerY)) {
         gameState->playerPosX = newPlayerX;
         gameState->playerPosY = newPlayerY;
     }
@@ -193,15 +273,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                   static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
 
     // sizeof(tilemap) / sizeof(tilemap[0])
-    for (u32 row{}; row < tilemap.rows; ++row) {
-        for (u32 column{}; column < tilemap.columns; ++column) {
-            const u32 tileID{ tilemap.tiles[row * tilemap.columns + column] };
+    for (u32 row{}; row < currentTilemap->rows; ++row) {
+        for (u32 column{}; column < currentTilemap->columns; ++column) {
+            const u32 tileID{ currentTilemap->tiles[row * currentTilemap->columns + column] };
             f32 gray{ tileID ? 1.0f : 0.5f };
 
-            const f32 minX{ tilemap.upperLeftX + (static_cast<f32>(column) * tilemap.tileWidth) };
-            const f32 minY{ tilemap.upperLeftY + (static_cast<f32>(row) * tilemap.tileHeight) };
-            const f32 maxX{ minX + tilemap.tileWidth };
-            const f32 maxY{ minY + tilemap.tileHeight };
+            const f32 minX{ currentTilemap->upperLeftX +
+                            (static_cast<f32>(column) * currentTilemap->tileWidth) };
+            const f32 minY{ currentTilemap->upperLeftY +
+                            (static_cast<f32>(row) * currentTilemap->tileHeight) };
+            const f32 maxX{ minX + currentTilemap->tileWidth };
+            const f32 maxY{ minY + currentTilemap->tileHeight };
 
             DrawRectangle(screenBuff, minX, minY, maxX, maxY, .1f, gray, gray);
         }
@@ -211,9 +293,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerR{ 0.5f };
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
-
-    const f32 playerWidth{ tilemap.tileWidth * 0.75f };
-    const f32 playerHeight{ tilemap.tileHeight * 0.9f };
 
     const f32 playerPosLeft{ gameState->playerPosX - (0.5f * playerWidth) };
     const f32 playerPosTop{ gameState->playerPosY - playerHeight };

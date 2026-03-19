@@ -14,7 +14,10 @@
             "compilerPath": "cl.exe",
             "cStandard": "c17",
             "cppStandard": "c++20",
-            "intelliSenseMode": "windows-msvc-x64"
+            "intelliSenseMode": "windows-msvc-x64",
+            "recursiveIncludes": {
+                "reduce": "${default}"
+            }
         }
     ],
     "version": 4

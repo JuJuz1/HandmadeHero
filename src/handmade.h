@@ -298,7 +298,7 @@ struct GameState {
     f32 playerPosY;
 };
 
-struct TilemapData {
+struct Tilemap {
     u32* tiles;
     u32 rows;
     u32 columns;
@@ -307,6 +307,13 @@ struct TilemapData {
     f32 upperLeftY;
     f32 tileWidth;
     f32 tileHeight;
+};
+
+struct World {
+    Tilemap* tilemaps;
+    u32 tilemapRows;
+    u32 tilemapColumns;
+    u32 currentTilemapIndex;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
