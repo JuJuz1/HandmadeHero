@@ -84,7 +84,8 @@ DEBUG_READ_FILE(DEBUGReadFile) {
             return result;
         }
 
-        const u32 bytesToRead{ SafeTruncateU64toU32(fileSize.QuadPart) };
+        // NOTE: 4GB limit
+        const u32 bytesToRead{ static_cast<u32>(fileSize.QuadPart) };
         DWORD bytesRead;
         // Consider the case where one could truncate the file after reading
         if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&

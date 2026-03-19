@@ -1,4 +1,5 @@
 #include "handmade.h"
+#include "handmade_intrinsics.h"
 
 namespace game {
 
@@ -110,11 +111,11 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 }
 
 INTERNAL Tilemap*
-GetTileMap(const World* world, i32 tilemapX, i32 tilemapY) {
+GetTileMap(const World* world, u32 tilemapX, u32 tilemapY) {
     Tilemap* tilemap{};
 
-    if (tilemapX >= 0 && tilemapX < static_cast<i32>(world->tilemapCountX) && tilemapY >= 0 &&
-        tilemapY < static_cast<i32>(world->tilemapCountY)) {
+    if (tilemapX >= 0 && tilemapX < world->tilemapCountX && tilemapY >= 0 &&
+        tilemapY < world->tilemapCountY) {
         tilemap = &world->tilemaps[(world->tilemapCountX * tilemapY) + tilemapX];
     }
 
@@ -319,9 +320,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
     const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
 
-    const RawWorldPosition rawPlayerPos{ static_cast<i32>(gameState->playerTilemapX),
-                                         static_cast<i32>(gameState->playerTilemapY), newPlayerX,
-                                         newPlayerY };
+    const RawWorldPosition rawPlayerPos{ gameState->playerTilemapX, gameState->playerTilemapY,
+                                         newPlayerX, newPlayerY };
 
     RawWorldPosition rawPlayerPosLeft{ rawPlayerPos };
     rawPlayerPosLeft.rawPlayerPosX -= playerWidth * 0.5f;

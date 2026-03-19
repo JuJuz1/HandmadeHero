@@ -1,7 +1,6 @@
 #ifndef HANDMADE_H
 #define HANDMADE_H
 
-#include <cmath> // TODO: write own sinf
 #include <cstdint>
 
 /*
@@ -124,62 +123,6 @@ struct PlatformExports {
 #endif // HANDMADE_INTERNAL
 
 GLOBAL constexpr f32 PI32f{ 3.14159265359f };
-
-INTERNAL inline i32
-SafeTruncateI64toI32(i64 value) {
-    ASSERT(value <= 2147483647LL);
-    ASSERT(value >= -2147483648LL);
-    return static_cast<i32>(value);
-}
-
-INTERNAL inline u32
-SafeTruncateU64toU32(u64 value) {
-    // TODO: U32_MAX and such...
-    ASSERT(value <= 0xFFFFFFFFULL);
-    return static_cast<u32>(value);
-}
-
-INTERNAL inline f32
-SafeTruncateF64toF32(f64 value) {
-    ASSERT(value <= 3.402823466e+38);
-    ASSERT(value >= -3.402823466e+38);
-    return static_cast<f32>(value);
-}
-
-INTERNAL inline i32
-TruncateF32ToI32(f32 value) {
-    // NOTE: truncate always truncates towards 0, even when value is negative
-    return static_cast<i32>(value);
-}
-
-INTERNAL inline u32
-TruncateF32ToU32(f32 value) {
-    ASSERT(value >= 0);
-    return static_cast<u32>(value);
-}
-
-INTERNAL inline i32
-FloorF32ToI32(f32 value) {
-    return static_cast<i32>(floorf(value));
-}
-
-INTERNAL inline u32
-FloorF32ToU32(f32 value) {
-    ASSERT(value >= 0);
-    return static_cast<u32>(floorf(value));
-}
-
-INTERNAL inline u32
-RoundF32ToU32(f32 value) {
-    ASSERT(value >= 0);
-    return static_cast<u32>(value + 0.5f);
-}
-
-INTERNAL inline i32
-RoundF32ToI32(f32 value) {
-    // TODO: intrinsic?
-    return static_cast<i32>(value + 0.5f);
-}
 
 INTERNAL void
 CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
@@ -323,8 +266,8 @@ struct GameState {
 };
 
 struct CanonicalWorldPosition {
-    i32 tilemapX;
-    i32 tilemapY;
+    u32 tilemapX;
+    u32 tilemapY;
 
     // Tile indexes in a given tilemap
     i32 tileX;
@@ -336,8 +279,8 @@ struct CanonicalWorldPosition {
 };
 
 struct RawWorldPosition {
-    i32 tilemapX;
-    i32 tilemapY;
+    u32 tilemapX;
+    u32 tilemapY;
 
     // Tile-map relative x and y (raw position values)
     f32 rawPlayerPosX;
