@@ -55,6 +55,12 @@ HANDMADE_DEBUG:
 
 #define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
 
+// c++17 required
+// Can be opted out of easily by just checking c++ standard version when compiling
+// Although on MSVC at least when compiling with an older standard like c++14, it still works and
+// produces the warning
+#define NODISCARD [[nodiscard]]
+
 // Typedefs for common types
 
 typedef int8_t i8;
@@ -144,6 +150,7 @@ CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char*
     *dest++ = '\0';
 }
 
+NODISCARD
 INTERNAL u32
 StrLength(const char* str) {
     ASSERT(str);
@@ -255,36 +262,21 @@ static_assert(sizeof(InputButtons) == sizeof(Button) * button_Count,
 static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
               "MouseButtons count doesn't match the amount of buttons declared!");
 
-// The game state
-struct GameState {
-    // Current tilemap indexes
-    u32 playerTilemapX;
-    u32 playerTilemapY;
-
-    f32 playerPosX;
-    f32 playerPosY;
-};
-
 struct CanonicalWorldPosition {
+#if 1
     u32 tilemapX;
     u32 tilemapY;
 
     // Tile indexes in a given tilemap
     i32 tileX;
     i32 tileY;
-
+#else
+    u32 tileX;
+    u32 tileY;
+#endif
     // Tile-relative x and y
     f32 tileRelativePosX;
     f32 tileRelativePosY;
-};
-
-struct RawWorldPosition {
-    u32 tilemapX;
-    u32 tilemapY;
-
-    // Tile-map relative x and y (raw position values)
-    f32 rawPlayerPosX;
-    f32 rawPlayerPosY;
 };
 
 struct Tilemap {
@@ -303,6 +295,11 @@ struct World {
 
     f32 upperLeftX;
     f32 upperLeftY;
+};
+
+// The game state
+struct GameState {
+    CanonicalWorldPosition playerPos;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series

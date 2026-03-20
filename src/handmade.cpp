@@ -11,18 +11,21 @@ GLOBAL GameMemory* gMemory;
 
 namespace input {
 
+NODISCARD
 INTERNAL bool32
 ActionJustPressed(const Button* button) {
     const bool32 result{ button->endedDown && button->halfTransitionCount > 0 };
     return result;
 }
 
+NODISCARD
 INTERNAL bool32
 ActionPressed(const Button* button) {
     const bool32 result{ button->endedDown };
     return result;
 }
 
+NODISCARD
 INTERNAL bool32
 ActionReleased(const Button* button) {
     const bool32 result{ !button->endedDown && button->halfTransitionCount > 0 };
@@ -107,12 +110,15 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gThreadContext = threadContext;
     gMemory = memory;
 
-    //gameState->playerTilemapX = 0;
-    //gameState->playerTilemapY = 0;
-    gameState->playerPosX = 150.0f;
-    gameState->playerPosY = 200.0f;
+    //gameState->playerPos.tilemapX = 0;
+    //gameState->playerPos.tilemapY = 0;
+    gameState->playerPos.tileX = 3;
+    gameState->playerPos.tileY = 3;
+    gameState->playerPos.tileRelativePosX = 20.0f;
+    gameState->playerPos.tileRelativePosY = 50.0f;
 }
 
+NODISCARD
 INTERNAL Tilemap*
 GetTileMap(const World* world, u32 tilemapX, u32 tilemapY) {
     Tilemap* tilemap{};
@@ -125,6 +131,7 @@ GetTileMap(const World* world, u32 tilemapX, u32 tilemapY) {
     return tilemap;
 }
 
+NODISCARD
 INTERNAL u32
 GetTilemapValue(const World* world, const Tilemap* tilemap, i32 tileX, i32 tileY) {
     ASSERT(tilemap);
@@ -135,6 +142,7 @@ GetTilemapValue(const World* world, const Tilemap* tilemap, i32 tileX, i32 tileY
     return tilemapValue;
 }
 
+NODISCARD
 INTERNAL bool32
 IsTilemapPointEmpty(const World* world, const Tilemap* tilemap, i32 testTilemapX,
                     i32 testTilemapY) {
@@ -151,59 +159,44 @@ IsTilemapPointEmpty(const World* world, const Tilemap* tilemap, i32 testTilemapX
     return isEmpty;
 }
 
-INTERNAL CanonicalWorldPosition
-GetCanonicalPosition(const World* world, RawWorldPosition rawPos) {
-    CanonicalWorldPosition canPos{};
+INTERNAL inline void
+ReCanonicalizeCoordinate(const World* world, i32 tileCount, u32* tilemapIndex, i32* tileIndex,
+                         f32* relPos) {
+    const i32 offset{ FloorF32ToI32(*relPos / world->tileSideInPixels) };
+    *tileIndex += offset;
+    *relPos -= offset * world->tileSideInPixels;
 
-    canPos.tilemapX = rawPos.tilemapX;
-    canPos.tilemapY = rawPos.tilemapY;
+    // Relative positions must be within the tile size in pixels
+    ASSERT(*relPos >= 0 && *relPos < world->tileSideInPixels);
 
-    const f32 x{ rawPos.rawPlayerPosX - world->upperLeftX };
-    const f32 y{ rawPos.rawPlayerPosY - world->upperLeftY };
-
-    canPos.tileX = FloorF32ToI32(x / world->tileSideInPixels);
-    canPos.tileY = FloorF32ToI32(y / world->tileSideInPixels);
-
-    // Tile-relative
-    canPos.tileRelativePosX = x - (canPos.tileX * world->tileSideInPixels);
-    canPos.tileRelativePosY = y - (canPos.tileY * world->tileSideInPixels);
-
-    // Relative positions must be within the tile size
-    ASSERT(canPos.tileRelativePosX >= 0 && canPos.tileRelativePosX < world->tileSideInPixels);
-    ASSERT(canPos.tileRelativePosY >= 0 && canPos.tileRelativePosY < world->tileSideInPixels);
-
-    // Up
-    if (canPos.tileY < 0) {
-        canPos.tileY = world->tilemapRows + canPos.tileY;
-        --canPos.tilemapY;
-        DEBUG_PLATFORM_PRINT("Tilemap detected: up");
+    if (*tileIndex < 0) {
+        *tileIndex = *tileIndex + tileCount;
+        --*tilemapIndex;
+        DEBUG_PLATFORM_PRINT("Tilemap detected negative!");
     }
-    // Down
-    if (canPos.tileY >= static_cast<i32>(world->tilemapRows)) {
-        canPos.tileY = canPos.tileY - world->tilemapRows;
-        ++canPos.tilemapY;
-        DEBUG_PLATFORM_PRINT("Tilemap detected: down");
+    if (*tileIndex >= tileCount) {
+        *tileIndex = *tileIndex - tileCount;
+        ++*tilemapIndex;
+        DEBUG_PLATFORM_PRINT("Tilemap detected positive!");
     }
-    // Left
-    if (canPos.tileX < 0) {
-        canPos.tileX = world->tilemapColumns + canPos.tileX;
-        --canPos.tilemapX;
-        DEBUG_PLATFORM_PRINT("Tilemap detected: left");
-    }
-    // Right
-    if (canPos.tileX >= static_cast<i32>(world->tilemapColumns)) {
-        canPos.tileX = canPos.tileX - world->tilemapColumns;
-        ++canPos.tilemapX;
-        DEBUG_PLATFORM_PRINT("Tilemap detected: right");
-    }
-
-    return canPos;
 }
 
-INTERNAL bool32
-IsWorldPointEmpty(const World* world, RawWorldPosition rawPos) {
-    const auto canPos{ GetCanonicalPosition(world, rawPos) };
+NODISCARD
+INTERNAL CanonicalWorldPosition
+RecanonicalizePosition(const World* world, CanonicalWorldPosition pos) {
+    CanonicalWorldPosition result{ pos };
 
+    ReCanonicalizeCoordinate(world, world->tilemapColumns, &result.tilemapX, &result.tileX,
+                             &result.tileRelativePosX);
+    ReCanonicalizeCoordinate(world, world->tilemapRows, &result.tilemapY, &result.tileY,
+                             &result.tileRelativePosY);
+
+    return result;
+}
+
+NODISCARD
+INTERNAL bool32
+IsWorldPointEmpty(const World* world, CanonicalWorldPosition canPos) {
     const Tilemap* tilemap{ GetTileMap(world, canPos.tilemapX, canPos.tilemapY) };
     if (!tilemap) {
         // invalid tilemapX or tilemapY
@@ -282,7 +275,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     world.tilemapCountX = 2;
     world.tilemapCountY = 2;
 
-    // Episode 31: moving away from pixels
     world.tileSideInMeters = 1.4f;
     world.tileSideInPixels = 60;
 
@@ -294,8 +286,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     world.upperLeftX = -world.tileSideInPixels / 2.0f; // Move half tileSideInPixels right
     world.upperLeftY = 0;
 
-    Tilemap* currentTilemap{ GetTileMap(&world, gameState->playerTilemapX,
-                                        gameState->playerTilemapY) };
+    Tilemap* currentTilemap{ GetTileMap(&world, gameState->playerPos.tilemapX,
+                                        gameState->playerPos.tilemapY) };
     ASSERT(currentTilemap);
 
     const f32 delta{ input->frameDeltaTime };
@@ -324,31 +316,32 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 playerWidth{ world.tileSideInPixels * 0.75f };
     const f32 playerHeight{ world.tileSideInPixels * 0.9f };
 
-    const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
-    const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
+    CanonicalWorldPosition newPlayerPos{ gameState->playerPos };
+    const f32 newPlayerX{ playerVelocityX * delta };
+    const f32 newPlayerY{ playerVelocityY * delta };
+    newPlayerPos.tileRelativePosX += newPlayerX;
+    newPlayerPos.tileRelativePosY += newPlayerY;
+    newPlayerPos = RecanonicalizePosition(&world, newPlayerPos);
 
-    const RawWorldPosition rawPlayerPos{ gameState->playerTilemapX, gameState->playerTilemapY,
-                                         newPlayerX, newPlayerY };
+    CanonicalWorldPosition testPlayerPosLeft{ newPlayerPos };
+    testPlayerPosLeft.tileRelativePosX -= playerWidth * 0.5f;
+    testPlayerPosLeft = RecanonicalizePosition(&world, testPlayerPosLeft);
 
-    RawWorldPosition rawPlayerPosLeft{ rawPlayerPos };
-    rawPlayerPosLeft.rawPlayerPosX -= playerWidth * 0.5f;
-    RawWorldPosition rawPlayerPosRight = rawPlayerPos;
-    rawPlayerPosRight.rawPlayerPosX += playerWidth * 0.5f;
+    CanonicalWorldPosition testPlayerPosRight{ newPlayerPos };
+    testPlayerPosRight.tileRelativePosX += playerWidth * 0.5f;
+    testPlayerPosRight = RecanonicalizePosition(&world, testPlayerPosRight);
 
-    if (IsWorldPointEmpty(&world, rawPlayerPos) && IsWorldPointEmpty(&world, rawPlayerPosLeft) &&
-        IsWorldPointEmpty(&world, rawPlayerPosRight)) {
-        const auto canPos{ GetCanonicalPosition(&world, rawPlayerPos) };
-
-        gameState->playerTilemapX = canPos.tilemapX;
-        gameState->playerTilemapY = canPos.tilemapY;
-        gameState->playerPosX =
-            world.upperLeftX + (canPos.tileX * world.tileSideInPixels) + canPos.tileRelativePosX;
-        gameState->playerPosY =
-            world.upperLeftY + (canPos.tileY * world.tileSideInPixels) + canPos.tileRelativePosY;
+    if (IsWorldPointEmpty(&world, newPlayerPos) && IsWorldPointEmpty(&world, testPlayerPosLeft) &&
+        IsWorldPointEmpty(&world, testPlayerPosRight)) {
+        gameState->playerPos = newPlayerPos;
     }
 
-    //memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
-    //memory->DEBUGPrintFloat(threadContext, "playerY", gameState->playerPosY);
+    memory->exports.DEBUGPrintInt(threadContext, "tileX", gameState->playerPos.tileX);
+    memory->exports.DEBUGPrintInt(threadContext, "tileY", gameState->playerPos.tileY);
+    memory->exports.DEBUGPrintFloat(threadContext, "relPlayerX",
+                                    gameState->playerPos.tileRelativePosX);
+    memory->exports.DEBUGPrintFloat(threadContext, "relPlayerY",
+                                    gameState->playerPos.tileRelativePosY);
 
     // Background
     DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
@@ -375,11 +368,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
 
-    const f32 playerPosLeft{ gameState->playerPosX - (playerWidth * 0.5f) };
-    const f32 playerPosTop{ gameState->playerPosY - playerHeight };
+    const f32 playerPosLeft{ world.upperLeftX +
+                             world.tileSideInPixels * gameState->playerPos.tileX +
+                             gameState->playerPos.tileRelativePosX - (playerWidth * 0.5f) };
+    const f32 playerPosTop{ world.upperLeftY + world.tileSideInPixels * gameState->playerPos.tileY +
+                            gameState->playerPos.tileRelativePosY - playerHeight };
 
     DrawRectangle(screenBuff, playerPosLeft, playerPosTop, playerPosLeft + playerWidth,
-                  gameState->playerPosY, playerR, playerG, playerB);
+                  playerPosTop + playerHeight, playerR, playerG, playerB);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

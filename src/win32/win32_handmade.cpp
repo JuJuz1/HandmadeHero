@@ -133,6 +133,7 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
 
 namespace win32 {
 
+NODISCARD
 INTERNAL WindowDimension
 GetWindowDimensions(HWND windowHandle) {
     RECT clientRect;
@@ -318,6 +319,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
 }
 
 // Circular buffer so we might get two regions to write to
+NODISCARD
 INTERNAL DSoundParams
 ProcessDSoundParams(const SoundOutput* soundOutput, DWORD lastPlayCursor, bool32 isSoundValid) {
     DSoundParams dSoundParams{};
@@ -434,6 +436,7 @@ GetInputFilePath(const AllState* allState, bool32 inputStream, u32 slotIndex, ch
     BuildGamePathFilename(allState, temp, dest, destCount);
 }
 
+NODISCARD
 INTERNAL ReplayBuffer*
 GetReplayBuffer(AllState* allState, u32 index) {
     ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
@@ -783,6 +786,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
     }
 }
 
+NODISCARD
 INTERNAL inline LARGE_INTEGER
 GetWallClock() {
     LARGE_INTEGER res;
@@ -790,6 +794,7 @@ GetWallClock() {
     return res;
 }
 
+NODISCARD
 INTERNAL inline f64
 GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     const f64 result{ static_cast<f64>(end.QuadPart - start.QuadPart) /
@@ -797,6 +802,7 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return result;
 }
 
+NODISCARD
 INTERNAL inline FILETIME
 GetLastWriteTime(const char* filename) {
     FILETIME lastWriteTime{};
@@ -809,6 +815,7 @@ GetLastWriteTime(const char* filename) {
     return lastWriteTime;
 }
 
+NODISCARD
 INTERNAL GameCode
 LoadGameCode(const char* srcDll, const char* tempDll) {
     // NOTE: Delete the temp file when the program ends?
