@@ -13,17 +13,20 @@ namespace input {
 
 INTERNAL bool32
 ActionJustPressed(const Button* button) {
-    return button->endedDown && button->halfTransitionCount > 0;
+    const bool32 result{ button->endedDown && button->halfTransitionCount > 0 };
+    return result;
 }
 
 INTERNAL bool32
 ActionPressed(const Button* button) {
-    return button->endedDown;
+    const bool32 result{ button->endedDown };
+    return result;
 }
 
 INTERNAL bool32
 ActionReleased(const Button* button) {
-    return !button->endedDown && button->halfTransitionCount > 0;
+    const bool32 result{ !button->endedDown && button->halfTransitionCount > 0 };
+    return result;
 }
 
 } //namespace input
@@ -158,16 +161,16 @@ GetCanonicalPosition(const World* world, RawWorldPosition rawPos) {
     const f32 x{ rawPos.rawPlayerPosX - world->upperLeftX };
     const f32 y{ rawPos.rawPlayerPosY - world->upperLeftY };
 
-    canPos.tileX = FloorF32ToI32(x / world->tileWidth);
-    canPos.tileY = FloorF32ToI32(y / world->tileHeight);
+    canPos.tileX = FloorF32ToI32(x / world->tileSideInPixels);
+    canPos.tileY = FloorF32ToI32(y / world->tileSideInPixels);
 
     // Tile-relative
-    canPos.tileRelativePosX = x - (canPos.tileX * world->tileWidth);
-    canPos.tileRelativePosY = y - (canPos.tileY * world->tileHeight);
+    canPos.tileRelativePosX = x - (canPos.tileX * world->tileSideInPixels);
+    canPos.tileRelativePosY = y - (canPos.tileY * world->tileSideInPixels);
 
     // Relative positions must be within the tile size
-    ASSERT(canPos.tileRelativePosX >= 0 && canPos.tileRelativePosX < world->tileWidth);
-    ASSERT(canPos.tileRelativePosY >= 0 && canPos.tileRelativePosY < world->tileHeight);
+    ASSERT(canPos.tileRelativePosX >= 0 && canPos.tileRelativePosX < world->tileSideInPixels);
+    ASSERT(canPos.tileRelativePosY >= 0 && canPos.tileRelativePosY < world->tileSideInPixels);
 
     // Up
     if (canPos.tileY < 0) {
@@ -279,13 +282,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     world.tilemapCountX = 2;
     world.tilemapCountY = 2;
 
+    // Episode 31: moving away from pixels
+    world.tileSideInMeters = 1.4f;
+    world.tileSideInPixels = 60;
+
     world.tilemapRows = tileMapRows;
     world.tilemapColumns = tileMapColumns;
 
-    world.upperLeftX = -30; // Move half tileWidth right
+    world.tileSideInPixels = 60;
+    world.tileSideInPixels = 60;
+    world.upperLeftX = -world.tileSideInPixels / 2.0f; // Move half tileSideInPixels right
     world.upperLeftY = 0;
-    world.tileWidth = 60;
-    world.tileHeight = 60;
 
     Tilemap* currentTilemap{ GetTileMap(&world, gameState->playerTilemapX,
                                         gameState->playerTilemapY) };
@@ -314,8 +321,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityY *= 5;
     }
 
-    const f32 playerWidth{ world.tileWidth * 0.75f };
-    const f32 playerHeight{ world.tileHeight * 0.9f };
+    const f32 playerWidth{ world.tileSideInPixels * 0.75f };
+    const f32 playerHeight{ world.tileSideInPixels * 0.9f };
 
     const f32 newPlayerX{ gameState->playerPosX + (playerVelocityX * delta) };
     const f32 newPlayerY{ gameState->playerPosY + (playerVelocityY * delta) };
@@ -335,9 +342,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         gameState->playerTilemapX = canPos.tilemapX;
         gameState->playerTilemapY = canPos.tilemapY;
         gameState->playerPosX =
-            world.upperLeftX + (canPos.tileX * world.tileWidth) + canPos.tileRelativePosX;
+            world.upperLeftX + (canPos.tileX * world.tileSideInPixels) + canPos.tileRelativePosX;
         gameState->playerPosY =
-            world.upperLeftY + (canPos.tileY * world.tileHeight) + canPos.tileRelativePosY;
+            world.upperLeftY + (canPos.tileY * world.tileSideInPixels) + canPos.tileRelativePosY;
     }
 
     //memory->DEBUGPrintFloat(threadContext, "playerX", gameState->playerPosX);
@@ -353,10 +360,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const u32 tileID{ currentTilemap->tiles[row * world.tilemapColumns + column] };
             f32 gray{ tileID ? 1.0f : 0.5f };
 
-            const f32 minX{ world.upperLeftX + (static_cast<f32>(column) * world.tileWidth) };
-            const f32 minY{ world.upperLeftY + (static_cast<f32>(row) * world.tileHeight) };
-            const f32 maxX{ minX + world.tileWidth };
-            const f32 maxY{ minY + world.tileHeight };
+            const f32 minX{ world.upperLeftX +
+                            (static_cast<f32>(column) * world.tileSideInPixels) };
+            const f32 minY{ world.upperLeftY + (static_cast<f32>(row) * world.tileSideInPixels) };
+            const f32 maxX{ minX + world.tileSideInPixels };
+            const f32 maxY{ minY + world.tileSideInPixels };
 
             DrawRectangle(screenBuff, minX, minY, maxX, maxY, .1f, gray, gray);
         }

@@ -11,7 +11,8 @@ INTERNAL inline i32
 TruncateI64toI32(i64 value) {
     ASSERT(value <= 2147483647LL);
     ASSERT(value >= -2147483648LL);
-    return static_cast<i32>(value);
+    const i32 result{ static_cast<i32>(value) };
+    return result;
 }
 
 INTERNAL inline u32
@@ -25,41 +26,48 @@ INTERNAL inline f32
 TruncateF64toF32(f64 value) {
     ASSERT(value <= 3.402823466e+38);
     ASSERT(value >= -3.402823466e+38);
-    return static_cast<f32>(value);
+    const f32 result{ static_cast<f32>(value) };
+    return result;
 }
 
 INTERNAL inline i32
 TruncateF32ToI32(f32 value) {
     // NOTE: truncate always truncates towards 0, even when value is negative
-    return static_cast<i32>(value);
+    const i32 result{ static_cast<i32>(value) };
+    return result;
 }
 
 INTERNAL inline u32
 TruncateF32ToU32(f32 value) {
     ASSERT(value >= 0);
-    return static_cast<u32>(value);
+    const u32 result{ static_cast<u32>(value) };
+    return result;
 }
 
 INTERNAL inline i32
 FloorF32ToI32(f32 value) {
-    return static_cast<i32>(floorf(value));
+    const i32 result{ static_cast<i32>(floorf(value)) };
+    return result;
 }
 
 INTERNAL inline u32
 FloorF32ToU32(f32 value) {
     ASSERT(value >= 0);
-    return static_cast<u32>(floorf(value));
+    const u32 result{ static_cast<u32>(floorf(value)) };
+    return result;
 }
 
 INTERNAL inline u32
 RoundF32ToU32(f32 value) {
     ASSERT(value >= 0);
-    return static_cast<u32>(value + 0.5f);
+    const u32 result{ static_cast<u32>(value + 0.5f) };
+    return result;
 }
 
 INTERNAL inline i32
 RoundF32ToI32(f32 value) {
-    return static_cast<i32>(value + 0.5f);
+    const i32 result{ static_cast<i32>(value + 0.5f) };
+    return result;
 }
 
 INTERNAL inline f32

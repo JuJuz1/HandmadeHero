@@ -18,6 +18,7 @@ rem we use /MTd to add extra checks
 
 rem https://learn.microsoft.com/en-us/cpp/build/reference/o-options-optimize-code?view=msvc-170
 rem /Oi generate intrinsic functions for appropriate function calls
+rem /fp:fast to optimize e.g. CRT floorf calls
 
 rem /nologo don't show compiler version and info
 

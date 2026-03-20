@@ -295,14 +295,14 @@ struct World {
     Tilemap* tilemaps;
     u32 tilemapCountX;
     u32 tilemapCountY;
-
     u32 tilemapRows;
     u32 tilemapColumns;
 
+    f32 tileSideInMeters;
+    i32 tileSideInPixels;
+
     f32 upperLeftX;
     f32 upperLeftY;
-    f32 tileWidth;
-    f32 tileHeight;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
