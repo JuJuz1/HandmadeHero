@@ -1,4 +1,5 @@
 #include "handmade.h"
+#include "handmade_intrinsics.h" // Safe truncate functions
 
 // Windows stuff
 #include <dsound.h>
@@ -85,7 +86,7 @@ DEBUG_READ_FILE(DEBUGReadFile) {
         }
 
         // NOTE: 4GB limit
-        const u32 bytesToRead{ static_cast<u32>(fileSize.QuadPart) };
+        const DWORD bytesToRead{ TruncateU64toU32(fileSize.QuadPart) };
         DWORD bytesRead;
         // Consider the case where one could truncate the file after reading
         if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
@@ -161,10 +162,10 @@ ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
     screenBuff->info.bmiHeader.biBitCount = 32; // 8 padding
     screenBuff->info.bmiHeader.biCompression = BI_RGB;
 
-    const u32 bmMemorySize{ screenBuff->width * screenBuff->height * screenBuff->bytesPerPixel };
+    const i32 bmMemorySize{ screenBuff->width * screenBuff->height * screenBuff->bytesPerPixel };
     // Allocate the memory for use immediately (MEM_COMMIT)
     screenBuff->memory = VirtualAlloc(0, bmMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    screenBuff->pitch = screenBuff->width * static_cast<i32>(screenBuff->bytesPerPixel);
+    screenBuff->pitch = screenBuff->width * screenBuff->bytesPerPixel;
 
     // TODO: clear to black probably
 }
@@ -198,7 +199,7 @@ typedef DIRECT_SOUND_CREATE(direct_sound_create);
 // clang-format on
 
 INTERNAL void
-InitDSound(HWND windowHandle, u32 samplesPerSecond, u32 buffSize) {
+InitDSound(HWND windowHandle, i32 samplesPerSecond, i32 buffSize) {
     HMODULE dSoundLib{ LoadLibraryA("dsound.dll") };
     if (!dSoundLib) {
         // log, couldn't load dll
@@ -264,13 +265,13 @@ ClearSoundBuffer(SoundOutput* soundOutput) {
                                        &region2Size, 0))) {
         u8* destSample{ static_cast<u8*>(region1) };
 
-        for (DWORD i{ 0 }; i < region1Size; ++i) {
+        for (DWORD i{}; i < region1Size; ++i) {
             *destSample++ = 0;
         }
 
         destSample = static_cast<u8*>(region2);
 
-        for (DWORD i{ 0 }; i < region2Size; ++i) {
+        for (DWORD i{}; i < region2Size; ++i) {
             *destSample++ = 0;
         }
 
@@ -297,7 +298,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
         const i16* srcSample{ sourceBuff->samples };
 
         // NOTE: collapse loops to one?
-        for (DWORD i{ 0 }; i < region1SampleCount; ++i) {
+        for (DWORD i{}; i < region1SampleCount; ++i) {
             *destSample++ = *srcSample++;
             *destSample++ = *srcSample++;
             ++soundOutput->runningSampleIndex;
@@ -306,7 +307,7 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
         const DWORD region2SampleCount{ region2Size / soundOutput->bytesPerSample };
         destSample = static_cast<i16*>(region2);
 
-        for (DWORD i{ 0 }; i < region2SampleCount; ++i) {
+        for (DWORD i{}; i < region2SampleCount; ++i) {
             *destSample++ = *srcSample++;
             *destSample++ = *srcSample++;
             ++soundOutput->runningSampleIndex;
@@ -423,14 +424,14 @@ GetExePathAndFilename(AllState* allState) {
 }
 
 INTERNAL void
-BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, u32 destCount) {
+BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, i32 destCount) {
     CatStrings(allState->exePath, allState->exeFilename - allState->exePath, filename,
                StrLength(filename), dest, destCount);
 }
 
 INTERNAL void
-GetInputFilePath(const AllState* allState, bool32 inputStream, u32 slotIndex, char* dest,
-                 u32 destCount) {
+GetInputFilePath(const AllState* allState, bool32 inputStream, i32 slotIndex, char* dest,
+                 i32 destCount) {
     char temp[32];
     wsprintfA(temp, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
     BuildGamePathFilename(allState, temp, dest, destCount);
@@ -438,16 +439,16 @@ GetInputFilePath(const AllState* allState, bool32 inputStream, u32 slotIndex, ch
 
 NODISCARD
 INTERNAL ReplayBuffer*
-GetReplayBuffer(AllState* allState, u32 index) {
+GetReplayBuffer(AllState* allState, i32 index) {
     ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
     ReplayBuffer* replayBuffer{ &allState->replayBuffers[index] };
     return replayBuffer;
 }
 
 INTERNAL void
-BeginRecordInput(AllState* allState, u32 recordingIndex) {
+BeginRecordInput(AllState* allState, i32 recordingIndex) {
     // TODO: cleanup the files after exiting the game?
-    allState->recordingIndex = static_cast<i32>(recordingIndex);
+    allState->recordingIndex = recordingIndex;
 
     char filePath[win32::all_State_File_Name_Count];
     GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
@@ -481,7 +482,7 @@ EndRecordInput(AllState* allState) {
 }
 
 INTERNAL void
-BeginInputPlayback(AllState* allState, u32 playingIndex) {
+BeginInputPlayback(AllState* allState, i32 playingIndex) {
     const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     if (!replayBuffer->isRecordedAtLeastOnce) {
         char buf[32];
@@ -491,7 +492,7 @@ BeginInputPlayback(AllState* allState, u32 playingIndex) {
         return;
     }
 
-    allState->playingIndex = static_cast<i32>(playingIndex);
+    allState->playingIndex = playingIndex;
 
     char filePath[all_State_File_Name_Count];
     GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
@@ -556,7 +557,7 @@ ClearInputMemory(game::Input* input) {
 }
 
 INTERNAL void
-HandleRecordButton(AllState* allState, game::Input* input, u32 selectedIndex) {
+HandleRecordButton(AllState* allState, game::Input* input, i32 selectedIndex) {
     ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
     ClearInputMemory(input);
 
@@ -581,12 +582,12 @@ HandleRecordButton(AllState* allState, game::Input* input, u32 selectedIndex) {
 }
 
 INTERNAL void
-HandleSwitchReplayBuffer(AllState* allState, game::Input* input, u32 selectedIndex,
-                         u32 shiftPressed) {
+HandleSwitchReplayBuffer(AllState* allState, game::Input* input, i32 selectedIndex,
+                         i32 shiftPressed) {
     ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
     ClearInputMemory(input);
 
-    if (allState->recordingIndex == static_cast<i32>(selectedIndex)) {
+    if (allState->recordingIndex == selectedIndex) {
         OutputDebugStringA("Selected same index when recording -> playback\n");
         EndRecordInput(allState);
         BeginInputPlayback(allState, selectedIndex);
@@ -635,7 +636,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
         // message.lParam contains additional information about keystrokes
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
-        const u32 vkCode{ static_cast<u32>(message.wParam) };
+        const WPARAM vkCode{ message.wParam };
         const bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
         const bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
 
@@ -772,7 +773,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
             } break;
             default: {
                 char buf[32];
-                sprintf_s(buf, "vkCode: %u NOT HANDLED\n", vkCode);
+                sprintf_s(buf, "vkCode: %llu NOT HANDLED\n", vkCode);
                 OutputDebugStringA(buf);
             } break;
             }
@@ -894,9 +895,9 @@ WinMain(
     // NOTE: This will not be used if we recap episode 20 audio fixes
     // 3 seems to be enough for monitorHz of 60 (gameUpdateHz 30), 5 for 144
     // NOTE: audio is bugged when using the record and playback
-    constexpr u32 framesOfAudioLatency{ 5 };
+    constexpr i32 framesOfAudioLatency{ 5 };
 
-    constexpr u32 desiredSchedulerMS{ 1 };
+    constexpr i32 desiredSchedulerMS{ 1 };
     const bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
     if (!RegisterClassA(&windowClass)) {
@@ -921,10 +922,10 @@ WinMain(
     // NOTE: in the future make the game function with arbitrary frame rate?
     // Ideally yes, but in practice would need a lot of work
     const HDC deviceContext{ GetDC(windowHandle) }; // clang-tidy NOLINT
-    u32 monitorHz{ 60 };
+    i32 monitorHz{ 60 };
     const i32 win32MonitorHz{ GetDeviceCaps(deviceContext, VREFRESH) };
     if (win32MonitorHz > 1) {
-        monitorHz = static_cast<u32>(win32MonitorHz);
+        monitorHz = win32MonitorHz;
         sprintf_s(buf, "Detected valid monitorHz: %u\n", monitorHz);
         //monitorHz = 60; // To test delta time
     } else {
@@ -944,7 +945,7 @@ WinMain(
     soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
     // NOTE: gameUpdateHz can be a float here... will be fixed later!
     soundOutput.latencySampleCount =
-        framesOfAudioLatency * soundOutput.samplesPerSecond / static_cast<u32>(gameUpdateHz);
+        framesOfAudioLatency * soundOutput.samplesPerSecond / static_cast<i32>(gameUpdateHz);
 
     win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
     win32::ClearSoundBuffer(&soundOutput);
@@ -958,7 +959,7 @@ WinMain(
     // Allocate at the same address if developer build
     LPVOID baseAddress{ reinterpret_cast<LPVOID>(TERABYTES(2)) };
 #else
-    LPVOID baseAddress{ 0 };
+    LPVOID baseAddress{};
 #endif
 
     game::GameMemory gameMemory{};
@@ -995,7 +996,7 @@ WinMain(
     allState.memorySize = totalSize;
 
     // Saving game memory in memory, piggy time!
-    for (u32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
+    for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
         win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
         // Using memory mapping
@@ -1050,7 +1051,7 @@ WinMain(
             game = win32::LoadGameCode(srcDllPath, tempDllPath);
         }
 
-        for (u32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
+        for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
             gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
         }
 
@@ -1065,7 +1066,7 @@ WinMain(
         gameInput.mouseY = mousePos.y;
         gameInput.mouseZ = 0;
 
-        for (u32 i{}; i < ARRAY_COUNT(gameInput.mouseButtons.buttons); ++i) {
+        for (i32 i{}; i < ARRAY_COUNT(gameInput.mouseButtons.buttons); ++i) {
             gameInput.mouseButtons.buttons[i].halfTransitionCount = 0;
         }
 

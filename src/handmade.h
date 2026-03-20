@@ -81,7 +81,7 @@ typedef double f64;
 
 // A thread context passed to game code and is used when calling back to platform-specific code
 struct ThreadContext {
-    u32 placeHolder;
+    i32 placeHolder;
 };
 
 #if HANDMADE_INTERNAL
@@ -90,7 +90,7 @@ namespace platform_export {
 
 struct DEBUGFileReadResult {
     void* content;
-    u32 contentSize;
+    i32 contentSize;
 };
 
 // clang-format off
@@ -139,11 +139,11 @@ CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char*
         total = destSize - 1;
     }
 
-    for (u32 i{}; i < srcASize && i < total; ++i) {
+    for (i32 i{}; i < srcASize && i < total; ++i) {
         *dest++ = *srcA++;
     }
 
-    for (u32 i{}; i < srcBSize && i < total; ++i) {
+    for (i32 i{}; i < srcBSize && i < total; ++i) {
         *dest++ = *srcB++;
     }
 
@@ -151,11 +151,11 @@ CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char*
 }
 
 NODISCARD
-INTERNAL u32
+INTERNAL i32
 StrLength(const char* str) {
     ASSERT(str);
 
-    u32 len{};
+    i32 len{};
     while (*str++) {
         len++;
     }
@@ -168,7 +168,7 @@ StrLength(const char* str) {
 namespace game {
 
 // TODO: experiment with more than 1
-GLOBAL constexpr u32 player_Count{ 1 };
+GLOBAL constexpr i32 player_Count{ 1 };
 
 // All the memory the game needs
 struct GameMemory {
@@ -190,14 +190,14 @@ struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
-    u32 bytesPerPixel;
-    u32 pitch;
+    i32 bytesPerPixel;
+    i32 pitch;
 };
 
 struct SoundOutputBuffer {
     i16* samples;
-    u32 samplesPerSecond;
-    u32 sampleCount;
+    i32 samplesPerSecond;
+    i32 sampleCount;
 };
 
 // Keyboard button states
@@ -205,11 +205,11 @@ struct Button {
     bool32 endedDown; // If the button ended down during the frame
     // The amount of times the state changed during the frame, with this we can deduce
     // if the button was just pressed, pressed continuously or just released
-    u32 halfTransitionCount;
+    i32 halfTransitionCount;
 };
 
-GLOBAL constexpr u32 button_Count{ 7 };
-GLOBAL constexpr u32 mouse_Button_Count{ 5 };
+GLOBAL constexpr i32 button_Count{ 7 };
+GLOBAL constexpr i32 mouse_Button_Count{ 5 };
 
 struct InputButtons {
     // A union allows us to do:
@@ -264,15 +264,15 @@ static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
 
 struct CanonicalWorldPosition {
 #if 1
-    u32 tilemapX;
-    u32 tilemapY;
+    i32 tilemapX;
+    i32 tilemapY;
 
     // Tile indexes in a given tilemap
-    u32 tileX;
-    u32 tileY;
+    i32 tileX;
+    i32 tileY;
 #else
-    u32 tileX;
-    u32 tileY;
+    i32 tileX;
+    i32 tileY;
 #endif
     // Tile-relative x and y
     f32 tileRelativePosX;
@@ -285,13 +285,13 @@ struct Tilemap {
 
 struct World {
     Tilemap* tilemaps;
-    u32 tilemapCountX;
-    u32 tilemapCountY;
-    u32 tilemapRows;
-    u32 tilemapColumns;
+    i32 tilemapCountX;
+    i32 tilemapCountY;
+    i32 tilemapRows;
+    i32 tilemapColumns;
 
     f32 tileSideInMeters;
-    u32 tileSideInPixels;
+    i32 tileSideInPixels;
     f32 metersToPixels;
 
     f32 upperLeftX;

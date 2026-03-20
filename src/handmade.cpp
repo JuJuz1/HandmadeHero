@@ -7,6 +7,7 @@ GLOBAL ThreadContext* gThreadContext;
 GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
+// This break hot reloading though... as we store the GameMemory pointer but don't update it
 #define DEBUG_PLATFORM_PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
 
 namespace input {
@@ -36,14 +37,14 @@ ActionReleased(const Button* button) {
 
 // Write the sound data to buff
 INTERNAL void
-OutputSound(GameState* gameState, const SoundOutputBuffer* buff, u32 toneHz) {
+OutputSound(GameState* gameState, const SoundOutputBuffer* buff, i32 toneHz) {
     constexpr i32 toneVolume{ 3000 };
-    const u32 wavePeriod{ buff->samplesPerSecond / toneHz };
+    const i32 wavePeriod{ buff->samplesPerSecond / toneHz };
 
     // NOTE: invalid semantics as buff is const but we copy the pointer...
     i16* sampleOut{ buff->samples };
 
-    for (u32 i{ 0 }; i < buff->sampleCount; ++i) {
+    for (i32 i{}; i < buff->sampleCount; ++i) {
         // Sine wave
 #if 1
         const i16 sampleValue{};
@@ -85,8 +86,8 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
     }
 
     // AA RR GG BB
-    const u32 color{ (RoundF32ToU32(r * 255.0f) << 16) | (RoundF32ToU32(g * 255.0f) << 8) |
-                     (RoundF32ToU32(b * 255.0f) << 0) };
+    const i32 color{ (RoundF32ToI32(r * 255.0f) << 16) | (RoundF32ToI32(g * 255.0f) << 8) |
+                     (RoundF32ToI32(b * 255.0f) << 0) };
 
     u8* memory{ static_cast<u8*>(screenBuff->memory) };
     u8* row{ memory + (roundedMinX * screenBuff->bytesPerPixel) +
@@ -120,7 +121,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
 NODISCARD
 INTERNAL Tilemap*
-GetTileMap(const World* world, u32 tilemapX, u32 tilemapY) {
+GetTileMap(const World* world, i32 tilemapX, i32 tilemapY) {
     Tilemap* tilemap{};
 
     if (tilemapX >= 0 && tilemapX < world->tilemapCountX && tilemapY >= 0 &&
@@ -133,18 +134,17 @@ GetTileMap(const World* world, u32 tilemapX, u32 tilemapY) {
 
 NODISCARD
 INTERNAL u32
-GetTilemapValue(const World* world, const Tilemap* tilemap, u32 tileX, u32 tileY) {
+GetTilemapValue(const World* world, const Tilemap* tilemap, i32 tileX, i32 tileY) {
     ASSERT(tilemap);
     ASSERT(tileX >= 0 && tileX < world->tilemapColumns && tileY >= 0 && tileY < world->tilemapRows);
-
     const u32 tilemapValue{ tilemap->tiles[(world->tilemapColumns * tileY) + tileX] };
     return tilemapValue;
 }
 
 NODISCARD
 INTERNAL bool32
-IsTilemapPointEmpty(const World* world, const Tilemap* tilemap, u32 testTilemapX,
-                    u32 testTilemapY) {
+IsTilemapPointEmpty(const World* world, const Tilemap* tilemap, i32 testTilemapX,
+                    i32 testTilemapY) {
     bool32 isEmpty{};
 
     if (tilemap) {
@@ -159,12 +159,10 @@ IsTilemapPointEmpty(const World* world, const Tilemap* tilemap, u32 testTilemapX
 }
 
 INTERNAL inline void
-ReCanonicalizeCoordinate(const World* world, u32 tileCount, u32* tilemapIndex, u32* tileIndex,
+ReCanonicalizeCoordinate(const World* world, i32 tileCount, i32* tilemapIndex, i32* tileIndex,
                          f32* relPos) {
     const i32 offset{ FloorF32ToI32(*relPos / world->tileSideInMeters) };
-    const i32 newTileIndex = *tileIndex + offset;
-
-    //*tileIndex += offset;
+    *tileIndex += offset;
     *relPos -= offset * world->tileSideInMeters;
 
     // TODO: what to do if: *relPos == world->tilesideinpixels
@@ -173,16 +171,14 @@ ReCanonicalizeCoordinate(const World* world, u32 tileCount, u32* tilemapIndex, u
     // Relative positions must be within the tile size in pixels
     ASSERT(*relPos >= 0 && *relPos < world->tileSideInMeters);
 
-    if (newTileIndex < 0) {
-        *tileIndex = newTileIndex + tileCount;
+    if (*tileIndex < 0) {
+        *tileIndex = *tileIndex + tileCount;
         --*tilemapIndex;
         DEBUG_PLATFORM_PRINT("Tilemap detected negative!");
-    } else if (newTileIndex >= static_cast<i32>(tileCount)) {
-        *tileIndex = newTileIndex - tileCount;
+    } else if (*tileIndex >= tileCount) {
+        *tileIndex = *tileIndex - tileCount;
         ++*tilemapIndex;
         DEBUG_PLATFORM_PRINT("Tilemap detected positive!");
-    } else {
-        *tileIndex = newTileIndex;
     }
 }
 
@@ -226,8 +222,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitializeGameState(threadContext, gameState, memory);
     }
 
-    constexpr u32 tileMapRows{ 9 };
-    constexpr u32 tileMapColumns{ 17 };
+    constexpr i32 tileMapRows{ 9 };
+    constexpr i32 tileMapColumns{ 17 };
     u32 tiles00[tileMapRows][tileMapColumns]{ { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
                                               { 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
                                               { 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1 },
@@ -289,7 +285,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     world.tileSideInPixels = 60;
     world.tileSideInPixels = 60;
-    world.upperLeftX = -(world.tileSideInPixels / 2.0f); // Move half tileSideInPixels right
+    world.upperLeftX = -world.tileSideInPixels / 2.0f; // Move half tileSideInPixels right
     world.upperLeftY = 0;
 
     Tilemap* currentTilemap{ GetTileMap(&world, gameState->playerPos.tilemapX,
@@ -302,6 +298,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     f32 playerVelocityX{}, playerVelocityY{};
     constexpr f32 playerSpeed{ 3 }; // Meters per second
+    constexpr f32 playerSpeedModifier{ 4 };
     if (input::ActionPressed(&input0Keyboard->up)) {
         playerVelocityY -= playerSpeed;
     }
@@ -315,8 +312,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityX += playerSpeed;
     }
     if (input::ActionPressed(&input0Keyboard->shift)) {
-        playerVelocityX *= 5;
-        playerVelocityY *= 5;
+        playerVelocityX *= playerSpeedModifier;
+        playerVelocityY *= playerSpeedModifier;
     }
 
     const f32 playerHeight{ world.tileSideInMeters };
@@ -353,10 +350,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
                   static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
 
-    // sizeof(tilemap) / sizeof(tilemap[0])
-    for (u32 row{}; row < world.tilemapRows; ++row) {
-        for (u32 column{}; column < world.tilemapColumns; ++column) {
-            const u32 tileID{ currentTilemap->tiles[row * world.tilemapColumns + column] };
+    for (i32 row{}; row < world.tilemapRows; ++row) {
+        for (i32 column{}; column < world.tilemapColumns; ++column) {
+            const u32 tileID{ GetTilemapValue(&world, currentTilemap, column, row) };
             f32 gray{ tileID ? 1.0f : 0.5f };
 
             if (row == gameState->playerPos.tileY && column == gameState->playerPos.tileX) {

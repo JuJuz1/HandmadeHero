@@ -11,17 +11,17 @@ struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
-    u32 bytesPerPixel;
+    i32 bytesPerPixel;
     i32 pitch;
 };
 
 // "Secondary" buffer values
 struct SoundOutput {
-    u32 samplesPerSecond;
-    u32 bytesPerSample;
-    u32 buffSize;
-    u32 latencySampleCount;
-    u32 runningSampleIndex;
+    i32 samplesPerSecond;
+    i32 bytesPerSample;
+    i32 buffSize;
+    i32 latencySampleCount;
+    i32 runningSampleIndex;
 };
 
 struct DSoundParams {
@@ -47,7 +47,7 @@ struct GameCode {
 };
 
 // NOTE: don't use MAX_PATH in user code as it can be dangerous
-GLOBAL u32 constexpr all_State_File_Name_Count{ MAX_PATH };
+GLOBAL i32 constexpr all_State_File_Name_Count{ MAX_PATH };
 
 // Buffers to store the game memory in memory instead of disk
 struct ReplayBuffer {
@@ -59,14 +59,14 @@ struct ReplayBuffer {
     bool32 isRecordedAtLeastOnce;
 };
 
-GLOBAL u32 constexpr replay_Buffer_Count{ 4 };
+GLOBAL i32 constexpr replay_Buffer_Count{ 4 };
 GLOBAL i32 constexpr replay_Buffer_Not_Recording{ -1 };
 GLOBAL i32 constexpr replay_Buffer_Not_Playing{ -1 };
 
 // NOTE: not really all state (yet?)
 struct AllState {
     //game::Input* input;
-    //u32 inputCount;
+    //i32 inputCount;
 
     void* gameMemory;
     u64 memorySize;
@@ -75,7 +75,7 @@ struct AllState {
     char exePath[all_State_File_Name_Count];
     char* exeFilename;
 
-    u32 selectedIndex; // Modifiable index to switch selected replay buffer
+    i32 selectedIndex; // Modifiable index to switch selected replay buffer
     i32 recordingIndex;
     i32 playingIndex;
     HANDLE recordingHandle;

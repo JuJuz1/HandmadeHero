@@ -21,7 +21,8 @@ INTERNAL inline u32
 TruncateU64toU32(u64 value) {
     // TODO: U32_MAX and such...
     ASSERT(value <= 0xFFFFFFFFULL);
-    return static_cast<u32>(value);
+    const u32 result{ static_cast<u32>(value) };
+    return result;
 }
 
 NODISCARD
@@ -100,4 +101,4 @@ ATan2(f32 y, f32 x) {
     return result;
 }
 
-#endif
+#endif // HANDMADE_INTRINSICS_H
