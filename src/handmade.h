@@ -268,8 +268,8 @@ struct CanonicalWorldPosition {
     u32 tilemapY;
 
     // Tile indexes in a given tilemap
-    i32 tileX;
-    i32 tileY;
+    u32 tileX;
+    u32 tileY;
 #else
     u32 tileX;
     u32 tileY;
@@ -291,7 +291,8 @@ struct World {
     u32 tilemapColumns;
 
     f32 tileSideInMeters;
-    i32 tileSideInPixels;
+    u32 tileSideInPixels;
+    f32 metersToPixels;
 
     f32 upperLeftX;
     f32 upperLeftY;
