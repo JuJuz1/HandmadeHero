@@ -1051,6 +1051,8 @@ WinMain(
             game = win32::LoadGameCode(srcDllPath, tempDllPath);
         }
 
+        // Keyboard input
+
         for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
             gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
         }
@@ -1105,6 +1107,7 @@ WinMain(
             win32::PlaybackInput(&allState, &gameInput);
         }
 
+        // TODO: Don't update this every frame? will be revised later
         ThreadContext threadContext{};
 
         // NOTE: can be moved to AllState to not assign every frame, although the optimizer probably

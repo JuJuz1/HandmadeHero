@@ -3,11 +3,11 @@
 
 namespace game {
 
+// Any global variables need to be initialized after hot reload (so probably every frame)
 GLOBAL ThreadContext* gThreadContext;
 GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
-// This break hot reloading though... as we store the GameMemory pointer but don't update it
 #define DEBUG_PLATFORM_PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
 
 namespace input {
@@ -107,9 +107,6 @@ INTERNAL void
 InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
     // TODO: maybe make platform set this
     memory->isInitialized = true;
-
-    gThreadContext = threadContext;
-    gMemory = memory;
 
     //gameState->playerPos.tilemapX = 0;
     //gameState->playerPos.tilemapY = 0;
@@ -221,6 +218,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     if (!memory->isInitialized) {
         InitializeGameState(threadContext, gameState, memory);
     }
+
+    gThreadContext = threadContext;
+    gMemory = memory;
 
     constexpr i32 tileMapRows{ 9 };
     constexpr i32 tileMapColumns{ 17 };
