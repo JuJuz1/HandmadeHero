@@ -101,4 +101,11 @@ ATan2(f32 y, f32 x) {
     return result;
 }
 
+NODISCARD
+INTERNAL inline u32
+AbsI32ToU32(i32 value) {
+    const u32 result{ static_cast<u32>(abs(value)) };
+    return result;
+}
+
 #endif // HANDMADE_INTRINSICS_H

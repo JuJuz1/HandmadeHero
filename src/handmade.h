@@ -262,8 +262,18 @@ static_assert(sizeof(InputButtons) == sizeof(Button) * button_Count,
 static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
               "MouseButtons count doesn't match the amount of buttons declared!");
 
-struct CanonicalWorldPosition {
-#if 1
+// NOTE: Engine internal
+struct TileChunkPosition {
+    // We use the upper 24 bits for the chunk index and the lower 8 for tile relative x and y
+    u32 tileChunkX;
+    u32 tileChunkY;
+
+    u32 chunkRelativeX;
+    u32 chunkRelativeY;
+};
+
+struct WorldPosition {
+#if 0
     i32 tilemapX;
     i32 tilemapY;
 
@@ -271,36 +281,40 @@ struct CanonicalWorldPosition {
     i32 tileX;
     i32 tileY;
 #else
-    i32 tileX;
-    i32 tileY;
+    // New way of storing the information, we don't need tilemapX and Y
+    // This is the "real" tileX and tileY in the whole world
+    u32 absTileX;
+    u32 absTileY;
 #endif
-    // Tile-relative x and y
+    // Tile-relative x and y, should these be from the center of the tile?
     f32 tileRelativePosX;
     f32 tileRelativePosY;
 };
 
-struct Tilemap {
+struct TileChunk {
     u32* tiles;
 };
 
 struct World {
-    Tilemap* tilemaps;
-    i32 tilemapCountX;
-    i32 tilemapCountY;
-    i32 tilemapRows;
-    i32 tilemapColumns;
+    TileChunk* tileChunks;
+    i32 tileChunkCountX;
+    i32 tileChunkCountY;
+
+    i32 chunkDim;
+    u32 chunkShift;
+    u32 chunkMask;
 
     f32 tileSideInMeters;
     i32 tileSideInPixels;
     f32 metersToPixels;
 
-    f32 upperLeftX;
-    f32 upperLeftY;
+    f32 lowerLeftX;
+    f32 lowerLeftY;
 };
 
 // The game state
 struct GameState {
-    CanonicalWorldPosition playerPos;
+    WorldPosition playerPos;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series

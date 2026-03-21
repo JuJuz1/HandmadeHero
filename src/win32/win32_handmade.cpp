@@ -788,7 +788,7 @@ ProcessPendingMessages(game::Input* input, AllState* allState) {
 }
 
 NODISCARD
-INTERNAL inline LARGE_INTEGER
+INTERNAL LARGE_INTEGER
 GetWallClock() {
     LARGE_INTEGER res;
     QueryPerformanceCounter(&res);
@@ -796,7 +796,7 @@ GetWallClock() {
 }
 
 NODISCARD
-INTERNAL inline f64
+INTERNAL f64
 GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     const f64 result{ static_cast<f64>(end.QuadPart - start.QuadPart) /
                       static_cast<f64>(gPerfCounterFreq) };
@@ -804,7 +804,7 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
 }
 
 NODISCARD
-INTERNAL inline FILETIME
+INTERNAL FILETIME
 GetLastWriteTime(const char* filename) {
     FILETIME lastWriteTime{};
 
