@@ -300,9 +300,9 @@ struct World {
     i32 tileChunkCountX;
     i32 tileChunkCountY;
 
-    i32 chunkDim;
     u32 chunkShift;
     u32 chunkMask;
+    u32 chunkDim;
 
     f32 tileSideInMeters;
     i32 tileSideInPixels;
