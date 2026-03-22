@@ -28,8 +28,8 @@ NODISCARD
 INTERNAL u32
 GetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tileX, u32 tileY) {
     ASSERT(tileChunk);
-    ASSERT(tileX < tileMap->chunkDim && tileY < tileMap->chunkDim);
-    const u32 tileValue{ tileChunk->tiles[(tileMap->chunkDim * tileY) + tileX] };
+    ASSERT(tileX < tileMap->chunkSize && tileY < tileMap->chunkSize);
+    const u32 tileValue{ tileChunk->tiles[(tileMap->chunkSize * tileY) + tileX] };
     return tileValue;
 }
 
@@ -50,6 +50,27 @@ GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY) {
     }
 
     return tileChunkValue;
+}
+
+INTERNAL void
+SetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tileX, u32 tileY,
+                    u32 value) {
+    ASSERT(tileChunk);
+    ASSERT(tileX < tileMap->chunkSize && tileY < tileMap->chunkSize);
+    tileChunk->tiles[(tileMap->chunkSize * tileY) + tileX] = value;
+}
+
+INTERNAL void
+SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTileY, u32 value) {
+    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY) };
+    const TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY) };
+
+    // TODO: create tileChunk if it does exist
+    ASSERT(tileChunk);
+    if (tileChunk) {
+        SetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeX, chunkPos.chunkRelativeY,
+                            value);
+    }
 }
 
 NODISCARD

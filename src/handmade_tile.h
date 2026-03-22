@@ -3,6 +3,11 @@
 
 /*
     A tilemap contains chunks. A chunk contains tiles.
+
+    Tiles:
+    - 0: out of bounds value
+    - 1: blocked tile value
+    - else: empty
 */
 
 GLOBAL constexpr u32 blocked_Tile_Value{ 1 };
@@ -40,7 +45,7 @@ struct TileMap {
 
     u32 chunkShift;
     u32 chunkMask;
-    u32 chunkDim;
+    u32 chunkSize;
 
     f32 tileSideInMeters;
     i32 tileSideInPixels;

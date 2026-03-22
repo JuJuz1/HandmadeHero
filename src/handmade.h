@@ -77,6 +77,8 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
+typedef size_t memory_index;
+
 /// Services that the platform layer provides to the game ///
 
 // A thread context passed to game code and is used when calling back to platform-specific code
@@ -265,8 +267,21 @@ static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
 #include "handmade_intrinsics.h"
 #include "handmade_tile.h"
 
+struct MemoryArena {
+    u8* base;
+    memory_index size;
+    memory_index used;
+};
+
+struct World {
+    TileMap* tileMap;
+};
+
 // The game state
 struct GameState {
+    MemoryArena worldArena;
+    World* world;
+
     TileMapPosition playerPos;
 };
 
