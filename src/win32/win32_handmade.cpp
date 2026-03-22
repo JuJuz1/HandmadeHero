@@ -283,7 +283,7 @@ ClearSoundBuffer(SoundOutput* soundOutput) {
 
 INTERNAL void
 FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
-                const game::SoundOutputBuffer* sourceBuff) {
+                const SoundOutputBuffer* sourceBuff) {
     LPVOID region1;
     DWORD region1Size;
     LPVOID region2;
@@ -520,7 +520,7 @@ EndInputPlayback(AllState* allState) {
 // These functions are the ones called in the loop
 
 INTERNAL void
-RecordInput(AllState* allState, const game::Input* input) {
+RecordInput(AllState* allState, const Input* input) {
     DWORD bytesWritten;
     if (WriteFile(allState->recordingHandle, input, sizeof(*input), &bytesWritten, 0) &&
         bytesWritten == sizeof(*input)) {
@@ -531,7 +531,7 @@ RecordInput(AllState* allState, const game::Input* input) {
 }
 
 INTERNAL void
-PlaybackInput(AllState* allState, game::Input* input) {
+PlaybackInput(AllState* allState, Input* input) {
     DWORD bytesRead;
     if ((ReadFile(allState->playingHandle, input, sizeof(*input), &bytesRead, 0)) &&
         bytesRead == sizeof(*input)) {
@@ -552,12 +552,12 @@ PlaybackInput(AllState* allState, game::Input* input) {
 }
 
 INTERNAL void
-ClearInputMemory(game::Input* input) {
+ClearInputMemory(Input* input) {
     ZeroMemory(input, sizeof(*input));
 }
 
 INTERNAL void
-HandleRecordButton(AllState* allState, game::Input* input, i32 selectedIndex) {
+HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
     ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
     ClearInputMemory(input);
 
@@ -582,8 +582,7 @@ HandleRecordButton(AllState* allState, game::Input* input, i32 selectedIndex) {
 }
 
 INTERNAL void
-HandleSwitchReplayBuffer(AllState* allState, game::Input* input, i32 selectedIndex,
-                         i32 shiftPressed) {
+HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, i32 shiftPressed) {
     ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
     ClearInputMemory(input);
 
@@ -621,7 +620,7 @@ HandleSwitchReplayBuffer(AllState* allState, game::Input* input, i32 selectedInd
 
 // The fired message should never have the same state (wasDown == isDown)
 INTERNAL void
-ProcessInputMessage(game::Button* button, bool32 isDown) {
+ProcessInputMessage(Button* button, bool32 isDown) {
     // NOTE: maybe just use if instead of ASSERT due to the way we do mouse input polling atm
     if (button->endedDown != isDown) {
         button->endedDown = isDown;
@@ -630,7 +629,7 @@ ProcessInputMessage(game::Button* button, bool32 isDown) {
 }
 
 INTERNAL void
-ProcessPendingMessages(game::Input* input, AllState* allState) {
+ProcessPendingMessages(Input* input, AllState* allState) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
         // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
@@ -826,7 +825,7 @@ LoadGameCode(const char* srcDll, const char* tempDll) {
     gameCode.dll = LoadLibraryA(tempDll);
     gameCode.lastWritetime = GetLastWriteTime(srcDll);
 
-    using namespace game::dll;
+    //using namespace dll;
     if (gameCode.dll) {
         gameCode.updateAndRender =
             reinterpret_cast<update_and_render*>(GetProcAddress(gameCode.dll, "UpdateAndRender"));
@@ -962,7 +961,7 @@ WinMain(
     LPVOID baseAddress{};
 #endif
 
-    game::GameMemory gameMemory{};
+    GameMemory gameMemory{};
     gameMemory.permanentStorageSize = MEGABYTES(64);
     gameMemory.transientStorageSize =
         MEGABYTES(128); // NOTE: MEGABYTES(128); changed from GIGABYTES(1) to speed up recording
@@ -1039,7 +1038,7 @@ WinMain(
 
     // The game represented as a DLL which allows hot reloading and more fun stuff!
     win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
-    game::Input gameInput{};
+    Input gameInput{};
 
     // Main loop
     gIsGameRunning = true;
@@ -1094,7 +1093,7 @@ WinMain(
 
         // Call game code
 
-        game::OffScreenBuffer screenBuff{};
+        OffScreenBuffer screenBuff{};
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
         screenBuff.height = gScreenBuff.height;
@@ -1118,7 +1117,7 @@ WinMain(
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
         }
 
-        game::SoundOutputBuffer soundBuff{};
+        SoundOutputBuffer soundBuff{};
         soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
         soundBuff.sampleCount = dSoundParams.bytesToWrite / soundOutput.bytesPerSample;
         soundBuff.samples = soundBuffSamples;

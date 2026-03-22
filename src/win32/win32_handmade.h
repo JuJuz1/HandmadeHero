@@ -40,8 +40,8 @@ struct GameCode {
     FILETIME lastWritetime;
 
     // IMPORTANT: these can be 0 as we removed the stubs so we need to check before calling
-    game::dll::update_and_render* updateAndRender;
-    game::dll::get_sound_samples* getSoundSamples;
+    update_and_render* updateAndRender;
+    get_sound_samples* getSoundSamples;
 
     bool32 isValid;
 };

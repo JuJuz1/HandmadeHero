@@ -165,7 +165,7 @@ StrLength(const char* str) {
 
 /// Game specific code ///
 
-namespace game {
+//namespace game {
 
 // TODO: experiment with more than 1
 GLOBAL constexpr i32 player_Count{ 1 };
@@ -262,67 +262,19 @@ static_assert(sizeof(InputButtons) == sizeof(Button) * button_Count,
 static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
               "MouseButtons count doesn't match the amount of buttons declared!");
 
-// NOTE: Engine internal
-struct TileChunkPosition {
-    // We use the upper 24 bits for the chunk index and the lower 8 for the x and y position
-    // relative to the chunk's tile
-    u32 chunkX;
-    u32 chunkY;
-
-    u32 chunkRelativeX;
-    u32 chunkRelativeY;
-};
-
-struct WorldPosition {
-#if 0
-    i32 tilemapX;
-    i32 tilemapY;
-
-    // Tile indexes in a given tilemap
-    i32 tileX;
-    i32 tileY;
-#else
-    // New way of storing the information, we don't need tilemapX and Y
-    // This is the "real" tileX and tileY in the whole world
-    u32 absTileX;
-    u32 absTileY;
-#endif
-    // Tile-relative x and y, should these be from the center of the tile?
-    f32 tileRelativePosX;
-    f32 tileRelativePosY;
-};
-
-struct TileChunk {
-    u32* tiles;
-};
-
-struct World {
-    TileChunk* tileChunks;
-    u32 tileChunkCountX;
-    u32 tileChunkCountY;
-
-    u32 chunkShift;
-    u32 chunkMask;
-    u32 chunkDim;
-
-    f32 tileSideInMeters;
-    i32 tileSideInPixels;
-    f32 metersToPixels;
-
-    f32 lowerLeftX;
-    f32 lowerLeftY;
-};
+#include "handmade_intrinsics.h"
+#include "handmade_tile.h"
 
 // The game state
 struct GameState {
-    WorldPosition playerPos;
+    TileMapPosition playerPos;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
 
 /// Services that the game provides to the platform layer ///
 
-namespace dll {
+//namespace dll {
 
 // clang-format off
 #define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, const SoundOutputBuffer* soundBuff)
@@ -332,8 +284,8 @@ typedef GET_SOUND_SAMPLES(get_sound_samples);
 typedef UPDATE_AND_RENDER(update_and_render);
 // clang-format on
 
-} //namespace dll
+//} //namespace dll
 
-} //namespace game
+//} //namespace game
 
 #endif // HANDMADE_H
