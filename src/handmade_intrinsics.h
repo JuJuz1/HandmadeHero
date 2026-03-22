@@ -66,17 +66,17 @@ FloorF32ToU32(f32 value) {
 }
 
 NODISCARD
-INTERNAL inline u32
-RoundF32ToU32(f32 value) {
-    ASSERT(value >= 0);
-    const u32 result{ static_cast<u32>(value + 0.5f) };
+INTERNAL inline i32
+RoundF32ToI32(f32 value) {
+    const i32 result{ static_cast<i32>(roundf(value)) };
     return result;
 }
 
 NODISCARD
-INTERNAL inline i32
-RoundF32ToI32(f32 value) {
-    const i32 result{ static_cast<i32>(value + 0.5f) };
+INTERNAL inline u32
+RoundF32ToU32(f32 value) {
+    ASSERT(value >= 0);
+    const u32 result{ static_cast<u32>(roundf(value)) };
     return result;
 }
 

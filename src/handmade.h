@@ -131,10 +131,10 @@ struct PlatformExports {
 GLOBAL constexpr f32 PI32f{ 3.14159265359f };
 
 INTERNAL void
-CatStrings(const char* srcA, u64 srcASize, const char* srcB, u64 srcBSize, char* dest,
-           u64 destSize) {
+CatStrings(const char* srcA, i64 srcASize, const char* srcB, i64 srcBSize, char* dest,
+           i64 destSize) {
     // Space for null terminator
-    u64 total{ srcASize + srcBSize };
+    i64 total{ srcASize + srcBSize };
     if (total >= destSize) {
         total = destSize - 1;
     }
@@ -264,9 +264,10 @@ static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
 
 // NOTE: Engine internal
 struct TileChunkPosition {
-    // We use the upper 24 bits for the chunk index and the lower 8 for tile relative x and y
-    u32 tileChunkX;
-    u32 tileChunkY;
+    // We use the upper 24 bits for the chunk index and the lower 8 for the x and y position
+    // relative to the chunk's tile
+    u32 chunkX;
+    u32 chunkY;
 
     u32 chunkRelativeX;
     u32 chunkRelativeY;
@@ -297,8 +298,8 @@ struct TileChunk {
 
 struct World {
     TileChunk* tileChunks;
-    i32 tileChunkCountX;
-    i32 tileChunkCountY;
+    u32 tileChunkCountX;
+    u32 tileChunkCountY;
 
     u32 chunkShift;
     u32 chunkMask;
