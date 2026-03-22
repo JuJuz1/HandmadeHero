@@ -336,6 +336,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 centerX{ screenBuff->width * 0.5f };
     const f32 centerY{ screenBuff->height * 0.5f - (playerHeight * 0.5f) };
 
+    // Drawing tiles
     for (i32 relRow{ -10 }; relRow < 10; ++relRow) {
         for (i32 relColumn{ -20 }; relColumn < 20; ++relColumn) {
             // Possibly wraps to U32 max
@@ -355,8 +356,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 gray = 0.25f;
             }
 
-            const f32 minX{ centerX + (static_cast<f32>(relColumn) * world.tileSideInPixels) };
-            const f32 minY{ centerY - (static_cast<f32>(relRow) * world.tileSideInPixels) };
+            const f32 minX{ centerX -
+                            (world.metersToPixels * gameState->playerPos.tileRelativePosX) +
+                            (static_cast<f32>(relColumn) * world.tileSideInPixels) };
+            const f32 minY{ centerY +
+                            (world.metersToPixels * gameState->playerPos.tileRelativePosY) -
+                            (static_cast<f32>(relRow) * world.tileSideInPixels) };
             const f32 maxX{ minX + world.tileSideInPixels };
             const f32 maxY{ minY - world.tileSideInPixels };
 
@@ -369,12 +374,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
 
-    const f32 playerPosLeft{ centerX +
-                             (world.metersToPixels * gameState->playerPos.tileRelativePosX) -
-                             (playerWidth * 0.5f * world.metersToPixels) };
-    const f32 playerPosTop{ centerY -
-                            (world.metersToPixels * gameState->playerPos.tileRelativePosY) -
-                            (playerHeight * world.metersToPixels) };
+    const f32 playerPosLeft{ centerX - (playerWidth * 0.5f * world.metersToPixels) };
+    const f32 playerPosTop{ centerY - (playerHeight * world.metersToPixels) };
 
     DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
                   playerPosLeft + (playerWidth * world.metersToPixels),
