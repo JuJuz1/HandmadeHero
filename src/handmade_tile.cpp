@@ -40,7 +40,7 @@ GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY) {
     const TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY) };
 
     u32 tileChunkValue{};
-    if (tileChunk) {
+    if (tileChunk && tileChunk->tiles) {
         tileChunkValue = GetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeX,
                                              chunkPos.chunkRelativeY);
     } else {
@@ -63,10 +63,20 @@ SetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tile
 INTERNAL void
 SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTileY, u32 value) {
     const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY) };
-    const TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY) };
+    TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY) };
 
-    // TODO: create tileChunk if it does exist
     ASSERT(tileChunk);
+
+    // Create tileChunk tiles if they don't exist
+    if (!tileChunk->tiles) {
+        const u32 tileCount{ tileMap->chunkSize * tileMap->chunkSize };
+        tileChunk->tiles = PushArray(worldArena, tileCount, u32);
+
+        for (u32 tileIndex{}; tileIndex < tileCount; ++tileIndex) {
+            tileChunk->tiles[tileIndex] = 3;
+        }
+    }
+
     if (tileChunk) {
         SetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeX, chunkPos.chunkRelativeY,
                             value);
@@ -85,14 +95,14 @@ NODISCARD
 INTERNAL void
 ReCanonicalizeCoordinate(const TileMap* tileMap, u32* tileIndex, f32* relPos) {
     const i32 offset{ RoundF32ToI32(*relPos / tileMap->tileSideInMeters) };
-    // NOTE: tileMap is assumed to be toroidal, if you step over the end you start at the beginning
+    // NOTE: tileMap is assumed to be toroidal, if you step over the end you start at the
+    // beginning
     *tileIndex += offset;
     *relPos -= static_cast<f32>(offset) * tileMap->tileSideInMeters;
 
     // TODO: what to do if: *relPos == tileMap->tilesideinpixels
-    // This can happen because we do the divide and floor and then multiple, the player might end up
-    // being on the same tile
-    // Relative positions must be within the tile size in pixels
+    // This can happen because we do the divide and floor and then multiple, the player might
+    // end up being on the same tile Relative positions must be within the tile size in pixels
     // TODO: fix the floating point math to not allow the case above of ==
     ASSERT(*relPos * 0.5f >= -tileMap->tileSideInMeters &&
            *relPos * 0.5f <= tileMap->tileSideInMeters);
