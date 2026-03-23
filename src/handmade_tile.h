@@ -18,6 +18,7 @@ struct TileChunkPosition {
     // relative to the chunk's tile
     u32 chunkX;
     u32 chunkY;
+    u32 chunkZ;
 
     u32 chunkRelativeX;
     u32 chunkRelativeY;
@@ -28,6 +29,7 @@ struct TileMapPosition {
     // This is the "real" tileX and tileY in the whole tilemap
     u32 absTileX;
     u32 absTileY;
+    u32 absTileZ;
 
     // Tile-relative x and y, should these be from the center of the tile?
     f32 tileRelativePosX;
@@ -42,14 +44,13 @@ struct TileMap {
     TileChunk* tileChunks;
     u32 tileChunkCountX;
     u32 tileChunkCountY;
+    u32 tileChunkCountZ;
 
     u32 chunkShift;
     u32 chunkMask;
     u32 chunkSize;
 
     f32 tileSideInMeters;
-    i32 tileSideInPixels;
-    f32 metersToPixels;
 };
 
 #endif // HANDMADE_TILE_H

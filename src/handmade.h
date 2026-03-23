@@ -210,7 +210,7 @@ struct Button {
     i32 halfTransitionCount;
 };
 
-GLOBAL constexpr i32 button_Count{ 7 };
+GLOBAL constexpr i32 button_Count{ 8 };
 GLOBAL constexpr i32 mouse_Button_Count{ 5 };
 
 struct InputButtons {
@@ -230,6 +230,8 @@ struct InputButtons {
 
             Button Q;
             Button E;
+
+            Button Z;
         };
     };
 };

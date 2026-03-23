@@ -106,8 +106,8 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
 
 // https://www.random.org/integers/?mode=advanced
 GLOBAL u32 randomNumbers[4096]{
-    0x5a24ab0, 0x5dfc5d9, 0x410a95e, 0x366c0bd, 0x5035026, 0x2128c83, 0x1dd2cf2, 0x26c8bdb,
-    0x205872f, 0x47fefa6, 0x11a5f64, 0x46b5f5a, 0x541a2f4, 0x2f5478d, 0x2e22ff9, 0x4470665,
+    0x47fefa6, 0x5dfc5d9, 0x410a95e, 0x366c0bd, 0x5035026, 0x2128c83, 0x1dd2cf2, 0x26c8bdb,
+    0x5a24ab0, 0x205872f, 0x11a5f64, 0x46b5f5a, 0x541a2f4, 0x2f5478d, 0x2e22ff9, 0x4470665,
     0x556ef51, 0x2f62f96, 0x57816ea, 0x4742a4e, 0x0276521, 0x217c5ba, 0x58c50b3, 0x0c2d6c0,
     0x4af9a25, 0x2c3f5a1, 0x034e22b, 0x1a277e1, 0x283992d, 0x15a1e05, 0x02f55dc, 0x140475f,
     0x1fbfd74, 0x54c7a15, 0x394185e, 0x05ec731, 0x3ed235b, 0x5f512b9, 0x12f6da4, 0x35756fa,
@@ -622,8 +622,9 @@ GLOBAL u32 randomNumbers[4096]{
 
 INTERNAL void
 InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
-    // TODO:  maybe make platform set this
+    // TODO: maybe make platform set this
     memory->isInitialized = true;
+
     gameState->playerPos.absTileX = 3;
     gameState->playerPos.absTileY = 3;
     gameState->playerPos.tileRelativePosX = 1.2f;
@@ -640,19 +641,18 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     TileMap* tileMap{ world->tileMap };
     tileMap->tileChunkCountX = 128;
     tileMap->tileChunkCountY = 128;
+    tileMap->tileChunkCountZ = 2; // Limited to 2 atm
 
     // chunk size is chunkSize x chunkSize (really: chunkShift * chunkShift)
     tileMap->chunkShift = 4;
     tileMap->chunkMask = (1 << tileMap->chunkShift) - 1;
     tileMap->chunkSize = 1 << tileMap->chunkShift;
 
-    tileMap->tileChunks = PushArray(&gameState->worldArena,
-                                    tileMap->tileChunkCountX * tileMap->tileChunkCountY, TileChunk);
+    tileMap->tileChunks = PushArray(
+        &gameState->worldArena,
+        tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileMap->tileChunkCountZ, TileChunk);
 
     tileMap->tileSideInMeters = 1.4f;
-    tileMap->tileSideInPixels = 60;
-    tileMap->metersToPixels =
-        static_cast<f32>(tileMap->tileSideInPixels) / tileMap->tileSideInMeters;
 
     // How many screens widths of chunks to generate
     constexpr u32 tilesPerHeight{ 9 };
@@ -668,12 +668,31 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     bool32 doorTop{};
     bool32 doorBottom{};
 
+    bool32 doorUp{};
+    bool32 doorDown{};
+
+    u32 absTileZ{};
+
     // Generating tile values
     for (u32 screen{}; screen < screenCount; ++screen) {
-
         ASSERT(randomNumIndex < ARRAY_COUNT(randomNumbers));
-        const u32 randomChoice{ randomNumbers[randomNumIndex++] % 2 };
-        if (randomChoice == 0) {
+        u32 randomChoice;
+        // Lateral only
+        if (doorUp || doorDown) {
+            randomChoice = randomNumbers[randomNumIndex++] % 2;
+        } else {
+            randomChoice = randomNumbers[randomNumIndex++] % 3;
+        }
+
+        // randomChoice of 2 means the room is blocked and has a door going up
+        // Atm this logic means we can only have 2 layers (z of 0 or 1)
+        if (randomChoice == 2) {
+            if (absTileZ == 0) {
+                doorUp = true;
+            } else {
+                doorDown = true;
+            }
+        } else if (randomChoice == 1) {
             doorRight = true;
         } else {
             doorTop = true;
@@ -688,21 +707,28 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                 if (tileX == 0 && (!doorLeft || (tileY != (tilesPerHeight / 2)))) {
                     tileValue = blocked_Tile_Value;
                 }
-
                 if (tileX == (tilesPerWidth - 1) &&
                     (!doorRight || (tileY != (tilesPerHeight / 2)))) {
                     tileValue = blocked_Tile_Value;
                 }
-
                 if (tileY == 0 && (!doorBottom || (tileX != tilesPerWidth / 2))) {
                     tileValue = blocked_Tile_Value;
                 }
-
                 if (tileY == (tilesPerHeight - 1) && (!doorTop || (tileX != tilesPerWidth / 2))) {
                     tileValue = blocked_Tile_Value;
                 }
 
-                SetTileValue(&gameState->worldArena, tileMap, absTileX, absTileY, tileValue);
+                if (tileX == 10 && tileY == 6) {
+                    if (doorUp) {
+                        tileValue = 4;
+                    }
+                    if (doorDown) {
+                        tileValue = 5;
+                    }
+                }
+
+                SetTileValue(&gameState->worldArena, tileMap, absTileX, absTileY, absTileZ,
+                             tileValue);
             }
         }
 
@@ -712,7 +738,24 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         doorRight = false;
         doorTop = false;
 
-        if (randomChoice == 0) {
+        if (doorUp) {
+            doorDown = true;
+            doorUp = false;
+        } else if (doorDown) {
+            doorUp = true;
+            doorDown = false;
+        } else {
+            doorUp = false;
+            doorDown = false;
+        }
+
+        if (randomChoice == 2) {
+            if (absTileZ == 0) {
+                absTileZ = 1;
+            } else {
+                absTileZ = 0;
+            }
+        } else if (randomChoice == 1) {
             ++screenX;
         } else {
             ++screenY;
@@ -726,7 +769,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: this macro depends on the order of the buttons inside InputButtons
     // Already used static_assert in handmade.h to handle this, but let it be asserted here as
     // well
-    ASSERT(&input->playerInputs[0].E - &input->playerInputs[0].buttons[0] ==
+    ASSERT(&input->playerInputs[0].Z - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
     ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==
            ARRAY_COUNT(input->mouseButtons.buttons) - 1);
@@ -763,7 +806,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityY *= playerSpeedModifier;
     }
 
-    TileMap* tileMap{ gameState->world->tileMap };
+    const TileMap* tileMap{ gameState->world->tileMap };
+
+    // Switching z index
+    if (input::ActionJustPressed(&input0Keyboard->Z)) {
+        if (input::ActionPressed(&input0Keyboard->shift)) {
+            if (gameState->playerPos.absTileZ > 0) {
+                --gameState->playerPos.absTileZ;
+            }
+        } else {
+            if (gameState->playerPos.absTileZ < (tileMap->tileChunkCountZ - 1)) {
+                ++gameState->playerPos.absTileZ;
+            }
+        }
+    }
+
+    constexpr i32 tileSideInPixels{ 60 };
+    const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tileMap->tileSideInMeters };
 
     const f32 playerHeight{ tileMap->tileSideInMeters };
     const f32 playerWidth{ playerHeight * 0.75f };
@@ -790,16 +849,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, gameState->playerPos.absTileX,
-                                                       gameState->playerPos.absTileY) };
+                                                       gameState->playerPos.absTileY,
+                                                       gameState->playerPos.absTileZ) };
 
     DEBUG_PLATFORM_PRINT("");
     memory->exports.DEBUGPrintInt(threadContext, "tileChunkX", chunkPos.chunkX);
     memory->exports.DEBUGPrintInt(threadContext, "tileChunkY", chunkPos.chunkY);
+    memory->exports.DEBUGPrintInt(threadContext, "tileChunkZ", chunkPos.chunkZ);
     memory->exports.DEBUGPrintInt(threadContext, "chunkRelativeX", chunkPos.chunkRelativeX);
     memory->exports.DEBUGPrintInt(threadContext, "chunkRelativeY", chunkPos.chunkRelativeY);
 
     memory->exports.DEBUGPrintInt(threadContext, "absTileX", gameState->playerPos.absTileX);
     memory->exports.DEBUGPrintInt(threadContext, "absTileY", gameState->playerPos.absTileY);
+    memory->exports.DEBUGPrintInt(threadContext, "absTileZ", gameState->playerPos.absTileZ);
     memory->exports.DEBUGPrintFloat(threadContext, "tileRelX",
                                     gameState->playerPos.tileRelativePosX);
     memory->exports.DEBUGPrintFloat(threadContext, "tileRelY",
@@ -820,8 +882,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             // Possibly wraps to U32 max
             const u32 row{ gameState->playerPos.absTileY + relRow };
             const u32 column{ gameState->playerPos.absTileX + relColumn };
+            const u32 depth{ gameState->playerPos.absTileZ };
 
-            const u32 tileID{ GetTileValue(tileMap, column, row) };
+            const u32 tileID{ GetTileValue(tileMap, column, row, depth) };
 
             f32 green{ 1.0f };
             if (tileID == 0) {
@@ -829,29 +892,43 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             } else if (tileID == blocked_Tile_Value) {
                 green = 0.5f;
             }
-
+            // Highlight player tile
             if (row == gameState->playerPos.absTileY && column == gameState->playerPos.absTileX) {
                 green = 0.25f;
             }
+
             f32 blue{ 1.0f };
             // On-demand generated
             if (tileID == 3) {
                 blue = 0.0f;
             }
+            // Door up
+            if (tileID == 4) {
+                blue = 0.25f;
+            }
+            // Door down
+            if (tileID == 5) {
+                blue = 0.5f;
+            }
+
+            f32 red{ 0.1f };
+            if (depth == 2) {
+                red = 0.2f;
+            }
 
             const f32 tileCenX{ screenCenterX -
-                                (tileMap->metersToPixels * gameState->playerPos.tileRelativePosX) +
-                                (static_cast<f32>(relColumn * tileMap->tileSideInPixels)) };
+                                (metersToPixels * gameState->playerPos.tileRelativePosX) +
+                                (static_cast<f32>(relColumn * tileSideInPixels)) };
             const f32 tileCenY{ screenCenterY +
-                                (tileMap->metersToPixels * gameState->playerPos.tileRelativePosY) -
-                                (static_cast<f32>(relRow * tileMap->tileSideInPixels)) };
+                                (metersToPixels * gameState->playerPos.tileRelativePosY) -
+                                (static_cast<f32>(relRow * tileSideInPixels)) };
 
-            const f32 minX{ tileCenX - (static_cast<f32>(tileMap->tileSideInPixels) * 0.5f) };
-            const f32 minY{ tileCenY - (static_cast<f32>(tileMap->tileSideInPixels) * 0.5f) };
-            const f32 maxX{ tileCenX + (static_cast<f32>(tileMap->tileSideInPixels) * 0.5f) };
-            const f32 maxY{ tileCenY + (static_cast<f32>(tileMap->tileSideInPixels) * 0.5f) };
+            const f32 minX{ tileCenX - (static_cast<f32>(tileSideInPixels) * 0.5f) };
+            const f32 minY{ tileCenY - (static_cast<f32>(tileSideInPixels) * 0.5f) };
+            const f32 maxX{ tileCenX + (static_cast<f32>(tileSideInPixels) * 0.5f) };
+            const f32 maxY{ tileCenY + (static_cast<f32>(tileSideInPixels) * 0.5f) };
 
-            DrawRectangle(screenBuff, minX, minY, maxX, maxY, 0.1f, green, blue);
+            DrawRectangle(screenBuff, minX, minY, maxX, maxY, red, green, blue);
         }
     }
 
@@ -860,13 +937,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
 
-    const f32 playerPosLeft{ screenCenterX - (playerWidth * 0.5f * tileMap->metersToPixels) };
-    const f32 playerPosTop{ screenCenterY - (playerHeight * tileMap->metersToPixels) };
+    const f32 playerPosLeft{ screenCenterX - (playerWidth * 0.5f * metersToPixels) };
+    const f32 playerPosTop{ screenCenterY - (playerHeight * metersToPixels) };
 
     DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
-                  playerPosLeft + (playerWidth * tileMap->metersToPixels),
-                  playerPosTop + (playerHeight * tileMap->metersToPixels), playerR, playerG,
-                  playerB);
+                  playerPosLeft + (playerWidth * metersToPixels),
+                  playerPosTop + (playerHeight * metersToPixels), playerR, playerG, playerB);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

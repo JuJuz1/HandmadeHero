@@ -750,6 +750,10 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                     gIsGamePaused = !gIsGamePaused;
                 }
             } break;
+
+            case 'Z': {
+                ProcessInputMessage(&input->playerInputs->Z, isDown);
+            } break;
 #endif
 
             case VK_UP: {

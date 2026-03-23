@@ -1,9 +1,13 @@
 NODISCARD
 INTERNAL TileChunk*
-GetTileChunk(const TileMap* tileMap, u32 tileChunkX, u32 tileChunkY) {
+GetTileChunk(const TileMap* tileMap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ) {
     TileChunk* tileChunk{};
-    if (tileChunkX < tileMap->tileChunkCountX && tileChunkY < tileMap->tileChunkCountY) {
-        tileChunk = &tileMap->tileChunks[(tileMap->tileChunkCountX * tileChunkY) + tileChunkX];
+    if (tileChunkX < tileMap->tileChunkCountX && tileChunkY < tileMap->tileChunkCountY &&
+        tileChunkZ < tileMap->tileChunkCountZ) {
+        tileChunk =
+            &tileMap
+                 ->tileChunks[(tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileChunkZ) +
+                              (tileMap->tileChunkCountX * tileChunkY) + tileChunkX];
     }
 
     return tileChunk;
@@ -11,12 +15,14 @@ GetTileChunk(const TileMap* tileMap, u32 tileChunkX, u32 tileChunkY) {
 
 NODISCARD
 INTERNAL TileChunkPosition
-GetChunkPosition(const TileMap* tileMap, u32 absTileX, u32 absTileY) {
+GetChunkPosition(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
     TileChunkPosition result{};
 
     // Shift down by chunkShift to get the upper bits for chunk index
     result.chunkX = absTileX >> tileMap->chunkShift;
     result.chunkY = absTileY >> tileMap->chunkShift;
+    result.chunkZ = absTileZ;
+
     // Get the lower 8 bits for tile relative positions
     result.chunkRelativeX = absTileX & tileMap->chunkMask;
     result.chunkRelativeY = absTileY & tileMap->chunkMask;
@@ -26,18 +32,19 @@ GetChunkPosition(const TileMap* tileMap, u32 absTileX, u32 absTileY) {
 
 NODISCARD
 INTERNAL u32
-GetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tileX, u32 tileY) {
+GetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 relX, u32 relY) {
     ASSERT(tileChunk);
-    ASSERT(tileX < tileMap->chunkSize && tileY < tileMap->chunkSize);
-    const u32 tileValue{ tileChunk->tiles[(tileMap->chunkSize * tileY) + tileX] };
+    ASSERT(relX < tileMap->chunkSize && relY < tileMap->chunkSize);
+    const u32 tileValue{ tileChunk->tiles[(tileMap->chunkSize * relY) + relX] };
     return tileValue;
 }
 
 NODISCARD
 INTERNAL u32
-GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY) {
-    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY) };
-    const TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY) };
+GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
+    const TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
+                                             chunkPos.chunkZ) };
 
     u32 tileChunkValue{};
     if (tileChunk && tileChunk->tiles) {
@@ -61,9 +68,11 @@ SetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tile
 }
 
 INTERNAL void
-SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTileY, u32 value) {
-    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY) };
-    TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY) };
+SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ,
+             u32 value) {
+    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
+    TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
+                                       chunkPos.chunkZ) };
 
     ASSERT(tileChunk);
 
@@ -86,7 +95,7 @@ SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTil
 NODISCARD
 INTERNAL bool32
 IsTileMapPointEmpty(const TileMap* tileMap, TileMapPosition pos) {
-    const u32 value{ GetTileValue(tileMap, pos.absTileX, pos.absTileY) };
+    const u32 value{ GetTileValue(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ) };
     const bool32 empty{ value != 0 && value != blocked_Tile_Value };
     return empty;
 }
