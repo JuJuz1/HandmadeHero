@@ -100,7 +100,6 @@ IsTileMapPointEmpty(const TileMap* tileMap, TileMapPosition pos) {
     return empty;
 }
 
-NODISCARD
 INTERNAL void
 ReCanonicalizeCoordinate(const TileMap* tileMap, u32* tileIndex, f32* relPos) {
     const i32 offset{ RoundF32ToI32(*relPos / tileMap->tileSideInMeters) };
@@ -125,4 +124,30 @@ RecanonicalizePosition(const TileMap* tileMap, TileMapPosition pos) {
     ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileRelativePosY);
 
     return result;
+}
+
+NODISCARD
+INTERNAL bool32
+AreOnSameTiles(const TileMapPosition* pos, const TileMapPosition* newPos) {
+    const bool32 result{ pos->absTileX == newPos->absTileX && pos->absTileY == newPos->absTileY &&
+                         pos->absTileZ == newPos->absTileZ };
+    return result;
+}
+
+INTERNAL void
+TileMapPositionModifyZChecked(const TileMap* tileMap, TileMapPosition* pos, i32 offset) {
+    // Assert some limit to avoid UB cases in the extremes
+    // Probably will never hit this as we most likely always move only 1 up or down
+    ASSERT(-10 <= offset && offset <= 10);
+
+    if (offset >= 0) {
+        if (pos->absTileZ < (tileMap->tileChunkCountZ - offset)) {
+            pos->absTileZ += offset;
+        }
+    } else {
+        // Handle negative with a trick
+        if (static_cast<u32>((-offset)) <= pos->absTileZ) {
+            pos->absTileZ += offset;
+        }
+    }
 }

@@ -78,7 +78,6 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
         roundedMinY = 0;
     }
 
-    // Not including fill pixel
     if (roundedMaxX > screenBuff->width) {
         roundedMaxX = screenBuff->width;
     }
@@ -95,6 +94,7 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
              (roundedMinY * screenBuff->pitch) };
 
     for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
+        // Not including fill pixel
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
             *pixel++ = color;
@@ -654,13 +654,6 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     tileMap->tileSideInMeters = 1.4f;
 
-    // How many screens widths of chunks to generate
-    constexpr u32 tilesPerHeight{ 9 };
-    constexpr u32 tilesPerWidth{ 17 };
-
-    constexpr u32 screenCount{ 100 };
-    u32 screenY{}, screenX{};
-
     u32 randomNumIndex{};
 
     bool32 doorLeft{};
@@ -672,6 +665,12 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     bool32 doorDown{};
 
     u32 absTileZ{};
+
+    // How many screens widths of chunks to generate
+    constexpr u32 screenCount{ 100 };
+    u32 screenY{}, screenX{};
+    constexpr u32 tilesPerHeight{ 9 };
+    constexpr u32 tilesPerWidth{ 17 };
 
     // Generating tile values
     for (u32 screen{}; screen < screenCount; ++screen) {
@@ -811,13 +810,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // Switching z index
     if (input::ActionJustPressed(&input0Keyboard->Z)) {
         if (input::ActionPressed(&input0Keyboard->shift)) {
-            if (gameState->playerPos.absTileZ > 0) {
-                --gameState->playerPos.absTileZ;
-            }
+            TileMapPositionModifyZChecked(tileMap, &gameState->playerPos, -1);
         } else {
-            if (gameState->playerPos.absTileZ < (tileMap->tileChunkCountZ - 1)) {
-                ++gameState->playerPos.absTileZ;
-            }
+            TileMapPositionModifyZChecked(tileMap, &gameState->playerPos, 1);
         }
     }
 
@@ -845,6 +840,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     if (IsTileMapPointEmpty(tileMap, newplayerPos) &&
         IsTileMapPointEmpty(tileMap, testplayerPosLeft) &&
         IsTileMapPointEmpty(tileMap, testplayerPosRight)) {
+        if (!AreOnSameTiles(&gameState->playerPos, &newplayerPos)) {
+            const u32 newTileValue{ GetTileValue(tileMap, newplayerPos.absTileX,
+                                                 newplayerPos.absTileY, newplayerPos.absTileZ) };
+
+            if (newTileValue == 4) {
+                TileMapPositionModifyZChecked(tileMap, &newplayerPos, 1);
+            } else if (newTileValue == 5) {
+                TileMapPositionModifyZChecked(tileMap, &newplayerPos, -1);
+            }
+        }
+
         gameState->playerPos = newplayerPos;
     }
 
@@ -928,7 +934,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const f32 maxX{ tileCenX + (static_cast<f32>(tileSideInPixels) * 0.5f) };
             const f32 maxY{ tileCenY + (static_cast<f32>(tileSideInPixels) * 0.5f) };
 
-            DrawRectangle(screenBuff, minX, minY, maxX, maxY, red, green, blue);
+            // Fix a 1 pixel wide vertical black bar that appears sometimes
+            const f32 roundedMinX{ static_cast<f32>(FloorF32ToI32(minX)) };
+            const f32 roundedMaxX{ static_cast<f32>(CeilF32ToI32(maxX)) };
+
+            DrawRectangle(screenBuff, roundedMinX, minY, roundedMaxX, maxY, red, green, blue);
         }
     }
 

@@ -81,6 +81,21 @@ RoundF32ToU32(f32 value) {
 }
 
 NODISCARD
+INTERNAL inline i32
+CeilF32ToI32(f32 value) {
+    const i32 result{ static_cast<i32>(ceilf(value)) };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline u32
+CeilF32ToU32(f32 value) {
+    ASSERT(value >= 0);
+    const u32 result{ static_cast<u32>(ceilf(value)) };
+    return result;
+}
+
+NODISCARD
 INTERNAL inline f32
 Sin(f32 angle) {
     const f32 result{ sinf(angle) };
