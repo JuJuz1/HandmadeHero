@@ -13,7 +13,7 @@
 GLOBAL constexpr u32 blocked_Tile_Value{ 1 };
 
 // NOTE: Engine internal
-struct TileChunkPosition {
+struct TilechunkPosition {
     // We use the upper 24 bits for the chunk index and the lower 8 for the x and y position
     // relative to the chunk's tile
     u32 chunkX;
@@ -24,7 +24,7 @@ struct TileChunkPosition {
     u32 chunkRelativeTileY;
 };
 
-struct TileMapPosition {
+struct TilemapPosition {
     // New way of storing the information, we don't need tilemapX and Y
     // This is the "real" tileX and tileY in the whole tilemap
     u32 absTileX;
@@ -36,12 +36,12 @@ struct TileMapPosition {
     f32 tileOffsetY;
 };
 
-struct TileChunk {
+struct Tilechunk {
     u32* tiles;
 };
 
-struct TileMap {
-    TileChunk* tileChunks;
+struct Tilemap {
+    Tilechunk* tileChunks;
     u32 tileChunkCountX;
     u32 tileChunkCountY;
     u32 tileChunkCountZ;

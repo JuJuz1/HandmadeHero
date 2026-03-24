@@ -296,7 +296,13 @@ PushSize_(MemoryArena* arena, memory_index size) {
 }
 
 struct World {
-    TileMap* tileMap;
+    Tilemap* tileMap;
+};
+
+struct LoadedBitmapInfo {
+    u32* pixels;
+    i32 width;
+    i32 height;
 };
 
 // The game state
@@ -304,10 +310,9 @@ struct GameState {
     MemoryArena worldArena;
     World* world;
 
-    TileMapPosition playerPos;
+    TilemapPosition playerPos;
 
-    // DEBUG: Bitmap loading
-    u32* pixelPtr;
+    LoadedBitmapInfo background;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series

@@ -108,7 +108,7 @@ DrawRectangle(const OffScreenBuffer* screenBuff, f32 minX, f32 minY, f32 maxX, f
 #pragma pack(push, 1)
 
 // https://en.wikipedia.org/wiki/BMP_file_format#Example_2
-struct BitMapHeader {
+struct BitmapHeader {
     u16 type;
     u32 fileSize;
     i16 reserved1;
@@ -123,23 +123,67 @@ struct BitMapHeader {
 
 #pragma pack(pop)
 
-INTERNAL u32*
+INTERNAL LoadedBitmapInfo
 DEBUGLoadBMP(ThreadContext* threadContext, platform_export::debug_read_file* readFile,
              const char* filename) {
+    // byte order of bmp: BB GG RR AA bottom up
+    // little endian -> AA RR GG BB
+    // It seems we already have it in the right order we want!
+    // (Casey had AA BB GG RR -> RR GG BB AA)
 
-    u32* result{};
+    LoadedBitmapInfo result{};
 
     auto readFileResult{ readFile(threadContext, filename) };
     if (readFileResult.content) {
-        const BitMapHeader* bitMapHeader{ static_cast<BitMapHeader*>(readFileResult.content) };
+        const BitmapHeader* bitMapHeader{ static_cast<BitmapHeader*>(readFileResult.content) };
         u32* pixels{ reinterpret_cast<u32*>(static_cast<u8*>(readFileResult.content) +
                                             bitMapHeader->bitMapOffset) };
-        result = pixels;
+
+        result.pixels = pixels;
+        result.width = bitMapHeader->width;
+        result.height = bitMapHeader->height;
     } else {
         DEBUG_PLATFORM_PRINT("Couldn't load bmp!\n");
     }
 
     return result;
+}
+
+INTERNAL void
+DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos) {
+    i32 roundedMinX{ RoundF32ToI32(xPos) };
+    i32 roundedMinY{ RoundF32ToI32(yPos) };
+    i32 roundedMaxX{ RoundF32ToI32(xPos + bitmap->width) };
+    i32 roundedMaxY{ RoundF32ToI32(yPos + bitmap->height) };
+
+    if (roundedMinX < 0) {
+        roundedMinX = 0;
+    }
+    if (roundedMinY < 0) {
+        roundedMinY = 0;
+    }
+
+    if (roundedMaxX > screenBuff->width) {
+        roundedMaxX = screenBuff->width;
+    }
+    if (roundedMaxY > screenBuff->height) {
+        roundedMaxY = screenBuff->height;
+    }
+
+    // Start from the last row (top row of the image) as the bitmap is stored bottom up
+    u32* srcRow{ bitmap->pixels + (bitmap->width * (bitmap->height - 1)) };
+    u8* destRow{ static_cast<u8*>(screenBuff->memory) };
+    for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
+        u32* dest{ reinterpret_cast<u32*>(destRow) };
+        u32* src{ srcRow };
+        for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
+            *dest++ = *src++;
+        }
+
+        destRow += screenBuff->pitch;
+        // Move to the start of the above row
+        srcRow -= bitmap->width;
+    }
 }
 
 // https://www.random.org/integers/?mode=advanced
@@ -663,8 +707,11 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // TODO: maybe make platform set this
     memory->isInitialized = true;
 
-    gameState->pixelPtr =
+    gameState->background =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/test_background.bmp");
+
+    //gameState->pixelPtr =
+    //    DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/structured_art.bmp");
 
     gameState->playerPos.absTileX = 3;
     gameState->playerPos.absTileY = 3;
@@ -677,9 +724,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
-    world->tileMap = PushSize(&gameState->worldArena, TileMap);
+    world->tileMap = PushSize(&gameState->worldArena, Tilemap);
 
-    TileMap* tileMap{ world->tileMap };
+    Tilemap* tileMap{ world->tileMap };
     tileMap->tileChunkCountX = 128;
     tileMap->tileChunkCountY = 128;
     tileMap->tileChunkCountZ = 2; // Limited to 2 atm
@@ -691,7 +738,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     tileMap->tileChunks = PushArray(
         &gameState->worldArena,
-        tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileMap->tileChunkCountZ, TileChunk);
+        tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileMap->tileChunkCountZ, Tilechunk);
 
     tileMap->tileSideInMeters = 1.4f;
 
@@ -847,14 +894,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityY *= playerSpeedModifier;
     }
 
-    const TileMap* tileMap{ gameState->world->tileMap };
+    const Tilemap* tileMap{ gameState->world->tileMap };
 
     // Switching z index
     if (input::ActionJustPressed(&input0Keyboard->Z)) {
         if (input::ActionPressed(&input0Keyboard->shift)) {
-            TileMapPositionModifyZChecked(tileMap, &gameState->playerPos, -1);
+            gameState->playerPos.absTileZ =
+                TilemapPositionModifyZChecked(tileMap, &gameState->playerPos, -1);
         } else {
-            TileMapPositionModifyZChecked(tileMap, &gameState->playerPos, 1);
+            gameState->playerPos.absTileZ =
+                TilemapPositionModifyZChecked(tileMap, &gameState->playerPos, 1);
         }
     }
 
@@ -864,39 +913,39 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 playerHeight{ tileMap->tileSideInMeters };
     const f32 playerWidth{ playerHeight * 0.75f };
 
-    TileMapPosition newplayerPos{ gameState->playerPos };
+    TilemapPosition newplayerPos{ gameState->playerPos };
     const f32 newPlayerX{ playerVelocityX * delta };
     const f32 newPlayerY{ playerVelocityY * delta };
     newplayerPos.tileOffsetX += newPlayerX;
     newplayerPos.tileOffsetY += newPlayerY;
     newplayerPos = RecanonicalizePosition(tileMap, newplayerPos);
 
-    TileMapPosition testplayerPosLeft{ newplayerPos };
+    TilemapPosition testplayerPosLeft{ newplayerPos };
     testplayerPosLeft.tileOffsetX -= playerWidth * 0.5f;
     testplayerPosLeft = RecanonicalizePosition(tileMap, testplayerPosLeft);
 
-    TileMapPosition testplayerPosRight{ newplayerPos };
+    TilemapPosition testplayerPosRight{ newplayerPos };
     testplayerPosRight.tileOffsetX += playerWidth * 0.5f;
     testplayerPosRight = RecanonicalizePosition(tileMap, testplayerPosRight);
 
-    if (IsTileMapPointEmpty(tileMap, newplayerPos) &&
-        IsTileMapPointEmpty(tileMap, testplayerPosLeft) &&
-        IsTileMapPointEmpty(tileMap, testplayerPosRight)) {
+    if (IsTilemapPointEmpty(tileMap, newplayerPos) &&
+        IsTilemapPointEmpty(tileMap, testplayerPosLeft) &&
+        IsTilemapPointEmpty(tileMap, testplayerPosRight)) {
         if (!AreOnSameTiles(&gameState->playerPos, &newplayerPos)) {
             const u32 newTileValue{ GetTileValue(tileMap, newplayerPos.absTileX,
                                                  newplayerPos.absTileY, newplayerPos.absTileZ) };
 
             if (newTileValue == 4) {
-                TileMapPositionModifyZChecked(tileMap, &newplayerPos, 1);
+                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tileMap, &newplayerPos, 1);
             } else if (newTileValue == 5) {
-                TileMapPositionModifyZChecked(tileMap, &newplayerPos, -1);
+                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tileMap, &newplayerPos, -1);
             }
         }
 
         gameState->playerPos = newplayerPos;
     }
 
-    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, gameState->playerPos.absTileX,
+    const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, gameState->playerPos.absTileX,
                                                        gameState->playerPos.absTileY,
                                                        gameState->playerPos.absTileZ) };
 
@@ -914,8 +963,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", gameState->playerPos.tileOffsetY);
 
     // Background
-    DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
-                  static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
+
+    DrawBitmap(screenBuff, &gameState->background, 0, 0);
+
+    //DrawRectangle(screenBuff, 0.0f, 0.0f, static_cast<f32>(screenBuff->width),
+    //              static_cast<f32>(screenBuff->height), 0.0f, 0.1f, 0.2f);
 
     const f32 screenCenterX{ static_cast<f32>(screenBuff->width) * 0.5f };
     const f32 screenCenterY{ static_cast<f32>(screenBuff->height) * 0.5f };
@@ -931,6 +983,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const u32 depth{ gameState->playerPos.absTileZ };
 
             const u32 tileID{ GetTileValue(tileMap, column, row, depth) };
+            if (tileID != 1 && tileID != 4 && tileID != 5 &&
+                !(row == gameState->playerPos.absTileY &&
+                  column == gameState->playerPos.absTileX)) {
+                continue;
+            }
 
             f32 green{ 1.0f };
             if (tileID == 0) {
@@ -993,17 +1050,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
                   playerPosLeft + (playerWidth * metersToPixels),
                   playerPosTop + (playerHeight * metersToPixels), playerR, playerG, playerB);
-
-    // Unsuccessful for now!
-#if 0
-    const u32* src{ gameState->pixelPtr };
-    u32* dest{ static_cast<u32*>(screenBuff->memory) };
-    for (u32 y{}; y < screenBuff->height; ++y) {
-        for (u32 x{}; x < screenBuff->width; ++x) {
-            *dest++ = *src++;
-        }
-    }
-#endif
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

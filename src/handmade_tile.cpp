@@ -1,7 +1,7 @@
 NODISCARD
-INTERNAL TileChunk*
-GetTileChunk(const TileMap* tileMap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ) {
-    TileChunk* tileChunk{};
+INTERNAL Tilechunk*
+GetTilechunk(const Tilemap* tileMap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ) {
+    Tilechunk* tileChunk{};
     if (tileChunkX < tileMap->tileChunkCountX && tileChunkY < tileMap->tileChunkCountY &&
         tileChunkZ < tileMap->tileChunkCountZ) {
         tileChunk =
@@ -14,9 +14,9 @@ GetTileChunk(const TileMap* tileMap, u32 tileChunkX, u32 tileChunkY, u32 tileChu
 }
 
 NODISCARD
-INTERNAL TileChunkPosition
-GetChunkPosition(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
-    TileChunkPosition result{};
+INTERNAL TilechunkPosition
+GetChunkPosition(const Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+    TilechunkPosition result{};
 
     // Shift down by chunkShift to get the upper bits for chunk index
     result.chunkX = absTileX >> tileMap->chunkShift;
@@ -32,7 +32,7 @@ GetChunkPosition(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTile
 
 NODISCARD
 INTERNAL u32
-GetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 relX, u32 relY) {
+GetTileValueChecked(const Tilemap* tileMap, const Tilechunk* tileChunk, u32 relX, u32 relY) {
     ASSERT(tileChunk);
     ASSERT(relX < tileMap->chunkSize && relY < tileMap->chunkSize);
     const u32 tileValue{ tileChunk->tiles[(tileMap->chunkSize * relY) + relX] };
@@ -41,9 +41,9 @@ GetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 relX
 
 NODISCARD
 INTERNAL u32
-GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
-    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
-    const TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
+GetTileValue(const Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+    const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
+    const Tilechunk* tileChunk{ GetTilechunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
                                              chunkPos.chunkZ) };
 
     u32 tileChunkValue{};
@@ -60,7 +60,7 @@ GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
 }
 
 INTERNAL void
-SetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tileX, u32 tileY,
+SetTileValueChecked(const Tilemap* tileMap, const Tilechunk* tileChunk, u32 tileX, u32 tileY,
                     u32 value) {
     ASSERT(tileChunk);
     ASSERT(tileX < tileMap->chunkSize && tileY < tileMap->chunkSize);
@@ -68,10 +68,10 @@ SetTileValueChecked(const TileMap* tileMap, const TileChunk* tileChunk, u32 tile
 }
 
 INTERNAL void
-SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ,
+SetTileValue(MemoryArena* worldArena, Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ,
              u32 value) {
-    const TileChunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
-    TileChunk* tileChunk{ GetTileChunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
+    const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
+    Tilechunk* tileChunk{ GetTilechunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
                                        chunkPos.chunkZ) };
 
     ASSERT(tileChunk);
@@ -94,14 +94,14 @@ SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTil
 
 NODISCARD
 INTERNAL bool32
-IsTileMapPointEmpty(const TileMap* tileMap, TileMapPosition pos) {
+IsTilemapPointEmpty(const Tilemap* tileMap, TilemapPosition pos) {
     const u32 value{ GetTileValue(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ) };
     const bool32 empty{ value != 0 && value != blocked_Tile_Value };
     return empty;
 }
 
 INTERNAL void
-ReCanonicalizeCoordinate(const TileMap* tileMap, u32* tileIndex, f32* relPos) {
+ReCanonicalizeCoordinate(const Tilemap* tileMap, u32* tileIndex, f32* relPos) {
     const i32 offset{ RoundF32ToI32(*relPos / tileMap->tileSideInMeters) };
     // NOTE: tileMap is assumed to be toroidal, if you step over the end you start at the
     // beginning
@@ -117,9 +117,9 @@ ReCanonicalizeCoordinate(const TileMap* tileMap, u32* tileIndex, f32* relPos) {
 }
 
 NODISCARD
-INTERNAL TileMapPosition
-RecanonicalizePosition(const TileMap* tileMap, TileMapPosition pos) {
-    TileMapPosition result{ pos };
+INTERNAL TilemapPosition
+RecanonicalizePosition(const Tilemap* tileMap, TilemapPosition pos) {
+    TilemapPosition result{ pos };
     ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffsetX);
     ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffsetY);
 
@@ -128,26 +128,30 @@ RecanonicalizePosition(const TileMap* tileMap, TileMapPosition pos) {
 
 NODISCARD
 INTERNAL bool32
-AreOnSameTiles(const TileMapPosition* pos, const TileMapPosition* newPos) {
+AreOnSameTiles(const TilemapPosition* pos, const TilemapPosition* newPos) {
     const bool32 result{ pos->absTileX == newPos->absTileX && pos->absTileY == newPos->absTileY &&
                          pos->absTileZ == newPos->absTileZ };
     return result;
 }
 
-INTERNAL void
-TileMapPositionModifyZChecked(const TileMap* tileMap, TileMapPosition* pos, i32 offset) {
+NODISCARD
+INTERNAL u32
+TilemapPositionModifyZChecked(const Tilemap* tileMap, const TilemapPosition* pos, i32 offset) {
     // Assert some limit to avoid UB cases in the extremes
     // Probably will never hit this as we most likely always move only 1 up or down
     ASSERT(-10 <= offset && offset <= 10);
 
+    u32 result{ pos->absTileZ };
     if (offset >= 0) {
         if (pos->absTileZ < (tileMap->tileChunkCountZ - offset)) {
-            pos->absTileZ += offset;
+            result += offset;
         }
     } else {
         // Handle negative with a trick
         if (static_cast<u32>((-offset)) <= pos->absTileZ) {
-            pos->absTileZ += offset;
+            result += offset;
         }
     }
+
+    return result;
 }
