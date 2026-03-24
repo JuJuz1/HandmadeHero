@@ -305,6 +305,9 @@ struct GameState {
     World* world;
 
     TileMapPosition playerPos;
+
+    // DEBUG: Bitmap loading
+    u32* pixelPtr;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series

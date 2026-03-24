@@ -24,8 +24,8 @@ GetChunkPosition(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTile
     result.chunkZ = absTileZ;
 
     // Get the lower 8 bits for tile relative positions
-    result.chunkRelativeX = absTileX & tileMap->chunkMask;
-    result.chunkRelativeY = absTileY & tileMap->chunkMask;
+    result.chunkRelativeTileX = absTileX & tileMap->chunkMask;
+    result.chunkRelativeTileY = absTileY & tileMap->chunkMask;
 
     return result;
 }
@@ -48,8 +48,8 @@ GetTileValue(const TileMap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
 
     u32 tileChunkValue{};
     if (tileChunk && tileChunk->tiles) {
-        tileChunkValue = GetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeX,
-                                             chunkPos.chunkRelativeY);
+        tileChunkValue = GetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeTileX,
+                                             chunkPos.chunkRelativeTileY);
     } else {
         // invalid tileMapX or tileMapY i.e. out of bounds
         //tileChunkValue = out_Of_Bounds_Tile_Value;
@@ -87,8 +87,8 @@ SetTileValue(MemoryArena* worldArena, TileMap* tileMap, u32 absTileX, u32 absTil
     }
 
     if (tileChunk) {
-        SetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeX, chunkPos.chunkRelativeY,
-                            value);
+        SetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeTileX,
+                            chunkPos.chunkRelativeTileY, value);
     }
 }
 
@@ -120,8 +120,8 @@ NODISCARD
 INTERNAL TileMapPosition
 RecanonicalizePosition(const TileMap* tileMap, TileMapPosition pos) {
     TileMapPosition result{ pos };
-    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileRelativePosX);
-    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileRelativePosY);
+    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffsetX);
+    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffsetY);
 
     return result;
 }

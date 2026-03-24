@@ -32,7 +32,7 @@ DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
     char buf[128];
-    sprintf_s(buf, "%s\n", message);
+    sprintf_s(buf, "%s", message);
     OutputDebugStringA(buf);
 }
 

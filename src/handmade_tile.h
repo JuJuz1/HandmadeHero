@@ -20,8 +20,8 @@ struct TileChunkPosition {
     u32 chunkY;
     u32 chunkZ;
 
-    u32 chunkRelativeX;
-    u32 chunkRelativeY;
+    u32 chunkRelativeTileX;
+    u32 chunkRelativeTileY;
 };
 
 struct TileMapPosition {
@@ -31,9 +31,9 @@ struct TileMapPosition {
     u32 absTileY;
     u32 absTileZ;
 
-    // Tile-relative x and y, should these be from the center of the tile?
-    f32 tileRelativePosX;
-    f32 tileRelativePosY;
+    // Tile-relative x and y from the center of the tile
+    f32 tileOffsetX;
+    f32 tileOffsetY;
 };
 
 struct TileChunk {
