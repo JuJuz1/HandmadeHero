@@ -119,6 +119,17 @@ struct BitmapHeader {
     i32 height;
     u16 planes;
     u16 bitsPerPixel;
+    u32 compression;
+    u32 sizeOfBitmap;
+    i32 horzResolution;
+    i32 vertResolution;
+    u32 colorsUsed;
+    u32 colorsImportant;
+
+    u32 redMask;
+    u32 blueMask;
+    u32 greenMask;
+    u32 alphaMask;
 };
 
 #pragma pack(pop)
@@ -131,6 +142,8 @@ DEBUGLoadBMP(ThreadContext* threadContext, platform_export::debug_read_file* rea
     // It seems we already have it in the right order we want!
     // (Casey had AA BB GG RR -> RR GG BB AA)
 
+    // It seems we have a value of 3 for compression always, and the masks change between files!
+
     LoadedBitmapInfo result{};
 
     auto readFileResult{ readFile(threadContext, filename) };
@@ -142,6 +155,8 @@ DEBUGLoadBMP(ThreadContext* threadContext, platform_export::debug_read_file* rea
         result.pixels = pixels;
         result.width = bitMapHeader->width;
         result.height = bitMapHeader->height;
+
+        // TODO: handle color masks
     } else {
         DEBUG_PLATFORM_PRINT("Couldn't load bmp!\n");
     }
@@ -172,7 +187,8 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 
     // Start from the last row (top row of the image) as the bitmap is stored bottom up
     u32* srcRow{ bitmap->pixels + (bitmap->width * (bitmap->height - 1)) };
-    u8* destRow{ static_cast<u8*>(screenBuff->memory) };
+    u8* destRow{ static_cast<u8*>(screenBuff->memory) + (roundedMinY * screenBuff->pitch) +
+                 (roundedMinX * screenBuff->bytesPerPixel) };
     for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
         u32* dest{ reinterpret_cast<u32*>(destRow) };
         u32* src{ srcRow };
@@ -710,6 +726,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gameState->background =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/test_background.bmp");
 
+    gameState->playerHead =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head.bmp");
+
     //gameState->pixelPtr =
     //    DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/structured_art.bmp");
 
@@ -740,6 +759,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         &gameState->worldArena,
         tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileMap->tileChunkCountZ, Tilechunk);
 
+    // NOTE: This is now seperated from the rendering (tileSideInPixels)
     tileMap->tileSideInMeters = 1.4f;
 
     u32 randomNumIndex{};
@@ -907,6 +927,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
+    // This now determines the actual pixel size of the tiles!
     constexpr i32 tileSideInPixels{ 60 };
     const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tileMap->tileSideInMeters };
 
@@ -1044,12 +1065,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
 
+    // TODO: fix player graphics positioning
     const f32 playerPosLeft{ screenCenterX - (playerWidth * 0.5f * metersToPixels) };
     const f32 playerPosTop{ screenCenterY - (playerHeight * metersToPixels) };
 
     DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
                   playerPosLeft + (playerWidth * metersToPixels),
                   playerPosTop + (playerHeight * metersToPixels), playerR, playerG, playerB);
+
+    DrawBitmap(screenBuff, &gameState->playerHead, playerPosLeft, playerPosTop);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

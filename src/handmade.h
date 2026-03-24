@@ -313,6 +313,7 @@ struct GameState {
     TilemapPosition playerPos;
 
     LoadedBitmapInfo background;
+    LoadedBitmapInfo playerHead;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
