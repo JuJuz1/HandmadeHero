@@ -40,6 +40,10 @@ static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
 #    endif
 #endif
 
+#if COMPILER_MSVC
+#    include <intrin.h>
+#endif
+
 /*
 HANDMADE_INTERNAL:
     0: release builds

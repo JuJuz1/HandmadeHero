@@ -138,7 +138,7 @@ FindLeastSignificantBitSet(u32 value) {
     BitscanResult result{};
 
 #if COMPILER_MSVC
-    // Why is long different from int... (...but not on MSVC!!! C++...)
+    // Why is long different from int... (...but not on MSVC! C++...)
     result.found = _BitScanForward(reinterpret_cast<unsigned long*>(&result.index), value);
 #else
     for (u32 i{}; i < 32; ++i) {

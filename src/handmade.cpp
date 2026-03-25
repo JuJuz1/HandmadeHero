@@ -218,7 +218,27 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
         u32* dest{ reinterpret_cast<u32*>(destRow) };
         u32* src{ srcRow };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            *dest++ = *src++;
+
+            const f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
+            const f32 srcRed{ static_cast<f32>((*src >> 16) & 0xFF) };
+            const f32 srcGreen{ static_cast<f32>((*src >> 8) & 0xFF) };
+            const f32 srcBlue{ static_cast<f32>((*src >> 0) & 0xFF) };
+
+            const f32 destRed{ static_cast<f32>((*dest >> 16) & 0xFF) };
+            const f32 destGreen{ static_cast<f32>((*dest >> 8) & 0xFF) };
+            const f32 destBlue{ static_cast<f32>((*dest >> 0) & 0xFF) };
+
+            // Linear blend
+            const f32 resultRed{ ((1.0f - alpha) * destRed) + (alpha * srcRed) };
+            const f32 resultGreen{ ((1.0f - alpha) * destGreen) + (alpha * srcGreen) };
+            const f32 resultBlue{ ((1.0f - alpha) * destBlue) + (alpha * srcBlue) };
+
+            *dest = { (TruncateF32ToU32(resultRed + 0.5f) << 16) |
+                      (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
+                      (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
+
+            ++dest;
+            ++src;
         }
 
         destRow += screenBuff->pitch;
