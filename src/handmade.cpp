@@ -190,11 +190,15 @@ DEBUGLoadBMP(ThreadContext* threadContext, platform_export::debug_read_file* rea
 }
 
 INTERNAL void
-DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos) {
-    i32 roundedMinX{ RoundF32ToI32(xPos) };
-    i32 roundedMinY{ RoundF32ToI32(yPos) };
-    i32 roundedMaxX{ RoundF32ToI32(xPos + bitmap->width) };
-    i32 roundedMaxY{ RoundF32ToI32(yPos + bitmap->height) };
+DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
+           i32 alignX = 0, i32 alignY = 0) {
+    const f32 alignedX{ xPos - static_cast<f32>(alignX) };
+    const f32 alignedY{ yPos - static_cast<f32>(alignY) };
+
+    i32 roundedMinX{ RoundF32ToI32(alignedX) };
+    i32 roundedMinY{ RoundF32ToI32(alignedY) };
+    i32 roundedMaxX{ RoundF32ToI32(alignedX + bitmap->width) };
+    i32 roundedMaxY{ RoundF32ToI32(alignedY + bitmap->height) };
 
     if (roundedMinX < 0) {
         roundedMinX = 0;
@@ -771,11 +775,44 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gameState->background =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/test_background.bmp");
 
-    gameState->playerHead =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head.bmp");
+    // Offsets: alignX and alignY
+    // 48 100 forward
+    // 46 104 left
+    // 42 100 backward
+    // 44 104 right
 
-    //gameState->pixelPtr =
-    //    DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/structured_art.bmp");
+    HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[0] };
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_forward.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_forward.bmp");
+    heroBitmaps->alignX = 48;
+    heroBitmaps->alignY = 100;
+    heroBitmaps++;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_left.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_left.bmp");
+    heroBitmaps->alignX = 46;
+    heroBitmaps->alignY = 104;
+    heroBitmaps++;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_backward.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "test/player_torso_backward.bmp");
+    heroBitmaps->alignX = 42;
+    heroBitmaps->alignY = 100;
+    heroBitmaps++;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_right.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_right.bmp");
+    heroBitmaps->alignX = 44;
+    heroBitmaps->alignY = 104;
 
     gameState->playerPos.absTileX = 3;
     gameState->playerPos.absTileY = 3;
@@ -927,13 +964,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==
            ARRAY_COUNT(input->mouseButtons.buttons) - 1);
 
+    gThreadContext = threadContext;
+    gMemory = memory;
+
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     if (!memory->isInitialized) {
         InitializeGameState(threadContext, gameState, memory);
     }
-
-    gThreadContext = threadContext;
-    gMemory = memory;
 
     const f32 delta{ input->frameDeltaTime };
     // NOTE: if many players -> loop through input->playerInputs
@@ -944,15 +981,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr f32 playerSpeedModifier{ 4 };
     if (input::ActionPressed(&input0Keyboard->up)) {
         playerVelocityY += playerSpeed;
+        gameState->playerFacingDirection = 2;
     }
     if (input::ActionPressed(&input0Keyboard->down)) {
         playerVelocityY -= playerSpeed;
+        gameState->playerFacingDirection = 0;
     }
     if (input::ActionPressed(&input0Keyboard->left)) {
         playerVelocityX -= playerSpeed;
+        gameState->playerFacingDirection = 1;
     }
     if (input::ActionPressed(&input0Keyboard->right)) {
         playerVelocityX += playerSpeed;
+        gameState->playerFacingDirection = 3;
     }
     if (input::ActionPressed(&input0Keyboard->shift)) {
         playerVelocityX *= playerSpeedModifier;
@@ -1106,19 +1147,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     // Drawing player
-    constexpr f32 playerR{ 0.5f };
-    constexpr f32 playerG{ 0.1f };
-    constexpr f32 playerB{ 0.5f };
 
-    // TODO: fix player graphics positioning
-    const f32 playerPosLeft{ screenCenterX - (playerWidth * 0.5f * metersToPixels) };
-    const f32 playerPosTop{ screenCenterY - (playerHeight * metersToPixels) };
+    // Real player position
+    const f32 playerGroundPointX{ screenCenterX };
+    const f32 playerGroundPointY{ screenCenterY };
 
-    DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
-                  playerPosLeft + (playerWidth * metersToPixels),
-                  playerPosTop + (playerHeight * metersToPixels), playerR, playerG, playerB);
-
-    DrawBitmap(screenBuff, &gameState->playerHead, playerPosLeft, playerPosTop);
+    const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[gameState->playerFacingDirection] };
+    DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPointX, playerGroundPointY,
+               heroBitmaps->alignX, heroBitmaps->alignY);
+    DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPointX, playerGroundPointY,
+               heroBitmaps->alignX, heroBitmaps->alignY);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

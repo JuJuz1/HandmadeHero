@@ -331,6 +331,13 @@ struct LoadedBitmapInfo {
     i32 height;
 };
 
+struct HeroBitmaps {
+    LoadedBitmapInfo head;
+    LoadedBitmapInfo torso;
+    i32 alignX;
+    i32 alignY;
+};
+
 // The game state
 struct GameState {
     MemoryArena worldArena;
@@ -339,7 +346,8 @@ struct GameState {
     TilemapPosition playerPos;
 
     LoadedBitmapInfo background;
-    LoadedBitmapInfo playerHead;
+    HeroBitmaps heroBitmaps[4];
+    u32 playerFacingDirection;
 };
 
 // We use the style 2 (Game as a service to the OS) described in the series
