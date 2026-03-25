@@ -821,11 +821,17 @@ GetLastWriteTime(const char* filename) {
 
 NODISCARD
 INTERNAL GameCode
-LoadGameCode(const char* srcDll, const char* tempDll) {
+LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) {
     // NOTE: Delete the temp file when the program ends?
-    CopyFileA(srcDll, tempDll, FALSE);
-
     GameCode gameCode{};
+
+    WIN32_FILE_ATTRIBUTE_DATA ignored;
+    // If the lock.tmp file is still present
+    if (GetFileAttributesExA(lockFilename, GetFileExInfoStandard, &ignored)) {
+        return gameCode;
+    }
+
+    CopyFileA(srcDll, tempDll, FALSE);
     gameCode.dll = LoadLibraryA(tempDll);
     gameCode.lastWritetime = GetLastWriteTime(srcDll);
 
@@ -882,6 +888,9 @@ WinMain(
     win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
     char tempDllPath[win32::all_State_File_Name_Count];
     win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath, sizeof(tempDllPath));
+
+    char lockFilePath[win32::all_State_File_Name_Count];
+    win32::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
 
     constexpr i32 startingWidth{ 960 };
     constexpr i32 startingHeight{ 540 };
@@ -1041,7 +1050,7 @@ WinMain(
     bool32 isSoundValid{};
 
     // The game represented as a DLL which allows hot reloading and more fun stuff!
-    win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath) };
+    win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
     Input gameInput{};
 
     // Main loop
@@ -1051,7 +1060,7 @@ WinMain(
         const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
         if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
             win32::UnloadGameCode(&game);
-            game = win32::LoadGameCode(srcDllPath, tempDllPath);
+            game = win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
         }
 
         // Keyboard input

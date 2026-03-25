@@ -54,18 +54,25 @@ rem delete all .pdb files
 rem replace the game's one with a new timestamped version to enable instantenous updating
 del *.pdb >nul 2>nul
 
-rem compile the platform and the game as seperate to allow DLL tricks
-cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %win32Libraries% %commonLinkerFlags%
-if ERRORLEVEL 1 (
-    set buildFailed=1
-    echo [31m[1mwin32_handmade.cpp failed[0m[1m
-)
+rem wait for pdb to be generated before building platform
+rem sometimes we couldn't set breakpoints in visual studio
+rem as the pdb was not loaded correctly when hot loading
+echo WAITING FOR PDB > lock.tmp
 
+rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
 cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
+)
+
+del lock.tmp
+
+cl %commonCompilerFlags% /I ../src ../src/win32/win32_handmade.cpp /link %win32Libraries% %commonLinkerFlags%
+if ERRORLEVEL 1 (
+    set buildFailed=1
+    echo [31m[1mwin32_handmade.cpp failed[0m[1m
 )
 
 rem needed if building from command line and not vscode
