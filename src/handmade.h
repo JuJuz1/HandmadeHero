@@ -10,13 +10,35 @@ This file acts as the shared interface between the platform layer and the game c
 - It declares the services the game can call back into the platform (file I/O, debug, etc.)
 - It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
 
-This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without restarting
-the platform layer
+This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
+restarting the platform layer
 */
 
 // Ensure we are compiling as 64-bit for now...
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
+
+// Compilers
+
+#ifndef COMPILER_MSVC
+#    define COMPILER_MSVC 0
+#endif
+
+#ifndef COMPILER_LLVM
+#    define COMPILER_LLVM 0
+#endif
+
+// Determine the compiler if none set
+// TODO: more compilers
+#if !COMPILER_MSVC && !COMPILER_LLVM
+#    if _MSC_VER
+#        undef COMPILER_MSVC
+#        define COMPILER_MSVC 1
+#    else
+#        undef COMPILER_LLVM
+#        define COMPILER_LLVM 1
+#    endif
+#endif
 
 /*
 HANDMADE_INTERNAL:
@@ -29,14 +51,14 @@ HANDMADE_DEBUG:
 */
 
 // TODO: use these ASSERT(s) vs assert from <cassert>?
-// probably just make this better to include more information (error messages and variadic arguments
-// of values?)
+// probably just make this better to include more information (error messages and variadic
+// arguments of values?)
 #if HANDMADE_DEBUG
 // clang-format off
-#define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; } // clang-tidy NOLINT
+    #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; } // clang-tidy NOLINT
 // clang-format on
 #else
-#define ASSERT(expr)
+#    define ASSERT(expr)
 #endif
 
 // Defines for different meanings of static
@@ -57,8 +79,8 @@ HANDMADE_DEBUG:
 
 // c++17 required
 // Can be opted out of easily by just checking c++ standard version when compiling
-// Although on MSVC at least when compiling with an older standard like c++14, it still works and
-// produces the warning
+// Although on MSVC at least when compiling with an older standard like c++14, it still
+// works and produces the warning
 #define NODISCARD [[nodiscard]]
 
 // Typedefs for common types

@@ -4,7 +4,11 @@
 #include <cmath>
 
 /*
-    TODO: implement these functions ourself using platform-efficient versions and cmath include
+    TODO: implement these functions ourself using platform-efficient versions and remove cmath
+   include. As a result this file's contents can access the platform layer!
+
+   https://learn.microsoft.com/en-us/cpp/intrinsics/compiler-intrinsics?view=msvc-170
+   https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html
 */
 
 NODISCARD
@@ -120,6 +124,32 @@ NODISCARD
 INTERNAL inline u32
 AbsI32ToU32(i32 value) {
     const u32 result{ static_cast<u32>(abs(value)) };
+    return result;
+}
+
+struct BitscanResult {
+    bool32 found;
+    u32 index;
+};
+
+NODISCARD
+INTERNAL inline BitscanResult
+FindLeastSignificantBitSet(u32 value) {
+    BitscanResult result{};
+
+#if COMPILER_MSVC
+    // Why is long different from int... (...but not on MSVC!!! C++...)
+    result.found = _BitScanForward(reinterpret_cast<unsigned long*>(&result.index), value);
+#else
+    for (u32 i{}; i < 32; ++i) {
+        if (value & (1 << i)) {
+            result.found = true;
+            result.index = i;
+            break;
+        }
+    }
+#endif
+
     return result;
 }
 
