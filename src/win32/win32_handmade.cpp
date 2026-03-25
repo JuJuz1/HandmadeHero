@@ -16,10 +16,13 @@ This is not a final platform layer!
 
 GLOBAL bool32 gIsGameRunning;
 GLOBAL bool32 gIsGamePaused;
+GLOBAL bool32 gShowCursor;
+GLOBAL HCURSOR gCursor;
 
 GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
+GLOBAL WINDOWPLACEMENT gWindowPlacement{ sizeof(WINDOWPLACEMENT) };
 
 #if HANDMADE_INTERNAL
 
@@ -133,6 +136,31 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
 #endif // HANDMADE_INTERNAL
 
 namespace win32 {
+
+// Raymond Chen's example modified sligthly
+// https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+// Using ChangeDisplaySettingsA we can have more control over the changes
+// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-changedisplaysettingsa
+INTERNAL void
+ToggleFullscreen(HWND hWnd) {
+    const LONG style{ GetWindowLongA(hWnd, GWL_STYLE) };
+    if (style & WS_OVERLAPPEDWINDOW) {
+        MONITORINFO mi{ sizeof(mi) };
+        if (GetWindowPlacement(hWnd, &gWindowPlacement) &&
+            GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+            SetWindowLongA(hWnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+            SetWindowPos(hWnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+                         mi.rcMonitor.right - mi.rcMonitor.left,
+                         mi.rcMonitor.bottom - mi.rcMonitor.top,
+                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+    } else {
+        SetWindowLongA(hWnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+        SetWindowPlacement(hWnd, &gWindowPlacement);
+        SetWindowPos(hWnd, 0, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+}
 
 NODISCARD
 INTERNAL WindowDimension
@@ -369,6 +397,14 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 255, LWA_ALPHA);
         } else {
             //SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 64, LWA_ALPHA);
+        }
+    } break;
+
+    case WM_SETCURSOR: {
+        if (!gShowCursor) {
+            SetCursor(0);
+        } else {
+            SetCursor(gCursor);
         }
     } break;
 
@@ -632,9 +668,7 @@ INTERNAL void
 ProcessPendingMessages(Input* input, AllState* allState) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
-        // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
         // message.lParam contains additional information about keystrokes
-        // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
         const WPARAM vkCode{ message.wParam };
         const bool32 isDown{ (message.lParam & (1 << 31)) == 0 };
         const bool32 wasDown{ (message.lParam & (1 << 30)) != 0 };
@@ -698,6 +732,12 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                     if (altPressed) {
                         gIsGameRunning = false;
                     }
+                }
+            } break;
+            case VK_F11: {
+                OutputDebugStringA("VK_F11 toggle fullscreen\n");
+                if (isDown) {
+                    ToggleFullscreen(message.hwnd);
                 }
             } break;
 
@@ -869,7 +909,6 @@ UnloadGameCode(GameCode* gamecode) {
 
 } //namespace win32
 
-// https://learn.microsoft.com/en-us/windows/win32/learnwin32/winmain--the-application-entry-point
 int WINAPI
 WinMain(
     // commenting out removed C4100 warnings for unreferenced parameters
@@ -878,8 +917,6 @@ WinMain(
     LPSTR /*unused*/,     // lpCmdLine, Command line arguments
     int /*unused*/        // nCmdShow Window visibility option
 ) {
-    // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
-
     win32::AllState allState{};
     win32::GetExePathAndFilename(&allState);
 
@@ -903,6 +940,15 @@ WinMain(
 
     const char* name{ "Handmade Hero" };
     windowClass.lpszClassName = name;
+
+    // Also works
+    const HCURSOR cursor{ LoadCursorA(0, IDC_ARROW) };
+    windowClass.hCursor = cursor; // This is not enough apparently
+    gCursor = cursor;             // Have to SetCursor to gCursor in WM_SETCURSOR...
+
+#if HANDMADE_INTERNAL
+    gShowCursor = true;
+#endif
 
     // NOTE: This will not be used if we recap episode 20 audio fixes
     // 3 seems to be enough for monitorHz of 60 (gameUpdateHz 30), 5 for 144
