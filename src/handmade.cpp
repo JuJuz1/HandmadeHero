@@ -55,11 +55,6 @@ OutputSound(GameState* gameState, const SoundOutputBuffer* buff, i32 toneHz) {
 #endif
         *sampleOut++ = sampleValue;
         *sampleOut++ = sampleValue;
-
-        //gameState->tSine += 2 * PI32f / static_cast<f32>(wavePeriod);
-        //if (gameState->tSine > 2 * PI32f) {
-        //    gameState->tSine -= 2 * PI32f;
-        //}
     }
 }
 
