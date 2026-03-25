@@ -158,8 +158,8 @@ DEBUGLoadBMP(ThreadContext* threadContext, platform_export::debug_read_file* rea
         const u32 redMask{ bitMapHeader->redMask };
         const u32 greenMask{ bitMapHeader->greenMask };
         const u32 blueMask{ bitMapHeader->blueMask };
-        // const u32 alphaMask{ ~(redMask | greenMask | blueMask) };
-        const u32 alphaMask{ bitMapHeader->alphaMask };
+        const u32 alphaMask{ ~(redMask | greenMask | blueMask) };
+        //const u32 alphaMask{ bitMapHeader->alphaMask }; commented out to investigate crash reason
 
         const BitscanResult redShift{ FindLeastSignificantBitSet(redMask) };
         const BitscanResult greenShift{ FindLeastSignificantBitSet(greenMask) };
@@ -200,10 +200,15 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
     i32 roundedMaxX{ RoundF32ToI32(alignedX + bitmap->width) };
     i32 roundedMaxY{ RoundF32ToI32(alignedY + bitmap->height) };
 
+    i32 srcOffsetX{};
     if (roundedMinX < 0) {
+        srcOffsetX = -roundedMinX;
         roundedMinX = 0;
     }
+
+    i32 srcOffsetY{};
     if (roundedMinY < 0) {
+        srcOffsetY = -roundedMinY;
         roundedMinY = 0;
     }
 
@@ -216,13 +221,16 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 
     // Start from the last row (top row of the image) as the bitmap is stored bottom up
     u32* srcRow{ bitmap->pixels + (bitmap->width * (bitmap->height - 1)) };
+    // Handle offsets to fix top and left side clipping
+    srcRow += -(bitmap->width * srcOffsetY) + srcOffsetX;
+
     u8* destRow{ static_cast<u8*>(screenBuff->memory) + (roundedMinY * screenBuff->pitch) +
                  (roundedMinX * screenBuff->bytesPerPixel) };
     for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
         u32* dest{ reinterpret_cast<u32*>(destRow) };
         u32* src{ srcRow };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-
+            // FIXME: Sometimes we crash here, but not often
             const f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
             const f32 srcRed{ static_cast<f32>((*src >> 16) & 0xFF) };
             const f32 srcGreen{ static_cast<f32>((*src >> 8) & 0xFF) };
@@ -247,7 +255,7 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 
         destRow += screenBuff->pitch;
         // Move to the start of the above row
-        srcRow -= bitmap->width;
+        srcRow += -bitmap->width;
     }
 }
 
@@ -814,6 +822,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     heroBitmaps->alignX = 44;
     heroBitmaps->alignY = 104;
 
+    gameState->cameraPos.absTileX = 17 / 2;
+    gameState->cameraPos.absTileY = 9 / 2;
+    gameState->cameraPos.absTileZ = 0;
+
     gameState->playerPos.absTileX = 3;
     gameState->playerPos.absTileY = 3;
     gameState->playerPos.tileOffsetX = 1.2f;
@@ -825,24 +837,24 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
-    world->tileMap = PushSize(&gameState->worldArena, Tilemap);
+    world->tilemap = PushSize(&gameState->worldArena, Tilemap);
 
-    Tilemap* tileMap{ world->tileMap };
-    tileMap->tileChunkCountX = 128;
-    tileMap->tileChunkCountY = 128;
-    tileMap->tileChunkCountZ = 2; // Limited to 2 atm
+    Tilemap* tilemap{ world->tilemap };
+    tilemap->tileChunkCountX = 128;
+    tilemap->tileChunkCountY = 128;
+    tilemap->tileChunkCountZ = 2; // Limited to 2 atm
 
     // chunk size is chunkSize x chunkSize (really: chunkShift * chunkShift)
-    tileMap->chunkShift = 4;
-    tileMap->chunkMask = (1 << tileMap->chunkShift) - 1;
-    tileMap->chunkSize = 1 << tileMap->chunkShift;
+    tilemap->chunkShift = 4;
+    tilemap->chunkMask = (1 << tilemap->chunkShift) - 1;
+    tilemap->chunkSize = 1 << tilemap->chunkShift;
 
-    tileMap->tileChunks = PushArray(
+    tilemap->tileChunks = PushArray(
         &gameState->worldArena,
-        tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileMap->tileChunkCountZ, Tilechunk);
+        tilemap->tileChunkCountX * tilemap->tileChunkCountY * tilemap->tileChunkCountZ, Tilechunk);
 
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
-    tileMap->tileSideInMeters = 1.4f;
+    tilemap->tileSideInMeters = 1.4f;
 
     u32 randomNumIndex{};
 
@@ -918,7 +930,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                     }
                 }
 
-                SetTileValue(&gameState->worldArena, tileMap, absTileX, absTileY, absTileZ,
+                SetTileValue(&gameState->worldArena, tilemap, absTileX, absTileY, absTileZ,
                              tileValue);
             }
         }
@@ -1000,24 +1012,24 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         playerVelocityY *= playerSpeedModifier;
     }
 
-    const Tilemap* tileMap{ gameState->world->tileMap };
+    const Tilemap* tilemap{ gameState->world->tilemap };
 
     // Switching z index
     if (input::ActionJustPressed(&input0Keyboard->Z)) {
         if (input::ActionPressed(&input0Keyboard->shift)) {
             gameState->playerPos.absTileZ =
-                TilemapPositionModifyZChecked(tileMap, &gameState->playerPos, -1);
+                TilemapPositionModifyZChecked(tilemap, &gameState->playerPos, -1);
         } else {
             gameState->playerPos.absTileZ =
-                TilemapPositionModifyZChecked(tileMap, &gameState->playerPos, 1);
+                TilemapPositionModifyZChecked(tilemap, &gameState->playerPos, 1);
         }
     }
 
     // This now determines the actual pixel size of the tiles!
     constexpr i32 tileSideInPixels{ 60 };
-    const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tileMap->tileSideInMeters };
+    const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tilemap->tileSideInMeters };
 
-    const f32 playerHeight{ tileMap->tileSideInMeters };
+    const f32 playerHeight{ tilemap->tileSideInMeters };
     const f32 playerWidth{ playerHeight * 0.75f };
 
     TilemapPosition newplayerPos{ gameState->playerPos };
@@ -1025,34 +1037,49 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 newPlayerY{ playerVelocityY * delta };
     newplayerPos.tileOffsetX += newPlayerX;
     newplayerPos.tileOffsetY += newPlayerY;
-    newplayerPos = RecanonicalizePosition(tileMap, newplayerPos);
+    newplayerPos = RecanonicalizePosition(tilemap, newplayerPos);
 
     TilemapPosition testplayerPosLeft{ newplayerPos };
     testplayerPosLeft.tileOffsetX -= playerWidth * 0.5f;
-    testplayerPosLeft = RecanonicalizePosition(tileMap, testplayerPosLeft);
+    testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
 
     TilemapPosition testplayerPosRight{ newplayerPos };
     testplayerPosRight.tileOffsetX += playerWidth * 0.5f;
-    testplayerPosRight = RecanonicalizePosition(tileMap, testplayerPosRight);
+    testplayerPosRight = RecanonicalizePosition(tilemap, testplayerPosRight);
 
-    if (IsTilemapPointEmpty(tileMap, newplayerPos) &&
-        IsTilemapPointEmpty(tileMap, testplayerPosLeft) &&
-        IsTilemapPointEmpty(tileMap, testplayerPosRight)) {
+    if (IsTilemapPointEmpty(tilemap, newplayerPos) &&
+        IsTilemapPointEmpty(tilemap, testplayerPosLeft) &&
+        IsTilemapPointEmpty(tilemap, testplayerPosRight)) {
         if (!AreOnSameTiles(&gameState->playerPos, &newplayerPos)) {
-            const u32 newTileValue{ GetTileValue(tileMap, newplayerPos.absTileX,
+            const u32 newTileValue{ GetTileValue(tilemap, newplayerPos.absTileX,
                                                  newplayerPos.absTileY, newplayerPos.absTileZ) };
 
             if (newTileValue == 4) {
-                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tileMap, &newplayerPos, 1);
+                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tilemap, &newplayerPos, 1);
             } else if (newTileValue == 5) {
-                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tileMap, &newplayerPos, -1);
+                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tilemap, &newplayerPos, -1);
             }
         }
 
         gameState->playerPos = newplayerPos;
+
+        const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
+        if (diff.dX > (9.0f * tilemap->tileSideInMeters)) {
+            gameState->cameraPos.absTileX += 17;
+        } else if (diff.dX < -(9.0f * tilemap->tileSideInMeters)) {
+            gameState->cameraPos.absTileX -= 17;
+        }
+
+        if (diff.dY > (5.0f * tilemap->tileSideInMeters)) {
+            gameState->cameraPos.absTileY += 9;
+        } else if (diff.dY < -(5.0f * tilemap->tileSideInMeters)) {
+            gameState->cameraPos.absTileY -= 9;
+        }
     }
 
-    const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, gameState->playerPos.absTileX,
+    gameState->cameraPos.absTileZ = gameState->playerPos.absTileZ;
+
+    const TilechunkPosition chunkPos{ GetChunkPosition(tilemap, gameState->playerPos.absTileX,
                                                        gameState->playerPos.absTileY,
                                                        gameState->playerPos.absTileZ) };
 
@@ -1085,11 +1112,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     for (i32 relRow{ -relRowCount }; relRow < relRowCount; ++relRow) {
         for (i32 relColumn{ -relColumnCount }; relColumn < relColumnCount; ++relColumn) {
             // Possibly wraps to U32 max
-            const u32 row{ gameState->playerPos.absTileY + relRow };
-            const u32 column{ gameState->playerPos.absTileX + relColumn };
-            const u32 depth{ gameState->playerPos.absTileZ };
+            const u32 row{ gameState->cameraPos.absTileY + relRow };
+            const u32 column{ gameState->cameraPos.absTileX + relColumn };
+            const u32 depth{ gameState->cameraPos.absTileZ };
 
-            const u32 tileID{ GetTileValue(tileMap, column, row, depth) };
+            const u32 tileID{ GetTileValue(tilemap, column, row, depth) };
             if (tileID != 1 && tileID != 4 && tileID != 5 &&
                 !(row == gameState->playerPos.absTileY &&
                   column == gameState->playerPos.absTileX)) {
@@ -1127,10 +1154,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             const f32 tileCenX{ screenCenterX -
-                                (metersToPixels * gameState->playerPos.tileOffsetX) +
+                                (metersToPixels * gameState->cameraPos.tileOffsetX) +
                                 (static_cast<f32>(relColumn * tileSideInPixels)) };
             const f32 tileCenY{ screenCenterY +
-                                (metersToPixels * gameState->playerPos.tileOffsetY) -
+                                (metersToPixels * gameState->cameraPos.tileOffsetY) -
                                 (static_cast<f32>(relRow * tileSideInPixels)) };
 
             const f32 minX{ tileCenX - (static_cast<f32>(tileSideInPixels) * 0.5f) };
@@ -1139,18 +1166,32 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const f32 maxY{ tileCenY + (static_cast<f32>(tileSideInPixels) * 0.5f) };
 
             // Fix a 1 pixel wide vertical black bar that appears sometimes
-            const f32 roundedMinX{ static_cast<f32>(FloorF32ToI32(minX)) };
-            const f32 roundedMaxX{ static_cast<f32>(CeilF32ToI32(maxX)) };
+            const f32 floorMinX{ static_cast<f32>(FloorF32ToI32(minX)) };
+            const f32 ceilMaxX{ static_cast<f32>(CeilF32ToI32(maxX)) };
 
-            DrawRectangle(screenBuff, roundedMinX, minY, roundedMaxX, maxY, red, green, blue);
+            DrawRectangle(screenBuff, floorMinX, minY, ceilMaxX, maxY, red, green, blue);
         }
     }
 
     // Drawing player
 
+    const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
+
     // Real player position
-    const f32 playerGroundPointX{ screenCenterX };
-    const f32 playerGroundPointY{ screenCenterY };
+    const f32 playerGroundPointX{ screenCenterX + (metersToPixels * diff.dX) };
+    const f32 playerGroundPointY{ screenCenterY - (metersToPixels * diff.dY) };
+
+    constexpr f32 playerR{ 0.5f };
+    constexpr f32 playerG{ 0.1f };
+    constexpr f32 playerB{ 0.5f };
+    // TODO: fix player graphics positioning
+
+    const f32 playerPosLeft{ playerGroundPointX - (playerWidth * 0.5f * metersToPixels) };
+    const f32 playerPosTop{ playerGroundPointY - (playerHeight * metersToPixels) };
+
+    DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
+                  playerPosLeft + (playerWidth * metersToPixels),
+                  playerPosTop + (playerHeight * metersToPixels), playerR, playerG, playerB);
 
     const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[gameState->playerFacingDirection] };
     DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPointX, playerGroundPointY,

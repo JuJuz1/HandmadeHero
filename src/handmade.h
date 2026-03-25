@@ -322,7 +322,7 @@ PushSize_(MemoryArena* arena, memory_index size) {
 }
 
 struct World {
-    Tilemap* tileMap;
+    Tilemap* tilemap;
 };
 
 struct LoadedBitmapInfo {
@@ -343,6 +343,7 @@ struct GameState {
     MemoryArena worldArena;
     World* world;
 
+    TilemapPosition cameraPos;
     TilemapPosition playerPos;
 
     LoadedBitmapInfo background;

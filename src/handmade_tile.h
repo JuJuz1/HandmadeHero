@@ -24,6 +24,12 @@ struct TilechunkPosition {
     u32 chunkRelativeTileY;
 };
 
+struct TilemapDiff {
+    f32 dX;
+    f32 dY;
+    f32 dZ;
+};
+
 struct TilemapPosition {
     // New way of storing the information, we don't need tilemapX and Y
     // This is the "real" tileX and tileY in the whole tilemap
