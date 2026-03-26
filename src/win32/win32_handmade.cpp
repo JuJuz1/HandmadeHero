@@ -1,3 +1,8 @@
+/*
+    Episode 11: Important topics about making code cross-platform
+    This is not a final platform layer!
+*/
+
 #include "handmade.h"
 #include "handmade_intrinsics.h" // Safe truncate functions
 
@@ -8,11 +13,6 @@
 #include <cstdio>
 
 #include "win32_handmade.h"
-
-/*
-Episode 11: Important topics about making code cross-platform
-This is not a final platform layer!
-*/
 
 GLOBAL bool32 gIsGameRunning;
 GLOBAL bool32 gIsGamePaused;

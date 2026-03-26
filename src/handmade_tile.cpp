@@ -120,8 +120,8 @@ NODISCARD
 INTERNAL TilemapPosition
 RecanonicalizePosition(const Tilemap* tileMap, TilemapPosition pos) {
     TilemapPosition result{ pos };
-    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffsetX);
-    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffsetY);
+    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffset.x);
+    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffset.y);
 
     return result;
 }
@@ -161,12 +161,11 @@ INTERNAL TilemapDiff
 Subtract(const Tilemap* tilemap, const TilemapPosition* a, const TilemapPosition* b) {
     TilemapDiff result{};
 
-    const f32 dTileX{ static_cast<f32>(a->absTileX) - static_cast<f32>(b->absTileX) };
-    const f32 dTileY{ static_cast<f32>(a->absTileY) - static_cast<f32>(b->absTileY) };
+    const Vec2 dTileXY{ static_cast<f32>(a->absTileX) - static_cast<f32>(b->absTileX),
+                        static_cast<f32>(a->absTileY) - static_cast<f32>(b->absTileY) };
     const f32 dTileZ{ static_cast<f32>(a->absTileZ) - static_cast<f32>(b->absTileZ) };
 
-    result.dX = (tilemap->tileSideInMeters * dTileX) + a->tileOffsetX - b->tileOffsetX;
-    result.dY = (tilemap->tileSideInMeters * dTileY) + a->tileOffsetY - b->tileOffsetY;
+    result.dXY = (tilemap->tileSideInMeters * dTileXY) + a->tileOffset - b->tileOffset;
     result.dZ = tilemap->tileSideInMeters * dTileZ;
 
     return result;

@@ -1,18 +1,20 @@
 #ifndef HANDMADE_H
 #define HANDMADE_H
 
-#include <cstdint>
-
 /*
-This file acts as the shared interface between the platform layer and the game code
+    This file acts as the shared interface between the platform layer and the game code
 
-- It declares the functions the platform calls into the game (UpdateAndRender, etc.)
-- It declares the services the game can call back into the platform (file I/O, debug, etc.)
-- It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
+    - It declares the functions the platform calls into the game (UpdateAndRender, etc.)
+    - It declares the services the game can call back into the platform (file I/O, debug, etc.)
+    - It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
 
-This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
-restarting the platform layer
+    This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
+    restarting the platform layer
+
+    TODO: maybe split this into handmade_platform.h
 */
+
+#include <cstdint>
 
 // Ensure we are compiling as 64-bit for now...
 // NOTE: is this a good way?
@@ -293,6 +295,7 @@ static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
               "MouseButtons count doesn't match the amount of buttons declared!");
 
 #include "handmade_intrinsics.h"
+#include "handmade_math.h"
 #include "handmade_tile.h"
 
 struct MemoryArena {
@@ -334,8 +337,7 @@ struct LoadedBitmapInfo {
 struct HeroBitmaps {
     LoadedBitmapInfo head;
     LoadedBitmapInfo torso;
-    i32 alignX;
-    i32 alignY;
+    Vec2 align;
 };
 
 // The game state

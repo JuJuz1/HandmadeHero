@@ -1,8 +1,6 @@
 #ifndef HANDMADE_INTRINSICS_H
 #define HANDMADE_INTRINSICS_H
 
-#include <cmath>
-
 /*
     TODO: implement these functions ourself using platform-efficient versions and remove cmath
    include. As a result this file's contents can access the platform layer!
@@ -10,6 +8,8 @@
    https://learn.microsoft.com/en-us/cpp/intrinsics/compiler-intrinsics?view=msvc-170
    https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html
 */
+
+#include <cmath>
 
 NODISCARD
 INTERNAL inline i32

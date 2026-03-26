@@ -1,5 +1,6 @@
 #include "handmade.h"
 
+#include "handmade_math.h"
 #include "handmade_tile.cpp"
 
 //namespace game {
@@ -790,32 +791,32 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_forward.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_forward.bmp");
-    heroBitmaps->alignX = 48;
-    heroBitmaps->alignY = 100;
+    heroBitmaps->align.x = 48;
+    heroBitmaps->align.y = 100;
     heroBitmaps++;
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_left.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_left.bmp");
-    heroBitmaps->alignX = 46;
-    heroBitmaps->alignY = 104;
+    heroBitmaps->align.x = 46;
+    heroBitmaps->align.y = 104;
     heroBitmaps++;
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_backward.bmp");
     heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
                                       "test/player_torso_backward.bmp");
-    heroBitmaps->alignX = 42;
-    heroBitmaps->alignY = 100;
+    heroBitmaps->align.x = 42;
+    heroBitmaps->align.y = 100;
     heroBitmaps++;
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_right.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_right.bmp");
-    heroBitmaps->alignX = 44;
-    heroBitmaps->alignY = 104;
+    heroBitmaps->align.x = 44;
+    heroBitmaps->align.y = 104;
 
     gameState->cameraPos.absTileX = 17 / 2;
     gameState->cameraPos.absTileY = 9 / 2;
@@ -823,8 +824,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     gameState->playerPos.absTileX = 3;
     gameState->playerPos.absTileY = 3;
-    gameState->playerPos.tileOffsetX = 1.2f;
-    gameState->playerPos.tileOffsetY = 0.5f;
+    gameState->playerPos.tileOffset.x = 1.2f;
+    gameState->playerPos.tileOffset.y = 0.5f;
 
     InitializeArena(&gameState->worldArena,
                     static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
@@ -983,28 +984,32 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
-    f32 playerVelocityX{}, playerVelocityY{};
+    Vec2 playerVelocity{};
     constexpr f32 playerSpeed{ 3 }; // Meters per second
     constexpr f32 playerSpeedModifier{ 4 };
     if (input::ActionPressed(&input0Keyboard->up)) {
-        playerVelocityY += playerSpeed;
+        playerVelocity.y += playerSpeed;
         gameState->playerFacingDirection = 2;
     }
     if (input::ActionPressed(&input0Keyboard->down)) {
-        playerVelocityY -= playerSpeed;
+        playerVelocity.y -= playerSpeed;
         gameState->playerFacingDirection = 0;
     }
     if (input::ActionPressed(&input0Keyboard->left)) {
-        playerVelocityX -= playerSpeed;
+        playerVelocity.x -= playerSpeed;
         gameState->playerFacingDirection = 1;
     }
     if (input::ActionPressed(&input0Keyboard->right)) {
-        playerVelocityX += playerSpeed;
+        playerVelocity.x += playerSpeed;
         gameState->playerFacingDirection = 3;
     }
     if (input::ActionPressed(&input0Keyboard->shift)) {
-        playerVelocityX *= playerSpeedModifier;
-        playerVelocityY *= playerSpeedModifier;
+        playerVelocity.x *= playerSpeedModifier;
+        playerVelocity.y *= playerSpeedModifier;
+    }
+
+    if (playerVelocity.x != 0.0f && playerVelocity.y != 0.0f) {
+        playerVelocity *= 0.70710678118f; // sqrt(0.5)
     }
 
     const Tilemap* tilemap{ gameState->world->tilemap };
@@ -1028,18 +1033,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 playerWidth{ playerHeight * 0.75f };
 
     TilemapPosition newplayerPos{ gameState->playerPos };
-    const f32 newPlayerX{ playerVelocityX * delta };
-    const f32 newPlayerY{ playerVelocityY * delta };
-    newplayerPos.tileOffsetX += newPlayerX;
-    newplayerPos.tileOffsetY += newPlayerY;
+    const Vec2 newPlayerPos{ playerVelocity.x * delta, playerVelocity.y * delta };
+    newplayerPos.tileOffset += newPlayerPos;
     newplayerPos = RecanonicalizePosition(tilemap, newplayerPos);
 
     TilemapPosition testplayerPosLeft{ newplayerPos };
-    testplayerPosLeft.tileOffsetX -= playerWidth * 0.5f;
+    testplayerPosLeft.tileOffset.x -= playerWidth * 0.5f;
     testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
 
     TilemapPosition testplayerPosRight{ newplayerPos };
-    testplayerPosRight.tileOffsetX += playerWidth * 0.5f;
+    testplayerPosRight.tileOffset.x += playerWidth * 0.5f;
     testplayerPosRight = RecanonicalizePosition(tilemap, testplayerPosRight);
 
     if (IsTilemapPointEmpty(tilemap, newplayerPos) &&
@@ -1059,15 +1062,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         gameState->playerPos = newplayerPos;
 
         const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
-        if (diff.dX > (9.0f * tilemap->tileSideInMeters)) {
+        if (diff.dXY.x > (9.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileX += 17;
-        } else if (diff.dX < -(9.0f * tilemap->tileSideInMeters)) {
+        } else if (diff.dXY.x < -(9.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileX -= 17;
         }
 
-        if (diff.dY > (5.0f * tilemap->tileSideInMeters)) {
+        if (diff.dXY.y > (5.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileY += 9;
-        } else if (diff.dY < -(5.0f * tilemap->tileSideInMeters)) {
+        } else if (diff.dXY.y < -(5.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileY -= 9;
         }
     }
@@ -1078,6 +1081,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                                        gameState->playerPos.absTileY,
                                                        gameState->playerPos.absTileZ) };
 
+#if 0
     DEBUG_PLATFORM_PRINT("\n");
     memory->exports.DEBUGPrintInt(threadContext, "tileChunkX", chunkPos.chunkX);
     memory->exports.DEBUGPrintInt(threadContext, "tileChunkY", chunkPos.chunkY);
@@ -1090,6 +1094,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     memory->exports.DEBUGPrintInt(threadContext, "absTileZ", gameState->playerPos.absTileZ);
     memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", gameState->playerPos.tileOffsetX);
     memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", gameState->playerPos.tileOffsetY);
+#endif
 
     // Background
 
@@ -1149,10 +1154,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             const f32 tileCenX{ screenCenterX -
-                                (metersToPixels * gameState->cameraPos.tileOffsetX) +
+                                (metersToPixels * gameState->cameraPos.tileOffset.x) +
                                 (static_cast<f32>(relColumn * tileSideInPixels)) };
             const f32 tileCenY{ screenCenterY +
-                                (metersToPixels * gameState->cameraPos.tileOffsetY) -
+                                (metersToPixels * gameState->cameraPos.tileOffset.y) -
                                 (static_cast<f32>(relRow * tileSideInPixels)) };
 
             const f32 minX{ tileCenX - (static_cast<f32>(tileSideInPixels) * 0.5f) };
@@ -1173,26 +1178,26 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
 
     // Real player position
-    const f32 playerGroundPointX{ screenCenterX + (metersToPixels * diff.dX) };
-    const f32 playerGroundPointY{ screenCenterY - (metersToPixels * diff.dY) };
+    const Vec2 playerGroundPoint{ screenCenterX + (metersToPixels * diff.dXY.x),
+                                  screenCenterY - (metersToPixels * diff.dXY.y) };
 
     constexpr f32 playerR{ 0.5f };
     constexpr f32 playerG{ 0.1f };
     constexpr f32 playerB{ 0.5f };
     // TODO: fix player graphics positioning
 
-    const f32 playerPosLeft{ playerGroundPointX - (playerWidth * 0.5f * metersToPixels) };
-    const f32 playerPosTop{ playerGroundPointY - (playerHeight * metersToPixels) };
+    const Vec2 playerPosXY{ playerGroundPoint.x - (playerWidth * 0.5f * metersToPixels),
+                            playerGroundPoint.y - (playerHeight * metersToPixels) };
 
-    DrawRectangle(screenBuff, playerPosLeft, playerPosTop,
-                  playerPosLeft + (playerWidth * metersToPixels),
-                  playerPosTop + (playerHeight * metersToPixels), playerR, playerG, playerB);
+    DrawRectangle(screenBuff, playerPosXY.x, playerPosXY.y,
+                  playerPosXY.x + (playerWidth * metersToPixels),
+                  playerPosXY.y + (playerHeight * metersToPixels), playerR, playerG, playerB);
 
     const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[gameState->playerFacingDirection] };
-    DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPointX, playerGroundPointY,
-               heroBitmaps->alignX, heroBitmaps->alignY);
-    DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPointX, playerGroundPointY,
-               heroBitmaps->alignX, heroBitmaps->alignY);
+    DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x, playerGroundPoint.y,
+               static_cast<i32>(heroBitmaps->align.x), static_cast<i32>(heroBitmaps->align.y));
+    DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,
+               static_cast<i32>(heroBitmaps->align.x), static_cast<i32>(heroBitmaps->align.y));
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
