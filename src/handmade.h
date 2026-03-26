@@ -118,7 +118,7 @@ namespace platform_export {
 
 struct DEBUGFileReadResult {
     void* content;
-    i32 contentSize;
+    u32 contentSize;
 };
 
 // clang-format off

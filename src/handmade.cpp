@@ -192,8 +192,8 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 
     i32 roundedMinX{ RoundF32ToI32(alignedX) };
     i32 roundedMinY{ RoundF32ToI32(alignedY) };
-    i32 roundedMaxX{ RoundF32ToI32(alignedX + bitmap->width) };
-    i32 roundedMaxY{ RoundF32ToI32(alignedY + bitmap->height) };
+    i32 roundedMaxX{ RoundF32ToI32(alignedX + static_cast<f32>(bitmap->width)) };
+    i32 roundedMaxY{ RoundF32ToI32(alignedY + static_cast<f32>(bitmap->height)) };
 
     i32 srcOffsetX{};
     if (roundedMinX < 0) {

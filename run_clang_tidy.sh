@@ -1,4 +1,47 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -euo pipefail
 
-clang-tidy src/handmade.cpp src/win32/win32_handmade.cpp
+# This script can be used to run clang-tidy on the unity build files
+# It constructs the compile_commands.json automatically which clang-tidy uses
+# No absolute paths have to be set in the compile_commands.json manually
+# This script has to be run from the project root
+# WINDOWS ONLY FOR NOW
+
+# Get absolute path of this script's directory (Windows only)
+ROOT="$(pwd -W)"
+
+# Add files here (mainly platform files only)
+SRC_FILES=(
+    "src/handmade.cpp"
+    "src/win32/win32_handmade.cpp"
+    #"src/linux/linux_handmade.cpp"
+)
+
+COMPILER_COMMAND="clang-cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /I src /W4 /std:c++20"
+
+# Start building the JSON, overwriting if already existed
+echo "[" > "$ROOT/compile_commands.json"
+
+for i in "${!SRC_FILES[@]}"; do
+    FILE="${SRC_FILES[i]}"
+
+    COMMA=","
+    if [[ $i -eq $((${#SRC_FILES[@]} - 1)) ]]; then
+        COMMA=""
+    fi
+
+    cat >> "$ROOT/compile_commands.json" <<EOF
+    {
+        "directory": "$ROOT",
+        "command": "$COMPILER_COMMAND $FILE",
+        "file": "$FILE"
+    }$COMMA
+EOF
+
+done
+
+echo "]" >> "$ROOT/compile_commands.json"
+
+set -x
+
+clang-tidy -p . "${SRC_FILES[@]}"

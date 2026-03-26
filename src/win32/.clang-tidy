@@ -1,9 +1,5 @@
 # https://releases.llvm.org/21.1.0/tools/clang/tools/extra/docs/clang-tidy/index.html
-# Clang tidy file for all files
-# Windows platform layer has its own, slightly modified settings
-
-# Use the run_clang_tidy.sh script
-# Otherwise one would need to construct the compile_commands.json manually
+# Clang tidy file for Windows platform code
 
 ---
 Checks: >
@@ -28,6 +24,7 @@ Checks: >
   -modernize-use-trailing-return-type,
   -modernize-use-std-numbers,
   -modernize-use-using,
+  -modernize-use-nullptr,
   -modernize-use-designated-initializers,
 
   readability-*,
@@ -36,11 +33,8 @@ Checks: >
   -readability-identifier-length,
   -readability-magic-numbers,
   -readability-uppercase-literal-suffix,
-  -readability-use-std-min-max
-
-CheckOptions:
-  - key: readability-function-cognitive-complexity.Threshold
-    value: '50'
+  -readability-use-std-min-max,
+  -readability-function-cognitive-complexity
 
 WarningsAsErrors: ''
 HeaderFileExtensions:

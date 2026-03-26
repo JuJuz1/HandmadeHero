@@ -22,7 +22,7 @@ GLOBAL HCURSOR gCursor;
 GLOBAL win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
-GLOBAL WINDOWPLACEMENT gWindowPlacement{ sizeof(WINDOWPLACEMENT) };
+GLOBAL WINDOWPLACEMENT gWindowPlacement{ sizeof(gWindowPlacement) };
 
 #if HANDMADE_INTERNAL
 
@@ -201,21 +201,30 @@ ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
 INTERNAL void
 DisplayBufferWindow(const HDC deviceContext, // clang-tidy NOLINT
                     const OffScreenBuffer* screenBuff, i32 wndWidth, i32 wndHeight) {
-    constexpr i32 offsetX{ 50 };
-    constexpr i32 offsetY{ 50 };
 
-    // Only clear parts we are not writing to get rid of flickering
-    PatBlt(deviceContext, 0, 0, wndWidth, offsetY, BLACKNESS);
-    PatBlt(deviceContext, 0, 0, offsetX, wndHeight, BLACKNESS);
-    PatBlt(deviceContext, offsetX, offsetY + screenBuff->height, wndWidth, wndHeight, BLACKNESS);
-    PatBlt(deviceContext, offsetX + screenBuff->width, 0, wndWidth, wndHeight, BLACKNESS);
+    // Fullscreen, upsample by 2
+    if (wndWidth >= screenBuff->width * 2 && wndHeight >= screenBuff->height * 2) {
+        StretchDIBits(deviceContext, 0, 0, screenBuff->width * 2, screenBuff->height * 2, 0, 0,
+                      screenBuff->width, screenBuff->height, screenBuff->memory, &screenBuff->info,
+                      DIB_RGB_COLORS, SRCCOPY);
+    } else {
+        constexpr i32 offsetX{ 50 };
+        constexpr i32 offsetY{ 50 };
 
-    // TODO: aspect ratio correction
-    // NOTE: buffer is locked for prototyping
-    // wndWidth, wndHeight
-    StretchDIBits(deviceContext, offsetX, offsetY, screenBuff->width, screenBuff->height, // dest
-                  0, 0, screenBuff->width, screenBuff->height,                            // src
-                  screenBuff->memory, &screenBuff->info, DIB_RGB_COLORS, SRCCOPY);
+        // Only clear parts we are not writing to get rid of flickering
+        PatBlt(deviceContext, 0, 0, wndWidth, offsetY, BLACKNESS);
+        PatBlt(deviceContext, 0, 0, offsetX, wndHeight, BLACKNESS);
+        PatBlt(deviceContext, offsetX, offsetY + screenBuff->height, wndWidth, wndHeight,
+               BLACKNESS);
+        PatBlt(deviceContext, offsetX + screenBuff->width, 0, wndWidth, wndHeight, BLACKNESS);
+
+        // TODO: aspect ratio correction
+        // NOTE: buffer is locked for prototyping
+        // wndWidth, wndHeight
+        StretchDIBits(deviceContext, offsetX, offsetY, screenBuff->width, screenBuff->height, 0, 0,
+                      screenBuff->width, screenBuff->height, screenBuff->memory, &screenBuff->info,
+                      DIB_RGB_COLORS, SRCCOPY);
+    }
 }
 
 // Make use of runtime dynamic library linking
@@ -688,7 +697,7 @@ ProcessPendingMessages(Input* input, AllState* allState) {
         case WM_KEYDOWN: {
             // Ignore continuous messages
             if (isDown == wasDown) {
-                break;
+                continue;
             }
 
             //char buf[32];
@@ -714,6 +723,24 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 OutputDebugStringA("D\n");
                 ProcessInputMessage(&input->playerInputs->right, isDown);
             } break;
+
+            case VK_UP: {
+                OutputDebugStringA("VK_UP\n");
+                ProcessInputMessage(&input->playerInputs->up, isDown);
+            } break;
+            case VK_DOWN: {
+                OutputDebugStringA("VK_DOWN\n");
+                ProcessInputMessage(&input->playerInputs->down, isDown);
+            } break;
+            case VK_LEFT: {
+                OutputDebugStringA("VK_LEFT\n");
+                ProcessInputMessage(&input->playerInputs->left, isDown);
+            } break;
+            case VK_RIGHT: {
+                OutputDebugStringA("VK_RIGHT\n");
+                ProcessInputMessage(&input->playerInputs->right, isDown);
+            } break;
+
             case 'Q': {
                 OutputDebugStringA("Q\n");
                 ProcessInputMessage(&input->playerInputs->Q, isDown);
@@ -796,24 +823,12 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             } break;
 #endif
 
-            case VK_UP: {
-                OutputDebugStringA("VK_UP\n");
-            } break;
-            case VK_DOWN: {
-                OutputDebugStringA("VK_DOWN\n");
-            } break;
-            case VK_LEFT: {
-                OutputDebugStringA("VK_LEFT\n");
-            } break;
-            case VK_RIGHT: {
-                OutputDebugStringA("VK_RIGHT\n");
-            } break;
-            case VK_ESCAPE: {
-                OutputDebugStringA("VK_ESCAPE\n");
-            } break;
-            case VK_SPACE: {
-                OutputDebugStringA("VK_SPACE\n");
-            } break;
+            //case VK_ESCAPE: {
+            //    OutputDebugStringA("VK_ESCAPE\n");
+            //} break;
+            //case VK_SPACE: {
+            //    OutputDebugStringA("VK_SPACE\n");
+            //} break;
             default: {
                 char buf[32];
                 sprintf_s(buf, "vkCode: %llu NOT HANDLED\n", vkCode);
