@@ -3,14 +3,13 @@
     This is not a final platform layer!
 */
 
-#include "handmade.h"
-#include "handmade_intrinsics.h" // Safe truncate functions
-
 // Windows stuff
 #include <dsound.h>
 #include <windows.h>
 
 #include <cstdio>
+
+#include "handmade.h"
 
 #include "win32_handmade.h"
 
@@ -89,7 +88,7 @@ DEBUG_READ_FILE(DEBUGReadFile) {
         }
 
         // NOTE: 4GB limit
-        const DWORD bytesToRead{ TruncateU64toU32(fileSize.QuadPart) };
+        const DWORD bytesToRead{ static_cast<u32>(fileSize.QuadPart) };
         DWORD bytesRead;
         // Consider the case where one could truncate the file after reading
         if (ReadFile(fileHandle, result.content, bytesToRead, &bytesRead, 0) &&
@@ -170,7 +169,8 @@ GetWindowDimensions(HWND windowHandle) {
     const i32 w{ clientRect.right - clientRect.left };
     const i32 h{ clientRect.bottom - clientRect.top };
 
-    return WindowDimension{ w, h };
+    const WindowDimension result{ w, h };
+    return result;
 }
 
 INTERNAL void
@@ -890,7 +890,6 @@ LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) 
     gameCode.dll = LoadLibraryA(tempDll);
     gameCode.lastWritetime = GetLastWriteTime(srcDll);
 
-    //using namespace dll;
     if (gameCode.dll) {
         gameCode.updateAndRender =
             reinterpret_cast<update_and_render*>(GetProcAddress(gameCode.dll, "UpdateAndRender"));

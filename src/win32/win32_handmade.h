@@ -65,9 +65,6 @@ GLOBAL i32 constexpr replay_Buffer_Not_Playing{ -1 };
 
 // NOTE: not really all state (yet?)
 struct AllState {
-    //game::Input* input;
-    //i32 inputCount;
-
     void* gameMemory;
     u64 memorySize;
     ReplayBuffer replayBuffers[replay_Buffer_Count];

@@ -3,8 +3,6 @@
 #include "handmade_math.h"
 #include "handmade_tile.cpp"
 
-//namespace game {
-
 // Any global variables need to be initialized after hot reload (so probably every frame)
 GLOBAL ThreadContext* gThreadContext;
 GLOBAL GameMemory* gMemory;
@@ -130,9 +128,7 @@ struct BitmapHeader {
 #pragma pack(pop)
 
 INTERNAL LoadedBitmapInfo
-DEBUGLoadBMP(ThreadContext* threadContext, platform_export::debug_read_file* readFile,
-             const char* filename) {
-
+DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename) {
     LoadedBitmapInfo result{};
 
     auto readFileResult{ readFile(threadContext, filename) };
@@ -1201,5 +1197,3 @@ extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     OutputSound(gameState, soundBuff, 256);
 }
-
-//} //namespace game

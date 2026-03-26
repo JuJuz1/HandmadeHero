@@ -11,6 +11,9 @@ struct Vec2 {
         f32 e[2];
     };
 
+    // NOTE: These could also be outside the struct by taking a reference as the first parameter
+    //inline Vec2& operator+=(Vec2& a, Vec2 b);
+
     inline f32& operator[](i32 i);
 
     inline Vec2& operator+=(Vec2 a);
@@ -53,7 +56,7 @@ operator*(Vec2 a, f32 scalar) {
 NODISCARD
 INTERNAL inline Vec2
 operator*(f32 scalar, Vec2 a) {
-    Vec2 result{ a.x * scalar, a.y * scalar };
+    Vec2 result{ a * scalar };
     return result;
 }
 

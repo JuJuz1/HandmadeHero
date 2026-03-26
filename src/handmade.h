@@ -11,40 +11,14 @@
     This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
     restarting the platform layer
 
-    TODO: maybe split this into handmade_platform.h
+    Split into handmade_platform.h which is designed to be C-compatible
 */
 
-#include <cstdint>
+#include "handmade_platform.h"
 
 // Ensure we are compiling as 64-bit for now...
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
-
-// Compilers
-
-#ifndef COMPILER_MSVC
-#    define COMPILER_MSVC 0
-#endif
-
-#ifndef COMPILER_LLVM
-#    define COMPILER_LLVM 0
-#endif
-
-// Determine the compiler if none set
-// TODO: more compilers
-#if !COMPILER_MSVC && !COMPILER_LLVM
-#    if _MSC_VER
-#        undef COMPILER_MSVC
-#        define COMPILER_MSVC 1
-#    else
-#        undef COMPILER_LLVM
-#        define COMPILER_LLVM 1
-#    endif
-#endif
-
-#if COMPILER_MSVC
-#    include <intrin.h>
-#endif
 
 /*
 HANDMADE_INTERNAL:
@@ -89,74 +63,7 @@ HANDMADE_DEBUG:
 // works and produces the warning
 #define NODISCARD [[nodiscard]]
 
-// Typedefs for common types
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-typedef i32 bool32; // We never use bool here :)
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef float f32;
-typedef double f64;
-
-typedef size_t memory_index;
-
 /// Services that the platform layer provides to the game ///
-
-// A thread context passed to game code and is used when calling back to platform-specific code
-struct ThreadContext {
-    i32 placeHolder;
-};
-
-#if HANDMADE_INTERNAL
-
-namespace platform_export {
-
-struct DEBUGFileReadResult {
-    void* content;
-    u32 contentSize;
-};
-
-// clang-format off
-#define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* message)
-typedef DEBUG_PRINT(debug_print);
-
-#define DEBUG_PRINT_INT(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
-typedef DEBUG_PRINT_INT(debug_print_int);
-
-#define DEBUG_PRINT_FLOAT(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
-typedef DEBUG_PRINT_FLOAT(debug_print_float);
-
-#define DEBUG_FREE_FILE_MEMORY(name) void name(ThreadContext* threadContext, void* memory)
-typedef DEBUG_FREE_FILE_MEMORY(debug_free_file_memory);
-
-#define DEBUG_READ_FILE(name) DEBUGFileReadResult name(ThreadContext* threadContext, const char* filename)
-typedef DEBUG_READ_FILE(debug_read_file);
-
-#define DEBUG_WRITE_FILE(name) bool32 name(ThreadContext* threadContext, const char* filename, void* memory, u32 fileSize)
-typedef DEBUG_WRITE_FILE(debug_write_file);
-// clang-format on
-
-// Exported functions for the game
-struct PlatformExports {
-    platform_export::debug_print* DEBUGPrint;
-    platform_export::debug_print_int* DEBUGPrintInt;
-    platform_export::debug_print_float* DEBUGPrintFloat;
-
-    platform_export::debug_free_file_memory* DEBUGFreeFileMemory;
-    platform_export::debug_read_file* DEBUGReadFile;
-    platform_export::debug_write_file* DEBUGWriteFile;
-};
-
-} //namespace platform_export
-
-#endif // HANDMADE_INTERNAL
 
 GLOBAL constexpr f32 PI32f{ 3.14159265359f };
 
@@ -194,105 +101,6 @@ StrLength(const char* str) {
 }
 
 /// Game specific code ///
-
-//namespace game {
-
-// TODO: experiment with more than 1
-GLOBAL constexpr i32 player_Count{ 1 };
-
-// All the memory the game needs
-struct GameMemory {
-    void* permanentStorage;
-    u64 permanentStorageSize;
-
-    void* transientStorage;
-    u64 transientStorageSize;
-
-    bool32 isInitialized;
-
-#if HANDMADE_INTERNAL
-    platform_export::PlatformExports exports;
-#endif
-};
-
-// Struct to hold screen buffer info
-struct OffScreenBuffer {
-    void* memory;
-    i32 width;
-    i32 height;
-    i32 bytesPerPixel;
-    i32 pitch;
-};
-
-struct SoundOutputBuffer {
-    i16* samples;
-    i32 samplesPerSecond;
-    i32 sampleCount;
-};
-
-// Keyboard button states
-struct Button {
-    bool32 endedDown; // If the button ended down during the frame
-    // The amount of times the state changed during the frame, with this we can deduce
-    // if the button was just pressed, pressed continuously or just released
-    i32 halfTransitionCount;
-};
-
-GLOBAL constexpr i32 button_Count{ 8 };
-GLOBAL constexpr i32 mouse_Button_Count{ 5 };
-
-struct InputButtons {
-    // A union allows us to do:
-    // InputButtons b;
-    // b[0] is the same as b.up;
-    union {
-        Button buttons[button_Count];
-
-        struct {
-            Button up;
-            Button down;
-            Button left;
-            Button right;
-
-            Button shift;
-
-            Button Q;
-            Button E;
-
-            Button Z;
-        };
-    };
-};
-
-struct MouseButtons {
-    union {
-        Button buttons[mouse_Button_Count];
-
-        struct {
-            Button left;
-            Button middle;
-            Button right;
-
-            // Side buttons
-            Button x1; // Closer
-            Button x2; // Further
-        };
-    };
-};
-
-struct Input {
-    InputButtons playerInputs[player_Count];
-
-    MouseButtons mouseButtons;
-    i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
-
-    f32 frameDeltaTime;
-};
-
-static_assert(sizeof(InputButtons) == sizeof(Button) * button_Count,
-              "Inputbuttons count doesn't match the amount of buttons declared!");
-static_assert(sizeof(MouseButtons) == sizeof(Button) * mouse_Button_Count,
-              "MouseButtons count doesn't match the amount of buttons declared!");
 
 #include "handmade_intrinsics.h"
 #include "handmade_math.h"
@@ -352,23 +160,5 @@ struct GameState {
     HeroBitmaps heroBitmaps[4];
     u32 playerFacingDirection;
 };
-
-// We use the style 2 (Game as a service to the OS) described in the series
-
-/// Services that the game provides to the platform layer ///
-
-//namespace dll {
-
-// clang-format off
-#define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, const SoundOutputBuffer* soundBuff)
-typedef GET_SOUND_SAMPLES(get_sound_samples);
-
-#define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
-typedef UPDATE_AND_RENDER(update_and_render);
-// clang-format on
-
-//} //namespace dll
-
-//} //namespace game
 
 #endif // HANDMADE_H

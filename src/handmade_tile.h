@@ -25,6 +25,7 @@ struct TilechunkPosition {
 };
 
 struct TilemapDiff {
+    // Vec3 could look nice here :)
     Vec2 dXY;
     f32 dZ;
 };
