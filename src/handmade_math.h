@@ -11,6 +11,8 @@ struct Vec2 {
         f32 e[2];
     };
 
+    inline f32& operator[](i32 i);
+
     inline Vec2& operator+=(Vec2 a);
     inline Vec2& operator-=(Vec2 a);
     inline Vec2& operator*=(f32 scalar);
@@ -71,6 +73,13 @@ operator*(Vec2 a, Vec2 b) {
 }
 
 /// Member functions
+
+inline f32&
+Vec2::operator[](i32 i) {
+    ASSERT(0 <= i && i < 2);
+    f32& result{ this->e[i] };
+    return result;
+}
 
 inline Vec2&
 Vec2::operator+=(Vec2 a) {
