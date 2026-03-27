@@ -155,6 +155,7 @@ struct GameState {
 
     TilemapPosition cameraPos;
     TilemapPosition playerPos;
+    Vec2 playerVelocity;
 
     LoadedBitmapInfo background;
     HeroBitmaps heroBitmaps[4];

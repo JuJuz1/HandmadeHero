@@ -114,4 +114,13 @@ Vec2::operator*=(Vec2 a) {
     return *this;
 }
 
+/// Utility functions
+
+NODISCARD
+INTERNAL inline f32
+SquareF32(f32 value) {
+    const f32 result{ value * value };
+    return result;
+}
+
 #endif // HANDMADE_MATH_H

@@ -975,32 +975,32 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: if many players -> loop through input->playerInputs
     const InputButtons* input0Keyboard{ &input->playerInputs[0] };
 
-    Vec2 playerVelocity{};
-    constexpr f32 playerSpeed{ 3 }; // Meters per second
+    // Acceleration
+    Vec2 playerAcceleration{};       // m/s^2
+    constexpr f32 playerSpeed{ 30 }; // m/s
     constexpr f32 playerSpeedModifier{ 4 };
     if (input::ActionPressed(&input0Keyboard->up)) {
-        playerVelocity.y += playerSpeed;
+        playerAcceleration.y += playerSpeed;
         gameState->playerFacingDirection = 2;
     }
     if (input::ActionPressed(&input0Keyboard->down)) {
-        playerVelocity.y -= playerSpeed;
+        playerAcceleration.y -= playerSpeed;
         gameState->playerFacingDirection = 0;
     }
     if (input::ActionPressed(&input0Keyboard->left)) {
-        playerVelocity.x -= playerSpeed;
+        playerAcceleration.x -= playerSpeed;
         gameState->playerFacingDirection = 1;
     }
     if (input::ActionPressed(&input0Keyboard->right)) {
-        playerVelocity.x += playerSpeed;
+        playerAcceleration.x += playerSpeed;
         gameState->playerFacingDirection = 3;
     }
     if (input::ActionPressed(&input0Keyboard->shift)) {
-        playerVelocity.x *= playerSpeedModifier;
-        playerVelocity.y *= playerSpeedModifier;
+        playerAcceleration *= playerSpeedModifier;
     }
 
-    if (playerVelocity.x != 0.0f && playerVelocity.y != 0.0f) {
-        playerVelocity *= 0.70710678118f; // sqrt(0.5)
+    if (playerAcceleration.x != 0.0f && playerAcceleration.y != 0.0f) {
+        playerAcceleration *= 0.70710678118f; // sqrt(0.5)
     }
 
     const Tilemap* tilemap{ gameState->world->tilemap };
@@ -1022,34 +1022,42 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const Vec2 playerSize{ tilemap->tileSideInMeters * 0.75f, tilemap->tileSideInMeters };
 
-    TilemapPosition newplayerPos{ gameState->playerPos };
-    const Vec2 newPlayerPos{ playerVelocity.x * delta, playerVelocity.y * delta };
-    newplayerPos.tileOffset += newPlayerPos;
-    newplayerPos = RecanonicalizePosition(tilemap, newplayerPos);
+    TilemapPosition newPlayerPos{ gameState->playerPos };
+    // 0.5 * at^2 + vt + p
+    newPlayerPos.tileOffset = (0.5f * playerAcceleration * SquareF32(delta)) +
+                              (gameState->playerVelocity * delta) + newPlayerPos.tileOffset;
 
-    TilemapPosition testplayerPosLeft{ newplayerPos };
+    // TODO: ordinary differential equations
+    playerAcceleration += -4.0f * gameState->playerVelocity;
+
+    // at + v
+    gameState->playerVelocity = playerAcceleration * delta + gameState->playerVelocity;
+
+    newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
+
+    TilemapPosition testplayerPosLeft{ newPlayerPos };
     testplayerPosLeft.tileOffset.x -= playerSize.x * 0.5f;
     testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
 
-    TilemapPosition testplayerPosRight{ newplayerPos };
+    TilemapPosition testplayerPosRight{ newPlayerPos };
     testplayerPosRight.tileOffset.x += playerSize.x * 0.5f;
     testplayerPosRight = RecanonicalizePosition(tilemap, testplayerPosRight);
 
-    if (IsTilemapPointEmpty(tilemap, newplayerPos) &&
+    if (IsTilemapPointEmpty(tilemap, newPlayerPos) &&
         IsTilemapPointEmpty(tilemap, testplayerPosLeft) &&
         IsTilemapPointEmpty(tilemap, testplayerPosRight)) {
-        if (!AreOnSameTiles(&gameState->playerPos, &newplayerPos)) {
-            const u32 newTileValue{ GetTileValue(tilemap, newplayerPos.absTileX,
-                                                 newplayerPos.absTileY, newplayerPos.absTileZ) };
+        if (!AreOnSameTiles(&gameState->playerPos, &newPlayerPos)) {
+            const u32 newTileValue{ GetTileValue(tilemap, newPlayerPos.absTileX,
+                                                 newPlayerPos.absTileY, newPlayerPos.absTileZ) };
 
             if (newTileValue == 4) {
-                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tilemap, &newplayerPos, 1);
+                newPlayerPos.absTileZ = TilemapPositionModifyZChecked(tilemap, &newPlayerPos, 1);
             } else if (newTileValue == 5) {
-                newplayerPos.absTileZ = TilemapPositionModifyZChecked(tilemap, &newplayerPos, -1);
+                newPlayerPos.absTileZ = TilemapPositionModifyZChecked(tilemap, &newPlayerPos, -1);
             }
         }
 
-        gameState->playerPos = newplayerPos;
+        gameState->playerPos = newPlayerPos;
 
         const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
         if (diff.dXY.x > (9.0f * tilemap->tileSideInMeters)) {
