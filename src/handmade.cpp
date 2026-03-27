@@ -1043,9 +1043,44 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     testplayerPosRight.tileOffset.x += playerSize.x * 0.5f;
     testplayerPosRight = RecanonicalizePosition(tilemap, testplayerPosRight);
 
-    if (IsTilemapPointEmpty(tilemap, newPlayerPos) &&
-        IsTilemapPointEmpty(tilemap, testplayerPosLeft) &&
-        IsTilemapPointEmpty(tilemap, testplayerPosRight)) {
+    bool32 collided{};
+    TilemapPosition colPos{};
+
+    if (!IsTilemapPointEmpty(tilemap, newPlayerPos)) {
+        collided = true;
+        colPos = newPlayerPos;
+    }
+
+    if (!IsTilemapPointEmpty(tilemap, testplayerPosLeft)) {
+        collided = true;
+        colPos = testplayerPosLeft;
+    }
+    if (!IsTilemapPointEmpty(tilemap, testplayerPosRight)) {
+        collided = true;
+        colPos = testplayerPosRight;
+    }
+
+    // Reflect
+    if (collided) {
+        constexpr f32 bounceStrength{ 0.5f };
+        Vec2 n{};
+        // Left
+        if (colPos.absTileX < gameState->playerPos.absTileX) {
+            n = Vec2{ 1, 0 };
+        }
+        if (colPos.absTileX > gameState->playerPos.absTileX) {
+            n = Vec2{ -1, 0 };
+        }
+        if (colPos.absTileY < gameState->playerPos.absTileY) {
+            n = Vec2{ 0, 1 };
+        }
+        if (colPos.absTileY > gameState->playerPos.absTileY) {
+            n = Vec2{ 0, -1 };
+        }
+
+        // To slide along the wall multiply by 1.0f in Reflect
+        gameState->playerVelocity = Reflect(gameState->playerVelocity, n) * bounceStrength;
+    } else {
         if (!AreOnSameTiles(&gameState->playerPos, &newPlayerPos)) {
             const u32 newTileValue{ GetTileValue(tilemap, newPlayerPos.absTileX,
                                                  newPlayerPos.absTileY, newPlayerPos.absTileZ) };
@@ -1058,19 +1093,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
 
         gameState->playerPos = newPlayerPos;
+    }
 
-        const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
-        if (diff.dXY.x > (9.0f * tilemap->tileSideInMeters)) {
-            gameState->cameraPos.absTileX += 17;
-        } else if (diff.dXY.x < -(9.0f * tilemap->tileSideInMeters)) {
-            gameState->cameraPos.absTileX -= 17;
-        }
+    const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
+    if (diff.dXY.x > (9.0f * tilemap->tileSideInMeters)) {
+        gameState->cameraPos.absTileX += 17;
+    } else if (diff.dXY.x < -(9.0f * tilemap->tileSideInMeters)) {
+        gameState->cameraPos.absTileX -= 17;
+    }
 
-        if (diff.dXY.y > (5.0f * tilemap->tileSideInMeters)) {
-            gameState->cameraPos.absTileY += 9;
-        } else if (diff.dXY.y < -(5.0f * tilemap->tileSideInMeters)) {
-            gameState->cameraPos.absTileY -= 9;
-        }
+    if (diff.dXY.y > (5.0f * tilemap->tileSideInMeters)) {
+        gameState->cameraPos.absTileY += 9;
+    } else if (diff.dXY.y < -(5.0f * tilemap->tileSideInMeters)) {
+        gameState->cameraPos.absTileY -= 9;
     }
 
     gameState->cameraPos.absTileZ = gameState->playerPos.absTileZ;
@@ -1173,8 +1208,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     // Drawing player
-
-    const TilemapDiff diff{ Subtract(tilemap, &gameState->playerPos, &gameState->cameraPos) };
 
     // Real player position
     const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * diff.dXY.x),

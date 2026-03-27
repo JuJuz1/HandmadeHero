@@ -77,6 +77,7 @@ operator*(Vec2 a, Vec2 b) {
 
 /// Member functions
 
+NODISCARD
 inline f32&
 Vec2::operator[](i32 i) {
     ASSERT(0 <= i && i < 2);
@@ -115,6 +116,21 @@ Vec2::operator*=(Vec2 a) {
 }
 
 /// Utility functions
+
+NODISCARD
+INTERNAL inline f32
+Dot(Vec2 a, Vec2 b) {
+    const f32 result{ a.x * b.x + a.y * b.y };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec2
+Reflect(Vec2 v, Vec2 n) {
+    // TODO: Assert n is normalized?
+    const Vec2 result{ v - (2.0f * Dot(v, n) * n) };
+    return result;
+}
 
 NODISCARD
 INTERNAL inline f32
