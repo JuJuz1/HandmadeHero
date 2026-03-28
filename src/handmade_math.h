@@ -125,6 +125,20 @@ Dot(Vec2 a, Vec2 b) {
 }
 
 NODISCARD
+INTERNAL inline f32
+Length(Vec2 a) {
+    const f32 result{ sqrtf(Dot(a, a)) };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline f32
+LengthSquared(Vec2 a) {
+    const f32 result{ Dot(a, a) };
+    return result;
+}
+
+NODISCARD
 INTERNAL inline Vec2
 Reflect(Vec2 v, Vec2 n) {
     // TODO: Assert n is normalized?

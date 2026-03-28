@@ -94,9 +94,16 @@ SetTileValue(MemoryArena* worldArena, Tilemap* tileMap, u32 absTileX, u32 absTil
 
 NODISCARD
 INTERNAL bool32
+IsTileValueEmpty(u32 value) {
+    const bool32 result{ value != 0 && value != blocked_Tile_Value };
+    return result;
+}
+
+NODISCARD
+INTERNAL bool32
 IsTilemapPointEmpty(const Tilemap* tileMap, TilemapPosition pos) {
-    const u32 value{ GetTileValue(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ) };
-    const bool32 empty{ value != 0 && value != blocked_Tile_Value };
+    const u32 tileValue{ GetTileValue(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ) };
+    const bool32 empty{ IsTileValueEmpty(tileValue) };
     return empty;
 }
 
@@ -168,5 +175,12 @@ Subtract(const Tilemap* tilemap, const TilemapPosition* a, const TilemapPosition
     result.dXY = (tilemap->tileSideInMeters * dTileXY) + a->tileOffset - b->tileOffset;
     result.dZ = tilemap->tileSideInMeters * dTileZ;
 
+    return result;
+}
+
+NODISCARD
+INTERNAL Vec2
+ClosestPointInRectangle(Vec2 minCorner, Vec2 maxCorner, const TilemapDiff* pos) {
+    Vec2 result{};
     return result;
 }

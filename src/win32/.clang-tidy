@@ -41,7 +41,7 @@ HeaderFileExtensions:
   - h
 ImplementationFileExtensions:
   - cpp
-HeaderFilterRegex: '.*'
+HeaderFilterRegex: 'src/.*'
 ExcludeHeaderFilterRegex: ''
 FormatStyle: 'file'
 ...

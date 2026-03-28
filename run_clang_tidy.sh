@@ -10,7 +10,7 @@ set -euo pipefail
 # Get absolute path of this script's directory (Windows only)
 ROOT="$(pwd -W)"
 
-# Add files here (mainly platform files only)
+# Add files here (platform files in addition to the game)
 SRC_FILES=(
     "src/handmade.cpp"
     "src/win32/win32_handmade.cpp"
@@ -30,6 +30,7 @@ for i in "${!SRC_FILES[@]}"; do
         COMMA=""
     fi
 
+    # Append the text between EOFs
     cat >> "$ROOT/compile_commands.json" <<EOF
     {
         "directory": "$ROOT",

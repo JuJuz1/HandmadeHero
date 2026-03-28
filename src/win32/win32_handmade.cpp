@@ -203,6 +203,7 @@ DisplayBufferWindow(const HDC deviceContext, // clang-tidy NOLINT
                     const OffScreenBuffer* screenBuff, i32 wndWidth, i32 wndHeight) {
 
     // Fullscreen, upsample by 2
+    // TODO: make this work on varying monitor sizes (other than 1920x1080)?
     if (wndWidth >= screenBuff->width * 2 && wndHeight >= screenBuff->height * 2) {
         StretchDIBits(deviceContext, 0, 0, screenBuff->width * 2, screenBuff->height * 2, 0, 0,
                       screenBuff->width, screenBuff->height, screenBuff->memory, &screenBuff->info,
