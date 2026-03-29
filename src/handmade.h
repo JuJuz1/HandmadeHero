@@ -119,12 +119,12 @@ InitializeArena(MemoryArena* arena, u8* base, memory_index size) {
     arena->used = 0;
 }
 
-#define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
-#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
+#define PushSize(arena, type) (type*)_PushSize(arena, sizeof(type))
+#define PushArray(arena, count, type) (type*)_PushSize(arena, (count) * sizeof(type))
 
 NODISCARD
 INTERNAL void*
-PushSize_(MemoryArena* arena, memory_index size) {
+_PushSize(MemoryArena* arena, memory_index size) {
     ASSERT(arena->used + size <= arena->size);
     void* result{ arena->base + arena->used };
     arena->used += size;
@@ -148,18 +148,30 @@ struct HeroBitmaps {
     Vec2 align;
 };
 
+struct Entity {
+    TilemapPosition pos;
+    Vec2 velocity;
+
+    Vec2 dimensions;
+    i32 facingDir;
+
+    bool32 exists;
+};
+
 // The game state
 struct GameState {
     MemoryArena worldArena;
     World* world;
 
     TilemapPosition cameraPos;
-    TilemapPosition playerPos;
-    Vec2 playerVelocity;
+    i32 cameraFollowingEntityIndex; // By default the first player (index 1)
+
+    Entity entities[256];
+    i32 entityCount;
+    i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(0))->playerInputs)];
 
     LoadedBitmapInfo background;
     HeroBitmaps heroBitmaps[4];
-    u32 playerFacingDirection;
 };
 
 #endif // HANDMADE_H

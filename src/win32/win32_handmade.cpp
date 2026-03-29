@@ -754,6 +754,12 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 OutputDebugStringA("VK_SHIFT\n");
                 ProcessInputMessage(&input->playerInputs->shift, isDown);
             } break;
+            // Enter
+            case VK_RETURN: {
+                OutputDebugStringA("VK_RETURN\n");
+                ProcessInputMessage(&input->playerInputs->enter, isDown);
+            } break;
+
             case VK_F4: {
                 if (isDown) {
                     OutputDebugStringA("VK_F4\n");
@@ -824,12 +830,6 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             } break;
 #endif
 
-            //case VK_ESCAPE: {
-            //    OutputDebugStringA("VK_ESCAPE\n");
-            //} break;
-            //case VK_SPACE: {
-            //    OutputDebugStringA("VK_SPACE\n");
-            //} break;
             default: {
                 char buf[32];
                 sprintf_s(buf, "vkCode: %llu NOT HANDLED\n", vkCode);

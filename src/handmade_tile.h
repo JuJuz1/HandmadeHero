@@ -7,7 +7,7 @@
     Tiles:
     - 0: out of bounds value
     - 1: blocked tile value
-    - else: empty
+    - else: not "blocked"
 */
 
 GLOBAL constexpr u32 blocked_Tile_Value{ 1 };

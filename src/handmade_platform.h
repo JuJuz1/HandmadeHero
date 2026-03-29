@@ -11,7 +11,8 @@
 extern "C" {
 #endif
 
-#include <cstdint>
+#include <stddef.h> // for size_t
+#include <stdint.h>
 
 // Compilers
 
@@ -58,16 +59,16 @@ typedef double f64;
 typedef size_t memory_index;
 
 // A thread context passed to game code and is used when calling back to platform-specific code
-struct ThreadContext {
+typedef struct ThreadContext {
     i32 placeHolder;
-};
+} ThreadContext;
 
 #if HANDMADE_INTERNAL
 
-struct DEBUGFileReadResult {
+typedef struct DEBUGFileReadResult {
     void* content;
     u32 contentSize;
-};
+} DEBUGFileReadResult;
 
 // clang-format off
 #define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* message)
@@ -90,7 +91,7 @@ typedef DEBUG_WRITE_FILE(debug_write_file);
 // clang-format on
 
 // Exported functions for the game
-struct PlatformExports {
+typedef struct PlatformExports {
     debug_print* DEBUGPrint;
     debug_print_int* DEBUGPrintInt;
     debug_print_float* DEBUGPrintFloat;
@@ -98,12 +99,12 @@ struct PlatformExports {
     debug_free_file_memory* DEBUGFreeFileMemory;
     debug_read_file* DEBUGReadFile;
     debug_write_file* DEBUGWriteFile;
-};
+} PlatformExports;
 
 #endif // HANDMADE_INTERNAL
 
 // All the memory the game needs
-struct GameMemory {
+typedef struct GameMemory {
     void* permanentStorage;
     u64 permanentStorageSize;
 
@@ -115,37 +116,37 @@ struct GameMemory {
 #if HANDMADE_INTERNAL
     PlatformExports exports;
 #endif
-};
+} GameMemory;
 
 // Struct to hold screen buffer info
-struct OffScreenBuffer {
+typedef struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
     i32 bytesPerPixel;
     i32 pitch;
-};
+} OffScreenBuffer;
 
-struct SoundOutputBuffer {
+typedef struct SoundOutputBuffer {
     i16* samples;
     i32 samplesPerSecond;
     i32 sampleCount;
-};
+} SoundOutputBuffer;
 
 // Keyboard button states
-struct Button {
+typedef struct Button {
     bool32 endedDown; // If the button ended down during the frame
     // The amount of times the state changed during the frame, with this we can deduce
     // if the button was just pressed, pressed continuously or just released
     i32 halfTransitionCount;
-};
+} Button;
 
-struct InputButtons {
+typedef struct InputButtons {
     // A union allows us to do:
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[8];
+        Button buttons[9];
 
         struct {
             Button up;
@@ -158,12 +159,15 @@ struct InputButtons {
             Button Q;
             Button E;
 
+            Button enter;
+
+            // All new buttons have to be above this
             Button Z;
         };
     };
-};
+} InputButtons;
 
-struct MouseButtons {
+typedef struct MouseButtons {
     union {
         Button buttons[5];
 
@@ -177,16 +181,16 @@ struct MouseButtons {
             Button x2; // Further
         };
     };
-};
+} MouseButtons;
 
-struct Input {
-    InputButtons playerInputs[1];
+typedef struct Input {
+    InputButtons playerInputs[2];
 
     MouseButtons mouseButtons;
     i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
 
     f32 frameDeltaTime;
-};
+} Input;
 
 // We use the style 2 (Game as a service to the OS) described in the series
 

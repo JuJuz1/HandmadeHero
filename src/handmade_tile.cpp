@@ -165,7 +165,7 @@ TilemapPositionModifyZChecked(const Tilemap* tileMap, const TilemapPosition* pos
 
 NODISCARD
 INTERNAL TilemapDiff
-Subtract(const Tilemap* tilemap, const TilemapPosition* a, const TilemapPosition* b) {
+SubtractTilemapPos(const Tilemap* tilemap, const TilemapPosition* a, const TilemapPosition* b) {
     TilemapDiff result{};
 
     const Vec2 dTileXY{ static_cast<f32>(a->absTileX) - static_cast<f32>(b->absTileX),
