@@ -988,13 +988,14 @@ InitializePlayer(Entity* entity) {
 }
 
 INTERNAL void
-MovePlayer(const Tilemap* tilemap, Entity* entity, Vec2 acceleration, f32 delta) {
+MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButtons,
+           Vec2 acceleration, f32 delta) {
     constexpr f32 playerSpeed{ 30 };
-    //constexpr f32 playerSpeedModifier{ 4 };
+    constexpr f32 playerSpeedModifier{ 4 };
 
-    //if (input::ActionPressed(&inputButtons->shift)) {
-    //    acceleration *= playerSpeedModifier;
-    //}
+    if (input::ActionPressed(&inputButtons->shift)) {
+        acceleration *= playerSpeedModifier;
+    }
 
     if (acceleration.x != 0.0f && acceleration.y != 0.0f) {
         acceleration *= 0.70710678118f; // sqrt(0.5)
@@ -1168,7 +1169,29 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 acceleration.x = 1.0f;
             }
 
-            MovePlayer(tilemap, controllingEntity, acceleration, delta);
+            // Make other players faster
+            if (controllerIndex != 0) {
+                acceleration *= static_cast<f32>(controllerIndex) * 1.5f;
+            }
+
+            // The separation of handling input and moving the player is not yet clear
+            MovePlayer(tilemap, controllingEntity, inputButtons, acceleration, delta);
+
+            // Other actions:
+
+            // Only the first player can do certain operations
+            // Switching z index
+            if (controllerIndex == 0) {
+                if (input::ActionJustPressed(&inputButtons->Z)) {
+                    if (input::ActionPressed(&inputButtons->shift)) {
+                        controllingEntity->pos.absTileZ =
+                            TilemapPositionModifyZChecked(tilemap, &controllingEntity->pos, -1);
+                    } else {
+                        controllingEntity->pos.absTileZ =
+                            TilemapPositionModifyZChecked(tilemap, &controllingEntity->pos, 1);
+                    }
+                }
+            }
         } else {
             if (input::ActionJustPressed(&inputButtons->enter)) {
                 DEBUG_PLATFORM_PRINT("New player!\n");
@@ -1184,17 +1207,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
         }
     }
-
-    // Switching z index
-    //if (input::ActionJustPressed(&inputButtons->Z)) {
-    //    if (input::ActionPressed(&inputButtons->shift)) {
-    //        gameState->playerPos.absTileZ =
-    //            TilemapPositionModifyZChecked(tilemap, &gameState->playerPos, -1);
-    //    } else {
-    //        gameState->playerPos.absTileZ =
-    //            TilemapPositionModifyZChecked(tilemap, &gameState->playerPos, 1);
-    //    }
-    //}
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
     constexpr i32 tileSideInPixels{ 60 };
@@ -1260,9 +1272,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const u32 depth{ gameState->cameraPos.absTileZ };
 
             const u32 tileID{ GetTileValue(tilemap, column, row, depth) };
-            if (tileID != blocked_Tile_Value && tileID != 3 && tileID != 4 && tileID != 5 &&
-                !(row == gameState->cameraPos.absTileY &&
-                  column == gameState->cameraPos.absTileX)) {
+            if (tileID != blocked_Tile_Value && tileID != 3 && tileID != 4 &&
+                tileID != 5 //&&
+                            //!(row == gameState->cameraPos.absTileY &&
+                            //  column == gameState->cameraPos.absTileX)
+            ) {
                 continue;
             }
 

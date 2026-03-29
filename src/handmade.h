@@ -168,6 +168,7 @@ struct GameState {
 
     Entity entities[256];
     i32 entityCount;
+    // Cursed... probably reconsider your use free will
     i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(0))->playerInputs)];
 
     LoadedBitmapInfo background;

@@ -1126,11 +1126,21 @@ WinMain(
 
         // Keyboard input
 
-        for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
-            gameInput.playerInputs[0].buttons[i].halfTransitionCount = 0;
+        for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput.playerInputs);
+             ++controllerIndex) {
+            for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
+                gameInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
+            }
         }
 
         win32::ProcessPendingMessages(&gameInput, &allState);
+
+        // Copy the first player input to all the other players to test
+        // NOTE: this is only here to test multiplayer with a single keyboard using the same input
+        // keys for the other player as well
+        //for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs); ++i) {
+        //    gameInput.playerInputs[i] = gameInput.playerInputs[0];
+        //}
 
         // Mouse input
 
