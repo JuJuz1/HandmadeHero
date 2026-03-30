@@ -12,6 +12,7 @@ GLOBAL GameMemory* gMemory;
 
 namespace input {
 
+// Returns true if the button was just pressed during the frame
 NODISCARD
 INTERNAL bool32
 ActionJustPressed(const Button* button) {
@@ -19,6 +20,9 @@ ActionJustPressed(const Button* button) {
     return result;
 }
 
+// Returns true if the button was pressed during the frame
+// As this returns true for the first frame as well, ActionJustPressed and ActionPressed both return
+// true for the first frame for the same button
 NODISCARD
 INTERNAL bool32
 ActionPressed(const Button* button) {
@@ -26,6 +30,7 @@ ActionPressed(const Button* button) {
     return result;
 }
 
+// Returns true if the button was just released during the frame
 NODISCARD
 INTERNAL bool32
 ActionReleased(const Button* button) {
@@ -152,6 +157,8 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         const u32 alphaMask{ ~(redMask | greenMask | blueMask) };
         //const u32 alphaMask{ bitMapHeader->alphaMask }; commented out to investigate crash reason
 
+        // Can also use _rotl
+        // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/rotl-rotl64-rotr-rotr64?view=msvc-170
         const BitscanResult redShift{ FindLeastSignificantBitSet(redMask) };
         const BitscanResult greenShift{ FindLeastSignificantBitSet(greenMask) };
         const BitscanResult blueShift{ FindLeastSignificantBitSet(blueMask) };
@@ -993,27 +1000,29 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     constexpr f32 playerSpeed{ 30 };
     constexpr f32 playerSpeedModifier{ 4 };
 
-    if (input::ActionPressed(&inputButtons->shift)) {
-        acceleration *= playerSpeedModifier;
-    }
-
-    if (acceleration.x != 0.0f && acceleration.y != 0.0f) {
-        acceleration *= 0.70710678118f; // sqrt(0.5)
+    // Normalize if greater than unit circle length of 1
+    const f32 accelerationLengthSq{ LengthSquared(acceleration) };
+    if (accelerationLengthSq > 1.0f) {
+        acceleration *= (1.0f / Sqrt(accelerationLengthSq));
     }
 
     acceleration *= playerSpeed;
 
+    if (input::ActionPressed(&inputButtons->shift)) {
+        acceleration *= playerSpeedModifier;
+    }
+
     // TODO: ordinary differential equations
     acceleration += -4.0f * entity->velocity;
-    // at + v
+    // v' = at + v
     entity->velocity = acceleration * delta + entity->velocity;
 
-    // 0.5 * at^2 + vt + p
+    // p' = 0.5 * at^2 + vt + p
     const Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     const TilemapPosition oldPlayerPos{ entity->pos };
-    TilemapPosition newPlayerPos{ entity->pos };
 
+    TilemapPosition newPlayerPos{ entity->pos };
     newPlayerPos.tileOffset = playerDelta + newPlayerPos.tileOffset;
     newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
 
@@ -1063,6 +1072,7 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
 
         // To slide along the wall multiply by 1.0f in Reflect
         entity->velocity = Reflect(entity->velocity, n) * bounceStrength;
+        DEBUG_PLATFORM_PRINT("Reflect!\n");
     } else {
         entity->pos = newPlayerPos;
     }
@@ -1109,15 +1119,17 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     }
 
     // Facing direction checks
-    const Vec2 playerVelocity{ entity->velocity };
-    if (AbsF32(playerVelocity.x) > AbsF32(playerVelocity.y)) {
-        if (playerVelocity.x > 0) {
+    const Vec2 velocity{ entity->velocity };
+    if (velocity.x == 0.0f && velocity.y == 0.0f) {
+        // Keep previous
+    } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
+        if (velocity.x > 0) {
             entity->facingDir = 3;
         } else {
             entity->facingDir = 1;
         }
-    } else if (AbsF32(playerVelocity.x) < AbsF32(playerVelocity.y)) {
-        if (playerVelocity.y > 0) {
+    } else {
+        if (velocity.y > 0) {
             entity->facingDir = 2;
         } else {
             entity->facingDir = 0;

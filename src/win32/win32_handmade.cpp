@@ -707,56 +707,44 @@ ProcessPendingMessages(Input* input, AllState* allState) {
 
             switch (vkCode) {
             case 'W': {
-                OutputDebugStringA("W\n");
                 // This approach won't work for justPressed, we have to use halfTransitionCount
                 //input->playerInputs->up.pressed = true;
                 ProcessInputMessage(&input->playerInputs->up, isDown);
             } break;
             case 'S': {
-                OutputDebugStringA("S\n");
                 ProcessInputMessage(&input->playerInputs->down, isDown);
             } break;
             case 'A': {
-                OutputDebugStringA("A\n");
                 ProcessInputMessage(&input->playerInputs->left, isDown);
             } break;
             case 'D': {
-                OutputDebugStringA("D\n");
                 ProcessInputMessage(&input->playerInputs->right, isDown);
             } break;
 
             case VK_UP: {
-                OutputDebugStringA("VK_UP\n");
                 ProcessInputMessage(&input->playerInputs->up, isDown);
             } break;
             case VK_DOWN: {
-                OutputDebugStringA("VK_DOWN\n");
                 ProcessInputMessage(&input->playerInputs->down, isDown);
             } break;
             case VK_LEFT: {
-                OutputDebugStringA("VK_LEFT\n");
                 ProcessInputMessage(&input->playerInputs->left, isDown);
             } break;
             case VK_RIGHT: {
-                OutputDebugStringA("VK_RIGHT\n");
                 ProcessInputMessage(&input->playerInputs->right, isDown);
             } break;
 
             case 'Q': {
-                OutputDebugStringA("Q\n");
                 ProcessInputMessage(&input->playerInputs->Q, isDown);
             } break;
             case 'E': {
-                OutputDebugStringA("E\n");
                 ProcessInputMessage(&input->playerInputs->E, isDown);
             } break;
             case VK_SHIFT: {
-                OutputDebugStringA("VK_SHIFT\n");
                 ProcessInputMessage(&input->playerInputs->shift, isDown);
             } break;
             // Enter
             case VK_RETURN: {
-                OutputDebugStringA("VK_RETURN\n");
                 ProcessInputMessage(&input->playerInputs->enter, isDown);
             } break;
 
@@ -831,9 +819,11 @@ ProcessPendingMessages(Input* input, AllState* allState) {
 #endif
 
             default: {
-                char buf[32];
-                sprintf_s(buf, "vkCode: %llu NOT HANDLED\n", vkCode);
-                OutputDebugStringA(buf);
+                if (isDown) {
+                    char buf[32];
+                    sprintf_s(buf, "vkCode: %llu NOT HANDLED\n", vkCode);
+                    OutputDebugStringA(buf);
+                }
             } break;
             }
         } break;

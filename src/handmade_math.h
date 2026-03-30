@@ -127,10 +127,11 @@ Dot(Vec2 a, Vec2 b) {
 NODISCARD
 INTERNAL inline f32
 Length(Vec2 a) {
-    const f32 result{ sqrtf(Dot(a, a)) };
+    const f32 result{ Sqrt(Dot(a, a)) };
     return result;
 }
 
+// This is cheaper to compute than Length, so use if we really don't need the actual length
 NODISCARD
 INTERNAL inline f32
 LengthSquared(Vec2 a) {
@@ -139,9 +140,19 @@ LengthSquared(Vec2 a) {
 }
 
 NODISCARD
+INTERNAL inline bool32
+IsNormalized(Vec2 a) {
+    constexpr f32 eps{ 0.0001f };
+    const bool32 result{ AbsF32(LengthSquared(a) - 1.0f) < eps };
+    return result;
+}
+
+NODISCARD
 INTERNAL inline Vec2
 Reflect(Vec2 v, Vec2 n) {
-    // TODO: Assert n is normalized?
+    // NOTE: Assert n is normalized? otherwise the formula breaks
+    ASSERT(IsNormalized(n));
+
     const Vec2 result{ v - (2.0f * Dot(v, n) * n) };
     return result;
 }
