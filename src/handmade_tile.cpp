@@ -177,10 +177,3 @@ SubtractTilemapPos(const Tilemap* tilemap, const TilemapPosition* a, const Tilem
 
     return result;
 }
-
-NODISCARD
-INTERNAL Vec2
-ClosestPointInRectangle(Vec2 minCorner, Vec2 maxCorner, const TilemapDiff* pos) {
-    Vec2 result{};
-    return result;
-}

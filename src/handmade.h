@@ -57,6 +57,10 @@ HANDMADE_DEBUG:
 
 #define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
 
+// Returns the first if equal, same for MAX
+#define MIN(a, b) ((a <= b) ? (a) : (b))
+#define MAX(a, b) ((a >= b) ? (a) : (b))
+
 // c++17 required
 // Can be opted out of easily by just checking c++ standard version when compiling
 // Although on MSVC at least when compiling with an older standard like c++14, it still
@@ -168,11 +172,13 @@ struct GameState {
 
     Entity entities[256];
     i32 entityCount;
-    // Cursed... probably reconsider your use free will
+    // Cursed cast... probably reconsider your use of free will
     i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(0))->playerInputs)];
 
     LoadedBitmapInfo background;
     HeroBitmaps heroBitmaps[4];
+
+    bool32 startWithAPlayer;
 };
 
 #endif // HANDMADE_H

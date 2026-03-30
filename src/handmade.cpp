@@ -802,6 +802,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     const i32 nullEntityIndex{ AddEntity(gameState) };
     //gameState->cameraFollowingEntityIndex = 1;
 
+    // Changed to false after initializing one player
+    gameState->startWithAPlayer = true;
+
     gameState->background =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/test_background.bmp");
 
@@ -1077,31 +1080,33 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
         entity->pos = newPlayerPos;
     }
 #else
-    const u32 minTileX{}, minTileY{};
-    const u32 onePastMaxTileX{}, onePastMaxTileY{};
+
+    // Search in t
+
+    const u32 minTileX{ MIN(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
+    const u32 minTileY{ MIN(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
+    const u32 onePastMaxTileX{ MAX(oldPlayerPos.absTileX, newPlayerPos.absTileX) + 1 };
+    const u32 onePastMaxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) + 1 };
     const u32 absTileZ{ entity->pos.absTileZ };
 
-    TilemapPosition bestPos{ entity->pos };
-    f32 bestDistanceSq{ LengthSquared(playerDelta) };
+    f32 tMin{ 1.0f }; // Assume we can go the full distance
 
+    // != to allow wrapping
     for (u32 absTileY{ minTileY }; absTileY != onePastMaxTileY; ++absTileY) {
         for (u32 absTileX{ minTileX }; absTileX != onePastMaxTileX; ++absTileX) {
             const TilemapPosition testPos{ absTileX, absTileY, absTileZ };
-            if (IsTilemapPointEmpty(tilemap, testPos)) {
+            if (!IsTilemapPointEmpty(tilemap, testPos)) {
                 const f32 halfTileSide{ 0.5f * tilemap->tileSideInMeters };
-                const Vec2 minCorner{ halfTileSide, halfTileSide };
+                const Vec2 minCorner{ -halfTileSide, -halfTileSide };
                 const Vec2 maxCorner{ -minCorner };
 
                 const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &testPos,
                                                                       &newPlayerPos) };
-                const Vec2 testPos{ ClosestPointInRectangle(minCorner, maxCorner,
-                                                            &relNewPlayerPos) };
+                Vec2 relPosXY{ relNewPlayerPos.dXY };
 
-                f32 testDistanceSq{};
-                if (bestDistanceSq > testDistanceSq) {
-                    bestDistanceSq = testDistanceSq;
-                    //bestPos = ??;
-                }
+                // Test all four walls and take the minimum Z
+                const f32 tResult = (wallX - relNewPlayerPos.x) / playerDelta.x;
+                TestWall(minCorner.x, relNewPlayerPos.dXY.x, minCorner.y, maxCorner.y);
             }
         }
     }
@@ -1205,7 +1210,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
         } else {
-            if (input::ActionJustPressed(&inputButtons->enter)) {
+            if (input::ActionJustPressed(&inputButtons->enter) || gameState->startWithAPlayer) {
+                if (gameState->startWithAPlayer) {
+                    gameState->startWithAPlayer = false;
+                }
+
                 DEBUG_PLATFORM_PRINT("New player!\n");
                 const i32 entityIndex{ AddEntity(gameState) };
                 controllingEntity = GetEntity(gameState, entityIndex);

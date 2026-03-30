@@ -129,8 +129,8 @@ Sqrt(f32 value) {
 
 NODISCARD
 INTERNAL inline u32
-AbsI32ToU32(i32 value) {
-    const u32 result{ static_cast<u32>(abs(value)) };
+AbsI32(i32 value) {
+    const u32 result{ static_cast<u32>(fabs(value)) };
     return result;
 }
 

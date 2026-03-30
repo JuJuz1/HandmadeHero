@@ -142,8 +142,24 @@ LengthSquared(Vec2 a) {
 NODISCARD
 INTERNAL inline bool32
 IsNormalized(Vec2 a) {
-    constexpr f32 eps{ 0.0001f };
+    constexpr f32 eps{ 1e-3f };
     const bool32 result{ AbsF32(LengthSquared(a) - 1.0f) < eps };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec2
+Normalize(Vec2 a) {
+    if (IsNormalized(a)) {
+        return a;
+    }
+
+    Vec2 result{ a };
+    const f32 lengthSq{ LengthSquared(a) };
+    if (lengthSq > 0.0f) {
+        result /= Sqrt(lengthSq);
+    }
+
     return result;
 }
 
