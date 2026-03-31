@@ -54,9 +54,6 @@ dkms.conf
 # debug information files
 *.dwo
 
-# Visual Studio files (for testing things)
-HandmadeHeroVS/
-
 # Build
 build/
 

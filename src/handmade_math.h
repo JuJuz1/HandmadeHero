@@ -147,6 +147,7 @@ IsNormalized(Vec2 a) {
     return result;
 }
 
+// Doubt this will be hardly ever used
 NODISCARD
 INTERNAL inline Vec2
 Normalize(Vec2 a) {

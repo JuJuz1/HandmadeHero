@@ -1029,7 +1029,7 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     newPlayerPos.tileOffset = playerDelta + newPlayerPos.tileOffset;
     newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
 
-#if 1
+#if 0
     TilemapPosition testplayerPosLeft{ newPlayerPos };
     testplayerPosLeft.tileOffset.x -= entity->dimensions.x * 0.5f;
     testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
@@ -1083,12 +1083,16 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
 
     // Search in t
 
+    // Take the "starting" tile and the "ending" tile
+    // Taking MIN and MAX takes into account
+    // all possible directions (left to right, right to left, ...)
     const u32 minTileX{ MIN(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
     const u32 minTileY{ MIN(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
     const u32 onePastMaxTileX{ MAX(oldPlayerPos.absTileX, newPlayerPos.absTileX) + 1 };
     const u32 onePastMaxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) + 1 };
     const u32 absTileZ{ entity->pos.absTileZ };
 
+    // f(t) = p + td (p is initial position, t is the time normalized from delta, d is the distance)
     f32 tMin{ 1.0f }; // Assume we can go the full distance
 
     // != to allow wrapping
@@ -1102,7 +1106,7 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
 
                 const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &testPos,
                                                                       &newPlayerPos) };
-                Vec2 relPosXY{ relNewPlayerPos.dXY };
+                const Vec2 relPosXY{ relNewPlayerPos.dXY };
 
                 // Test all four walls and take the minimum Z
                 const f32 tResult = (wallX - relNewPlayerPos.x) / playerDelta.x;

@@ -2,6 +2,13 @@
 
 My implementation of the code as I followed Casey Muratori's [Handmade Hero](https://guide.handmadehero.org/) playlist
 
+## General architecture
+
+Unity build, game as a service to the platform
+
+Header files mostly contain definitions for structs, everything else lives in .cpp files
+...
+
 ## Hot reloading
 Build the game after modifying the code to load the DLL automatically and see the changes instantly
 
@@ -19,11 +26,20 @@ Supported automatically when modifying game code only! All other files except pl
 
 ## Building
 
-Visual Studio 2022+ (or build tools) Also earlier versions might work
+### Windows
 
-- Open x64 Native Tools Command Prompt for Visual Studio 2022
+Visual Studio 2022+ (or build tools). Also earlier versions might work. Have to test GCC and Clang
+
+- Clone the repository if you already haven't
+- Open x64 Native Tools Command Prompt for Visual Studio 2022 (or 2026?)
 - Navigate to the project root
-- run build_cli.bat which puts the executable into build folder
+- run [scripts/win32_build.bat](scripts/win32_build.bat) FROM THE ROOT
 
-If using other shells: modify the setup_env.bat script to have vcvarsall.bat path to your Visual Studio installation before running build_cli.bat. This varies between Visual Studio installations
-- run setup_env.bat to initialize x64 environment for MSVC and then build according to the instructions above
+```
+.\scripts\win32_build.bat
+```
+
+which puts the executable into the created build folder
+
+If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat) script to have vcvarsall.bat path to your Visual Studio installation before running [scripts/win32_build.bat](scripts/win32_build.bat). This varies between Visual Studio installations
+- run [scripts/setup_env.bat](scripts/setup_env.bat) to initialize x64 environment for MSVC and then build according to the instructions above
