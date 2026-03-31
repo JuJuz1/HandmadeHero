@@ -1008,7 +1008,7 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
         const f32 newY{ relY + (tResult * playerDeltaY) };
         if (tResult >= 0.0f && tResult < tMin) {
             if (newY >= minY && newY <= maxY) {
-                newTMin = MIN(0.0f, tMin - tEps);
+                newTMin = MAX(0.0f, tResult - tEps);
             }
         }
     }
@@ -1381,8 +1381,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Vec2 tileSide{ (static_cast<f32>(tileSideInPixels) * 0.5f),
                                  (static_cast<f32>(tileSideInPixels) * 0.5f) };
 
-            const Vec2 min{ tileCen - tileSide };
-            const Vec2 max{ tileCen + tileSide };
+            const Vec2 min{ tileCen - tileSide * 0.9f };
+            const Vec2 max{ tileCen + tileSide * 0.9f };
 
             // Fix a 1 pixel wide vertical black bar that appears sometimes
             const Vec2 minFlooredX{ static_cast<f32>(FloorF32ToI32(min.x)), min.y };
