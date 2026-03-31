@@ -997,6 +997,25 @@ InitializePlayer(Entity* entity) {
     entity->dimensions.x = entity->dimensions.y * 0.75f;
 }
 
+INTERNAL f32
+TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 tMin, f32 minY,
+         f32 maxY) {
+    constexpr f32 tEps{ 1e-2f };
+    f32 newTMin{ tMin };
+
+    if (playerDeltaX != 0.0f) {
+        const f32 tResult{ (wallX - relX) / playerDeltaX };
+        const f32 newY{ relY + (tResult * playerDeltaY) };
+        if (tResult >= 0.0f && tResult < tMin) {
+            if (newY >= minY && newY <= maxY) {
+                newTMin = MIN(0.0f, tMin - tEps);
+            }
+        }
+    }
+
+    return newTMin;
+}
+
 INTERNAL void
 MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButtons,
            Vec2 acceleration, f32 delta) {
@@ -1018,18 +1037,18 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     // TODO: ordinary differential equations
     acceleration += -4.0f * entity->velocity;
     // v' = at + v
-    entity->velocity = acceleration * delta + entity->velocity;
+    entity->velocity += acceleration * delta;
 
     // p' = 0.5 * at^2 + vt + p
     const Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     const TilemapPosition oldPlayerPos{ entity->pos };
-
     TilemapPosition newPlayerPos{ entity->pos };
-    newPlayerPos.tileOffset = playerDelta + newPlayerPos.tileOffset;
+    newPlayerPos.tileOffset += playerDelta;
     newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
 
 #if 0
+
     TilemapPosition testplayerPosLeft{ newPlayerPos };
     testplayerPosLeft.tileOffset.x -= entity->dimensions.x * 0.5f;
     testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
@@ -1092,7 +1111,6 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     const u32 onePastMaxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) + 1 };
     const u32 absTileZ{ entity->pos.absTileZ };
 
-    // f(t) = p + td (p is initial position, t is the time normalized from delta, d is the distance)
     f32 tMin{ 1.0f }; // Assume we can go the full distance
 
     // != to allow wrapping
@@ -1102,18 +1120,32 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
             if (!IsTilemapPointEmpty(tilemap, testPos)) {
                 const f32 halfTileSide{ 0.5f * tilemap->tileSideInMeters };
                 const Vec2 minCorner{ -halfTileSide, -halfTileSide };
-                const Vec2 maxCorner{ -minCorner };
+                const Vec2 maxCorner{ halfTileSide, halfTileSide };
 
-                const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &testPos,
-                                                                      &newPlayerPos) };
+                const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &oldPlayerPos,
+                                                                      &testPos) };
                 const Vec2 relPosXY{ relNewPlayerPos.dXY };
 
                 // Test all four walls and take the minimum Z
-                const f32 tResult = (wallX - relNewPlayerPos.x) / playerDelta.x;
-                TestWall(minCorner.x, relNewPlayerPos.dXY.x, minCorner.y, maxCorner.y);
+
+                tMin = TestWall(minCorner.x, relPosXY.x, relPosXY.y, playerDelta.x, playerDelta.y,
+                                tMin, minCorner.y, maxCorner.y);
+                tMin = TestWall(maxCorner.x, relPosXY.x, relPosXY.y, playerDelta.x, playerDelta.y,
+                                tMin, minCorner.y, maxCorner.y);
+
+                tMin = TestWall(minCorner.y, relPosXY.y, relPosXY.x, playerDelta.y, playerDelta.x,
+                                tMin, minCorner.x, maxCorner.x);
+                tMin = TestWall(maxCorner.y, relPosXY.y, relPosXY.x, playerDelta.y, playerDelta.x,
+                                tMin, minCorner.x, maxCorner.x);
             }
         }
     }
+
+    newPlayerPos = entity->pos;
+    newPlayerPos.tileOffset += playerDelta * tMin;
+    entity->pos = newPlayerPos;
+    newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
+
 #endif
 
     // Door checks
