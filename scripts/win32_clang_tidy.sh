@@ -14,7 +14,6 @@ ROOT="$(pwd -W)"
 SRC_FILES=(
     "src/handmade.cpp"
     "src/win32/win32_handmade.cpp"
-    #"src/linux/linux_handmade.cpp"
 )
 
 COMPILER_COMMAND="clang-cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /I src /W4 /std:c++20"

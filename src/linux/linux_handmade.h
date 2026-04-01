@@ -1,0 +1,7 @@
+#ifndef LINUX_HANDMADE_H
+#define LINUX_HANDMADE_H
+
+#if LINUX_HANDMADE
+
+#endif // LINUX_HANDMADE
+#endif // LINUX_HANDMADE_H
