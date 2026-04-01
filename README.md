@@ -31,7 +31,7 @@ Supported automatically when modifying game code only! All other files except pl
 Visual Studio 2022+ (or build tools). Also earlier versions might work. Have to test GCC and Clang
 
 - Clone the repository if you already haven't
-- Open x64 Native Tools Command Prompt for VS (*some version*) (or similar named)
+- Open x64 Native Tools Command Prompt for VS <*some version*> (or similar named)
 - Navigate to the project root
 - run [scripts/win32_build.bat](scripts/win32_build.bat) FROM THE ROOT
 
@@ -46,4 +46,18 @@ If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat)
 
 ### Linux
 
-Using David Gow's [Handmade Penguin](https://davidgow.net/handmadepenguin/) SDL port of the platform layer. Heavily modified to match the code structure and style of the project
+Using David Gow's [Handmade Penguin](https://davidgow.net/handmadepenguin/) SDL 2 port of the platform layer. A repository containing all the things needed here [SDL Handmade](https://github.com/KimJorgensen/sdl_handmade)
+
+Heavily modified to match the code structure and style of the project
+
+LLVM compiler (Clang) supporting C++20 (almost any version not older than ~3 years, so 16.0+)
+
+- Clone the repository if you already haven't
+- Navigate to the project root
+- run [scripts/linux_build.sh](scripts/linux_build.sh) FROM THE ROOT
+
+```
+./scripts/linux_build.sh
+```
+
+which puts the executable into the created build folder
