@@ -31,7 +31,7 @@ Supported automatically when modifying game code only! All other files except pl
 Visual Studio 2022+ (or build tools). Also earlier versions might work. Have to test GCC and Clang
 
 - Clone the repository if you already haven't
-- Open x64 Native Tools Command Prompt for Visual Studio 2022 (or 2026?)
+- Open x64 Native Tools Command Prompt for VS (*some version*) (or similar named)
 - Navigate to the project root
 - run [scripts/win32_build.bat](scripts/win32_build.bat) FROM THE ROOT
 
@@ -43,3 +43,7 @@ which puts the executable into the created build folder
 
 If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat) script to have vcvarsall.bat path to your Visual Studio installation before running [scripts/win32_build.bat](scripts/win32_build.bat). This varies between Visual Studio installations
 - run [scripts/setup_env.bat](scripts/setup_env.bat) to initialize x64 environment for MSVC and then build according to the instructions above
+
+### Linux
+
+Using David Gow's [Handmade Penguin](https://davidgow.net/handmadepenguin/) SDL port of the platform layer. Heavily modified to match the code structure and style of the project
