@@ -890,7 +890,7 @@ LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) 
         gameCode.isValid = gameCode.updateAndRender && gameCode.getSoundSamples;
     } else {
         // log
-        OutputDebugStringA("Failed to load handmade.dll!\n");
+        OutputDebugStringA("Failed to load dll!\n");
     }
 
     if (!gameCode.isValid) {
@@ -989,10 +989,10 @@ WinMain(
     const i32 win32MonitorHz{ GetDeviceCaps(deviceContext, VREFRESH) };
     if (win32MonitorHz > 1) {
         monitorHz = win32MonitorHz;
-        sprintf_s(buf, "Detected valid monitorHz: %u\n", monitorHz);
+        sprintf_s(buf, "Detected valid monitorHz: %d\n", monitorHz);
         //monitorHz = 60; // To test delta time
     } else {
-        sprintf_s(buf, "Using default monitorHz: %u\n", monitorHz);
+        sprintf_s(buf, "Using default monitorHz: %d\n", monitorHz);
     }
 
     OutputDebugStringA(buf);
