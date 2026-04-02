@@ -6,10 +6,10 @@
 
 #include <SDL2/SDL.h>
 
+#include <cstdio>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <glob.h>
-#include <stdio.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -80,7 +80,7 @@ ResizeTexture(OffScreenBuffer* screenBuff, SDL_Renderer* renderer, i32 w, i32 h)
 }
 
 INTERNAL void
-DisplayBufferWindow(const OffScreenBuffer* screenBuff, SDL_Renderer* renderer, i32 wndWidth,
+DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i32 wndWidth,
                     i32 wndHeight) {
     SDL_UpdateTexture(screenBuff->texture, 0, screenBuff->memory, screenBuff->pitch);
 
@@ -134,7 +134,7 @@ GetInputFilePath(const AllState* allState, bool32 inputStream, i32 slotIndex, ch
 
 NODISCARD
 INTERNAL ReplayBuffer*
-GetReplayBuffer(AllState* allState, i32 index) {
+GetReplayBuffer(const AllState* allState, i32 index) {
     ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
     ReplayBuffer* replayBuffer{ &allState->replayBuffers[index] };
     return replayBuffer;
@@ -171,7 +171,7 @@ ProcessPendingSDLEvents() {
                 SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
                 SDL_Renderer* renderer{ SDL_GetRenderer(window) };
                 const auto wndDimension{ GetWindowDimensions(window) };
-                DisplayBufferWindow(&gScreenBuff, renderer, wndDimension.width,
+                DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width,
                                     wndDimension.height);
 
             } break;
@@ -201,11 +201,11 @@ GetSecondsElapsed(u64 Start, u64 End) {
 
 NODISCARD
 INTERNAL time_t
-GetLastWriteTime(const char* Filename) {
+GetLastWriteTime(const char* filename) {
     time_t lastWriteTime{};
 
     struct stat fileStatus;
-    if (stat(Filename, &fileStatus) == 0) {
+    if (stat(filename, &fileStatus) == 0) {
         lastWriteTime = fileStatus.st_mtime;
     }
 
@@ -224,8 +224,10 @@ LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) 
     if (gameCode.lastWritetime) {
         gameCode.dll = dlopen(srcDll, RTLD_LAZY);
         if (gameCode.dll) {
-            gameCode.updateAndRender = (update_and_render*)dlsym(gameCode.dll, "UpdateAndRender");
-            gameCode.getSoundSamples = (get_sound_samples*)dlsym(gameCode.dll, "GetSoundSamples");
+            gameCode.updateAndRender =
+                static_cast<update_and_render*>(dlsym(gameCode.dll, "UpdateAndRender"));
+            gameCode.getSoundSamples =
+                static_cast<get_sound_samples*>(dlsym(gameCode.dll, "GetSoundSamples"));
 
             gameCode.isValid = gameCode.updateAndRender && gameCode.getSoundSamples;
         } else {
@@ -258,7 +260,7 @@ UnloadGameCode(GameCode* gameCode) {
 } //namespace sdl
 
 int
-main(int argc, char** argv) {
+main() {
     sdl::AllState allState{};
     // Exe paths and stuff
     sdl::GetExePathAndFilename(&allState);
@@ -309,9 +311,9 @@ main(int argc, char** argv) {
     const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
 #if HANDMADE_INTERNAL
-    void* baseAddress{ reinterpret_cast<void*>(TERABYTES(2)) };
+    const void* baseAddress{ reinterpret_cast<void*>(TERABYTES(2)) };
 #else
-    void* baseAddress{};
+    const void* baseAddress{};
 #endif
 
     GameMemory gameMemory{};
@@ -339,25 +341,28 @@ main(int argc, char** argv) {
     //gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
 #endif
 
-    for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
-        sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
+    allState.gameMemory = gameMemory.permanentStorage;
+    allState.memorySize = totalSize;
 
-        sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
-                              sizeof(replayBuffer->replayFilePath));
+    //for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
+    //    sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
-        replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
-                                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    //    sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
+    //                          sizeof(replayBuffer->replayFilePath));
 
-        ftruncate(replayBuffer->fileHandle, allState.memorySize);
+    //    replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
+    //                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
-        replayBuffer->memoryBlock = mmap(0, allState.memorySize, PROT_READ | PROT_WRITE,
-                                         MAP_PRIVATE, replayBuffer->fileHandle, 0);
-        ASSERT(replayBuffer->memoryBlock);
-    }
+    //    ftruncate(replayBuffer->fileHandle, allState.memorySize);
 
-    allState.recordingIndex = sdl::replay_Buffer_Not_Recording;
-    allState.playingIndex = sdl::replay_Buffer_Not_Playing;
-    allState.isReplayLooping = true;
+    //    replayBuffer->memoryBlock = mmap(0, allState.memorySize, PROT_READ | PROT_WRITE,
+    //                                     MAP_PRIVATE, replayBuffer->fileHandle, 0);
+    //    ASSERT(replayBuffer->memoryBlock);
+    //}
+
+    //allState.recordingIndex = sdl::replay_Buffer_Not_Recording;
+    //allState.playingIndex = sdl::replay_Buffer_Not_Playing;
+    //allState.isReplayLooping = true;
 
     // TODO: other performance statistics
     gPerfCounterFreq = SDL_GetPerformanceFrequency();
@@ -374,6 +379,15 @@ main(int argc, char** argv) {
             game = sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
         }
 
+        // Keyboard input
+
+        for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput.playerInputs);
+             ++controllerIndex) {
+            for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
+                gameInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
+            }
+        }
+
         sdl::ProcessPendingSDLEvents();
 
         OffScreenBuffer screenBuff{};
@@ -384,9 +398,13 @@ main(int argc, char** argv) {
         screenBuff.pitch = gScreenBuff.pitch;
 
         ThreadContext threadContext{};
+
         if (game.updateAndRender) {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
         }
+
+        const auto wndDimension{ sdl::GetWindowDimensions(window) };
+        sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width, wndDimension.height);
     }
 
     SDL_Quit();
