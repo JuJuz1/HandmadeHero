@@ -27,7 +27,7 @@
             "defines": [
                 "HANDMADE_DEBUG",
                 "HANDMADE_INTERNAL",
-                "LINUX_HANDMADE"
+                "HANDMADE_LINUX"
             ],
             "compilerPath": "/opt/llvm-22.1.0/bin/clang++",
             "cStandard": "c17",

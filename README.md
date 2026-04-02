@@ -61,3 +61,9 @@ LLVM compiler (Clang) supporting C++20 (almost any version not older than ~3 yea
 ```
 
 which puts the executable into the created build folder
+
+Run it:
+
+```
+./build/linux_handmade
+```
