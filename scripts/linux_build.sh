@@ -18,6 +18,9 @@ commonCompilerFlags="$commonCompilerDefines $commonCompilerWarnings -g -std=c++2
 sdl2=$(sdl2-config --cflags --libs)
 
 # Build
+clang++ $commonCompilerFlags ../src/handmade.cpp -I ../src -shared -o handmade.so
+
 clang++ $commonCompilerFlags ../src/linux/linux_handmade.cpp -I ../src -o linux_handmade $sdl2
+
 
 popd
