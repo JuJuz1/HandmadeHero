@@ -33,6 +33,110 @@ GLOBAL bool32 gIsGamePaused;
 GLOBAL sdl::OffScreenBuffer gScreenBuff;
 GLOBAL i64 gPerfCounterFreq;
 
+#if HANDMADE_INTERNAL
+
+namespace platform_export {
+
+INTERNAL
+DEBUG_PRINT(DEBUGPrint) {
+    UNUSED_PARAMS(threadContext);
+
+    printf("%s", message);
+}
+
+INTERNAL
+DEBUG_PRINT_INT(DEBUGPrintInt) {
+    UNUSED_PARAMS(threadContext);
+
+    printf("%s: %d\n", valueName, value);
+}
+
+INTERNAL
+DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
+    UNUSED_PARAMS(threadContext);
+
+    printf("%s: %f\n", valueName, value);
+}
+
+DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
+    if (memory) {
+        free(memory);
+    }
+}
+
+DEBUG_READ_FILE(DEBUGReadFile) {
+    DEBUGFileReadResult result{};
+
+    const i32 fileHandle{ open(filename, O_RDONLY) };
+    if (fileHandle == -1) {
+        return result;
+    }
+
+    struct stat fileStatus;
+    if (fstat(fileHandle, &fileStatus) == -1) {
+        close(fileHandle);
+        return result;
+    }
+
+    result.contentSize = static_cast<u32>(fileStatus.st_size);
+
+    result.content = malloc(result.contentSize);
+    if (!result.content) {
+        close(fileHandle);
+        result.contentSize = 0;
+        return result;
+    }
+
+    u32 bytesToRead{ result.contentSize };
+    u8* nextByteLocation{ static_cast<u8*>(result.content) };
+    while (bytesToRead) {
+        ssize_t bytesRead{ read(fileHandle, nextByteLocation, bytesToRead) };
+        if (bytesRead == -1) {
+            free(result.content);
+            result.content = 0;
+            result.contentSize = 0;
+            close(fileHandle);
+            return result;
+        }
+
+        bytesToRead -= bytesRead;
+        nextByteLocation += bytesRead;
+    }
+
+    close(fileHandle);
+
+    return result;
+}
+
+DEBUG_WRITE_FILE(DEBUGWriteFile) {
+    const i32 fileHandle{ open(filename, O_WRONLY | O_CREAT | O_TRUNC,
+                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) };
+    if (!fileHandle) {
+        return false;
+    }
+
+    u32 bytesToWrite{ fileSize };
+    u8* nextByteLocation{ static_cast<u8*>(memory) };
+    while (bytesToWrite) {
+        ssize_t bytesWritten{ write(fileHandle, nextByteLocation, bytesToWrite) };
+        if (bytesWritten == -1) {
+            close(fileHandle);
+            return false;
+        }
+
+        bytesToWrite -= bytesWritten;
+        nextByteLocation += bytesWritten;
+    }
+
+    close(fileHandle);
+
+    return true;
+}
+
+} //namespace platform_export
+
+#endif // HANDMADE_INTERNAL
+
 namespace sdl {
 
 INTERNAL void
@@ -134,7 +238,7 @@ GetInputFilePath(const AllState* allState, bool32 inputStream, i32 slotIndex, ch
 
 NODISCARD
 INTERNAL ReplayBuffer*
-GetReplayBuffer(const AllState* allState, i32 index) {
+GetReplayBuffer(AllState* allState, i32 index) {
     ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
     ReplayBuffer* replayBuffer{ &allState->replayBuffers[index] };
     return replayBuffer;
@@ -225,9 +329,9 @@ LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) 
         gameCode.dll = dlopen(srcDll, RTLD_LAZY);
         if (gameCode.dll) {
             gameCode.updateAndRender =
-                static_cast<update_and_render*>(dlsym(gameCode.dll, "UpdateAndRender"));
+                reinterpret_cast<update_and_render*>(dlsym(gameCode.dll, "UpdateAndRender"));
             gameCode.getSoundSamples =
-                static_cast<get_sound_samples*>(dlsym(gameCode.dll, "GetSoundSamples"));
+                reinterpret_cast<get_sound_samples*>(dlsym(gameCode.dll, "GetSoundSamples"));
 
             gameCode.isValid = gameCode.updateAndRender && gameCode.getSoundSamples;
         } else {
@@ -311,9 +415,9 @@ main() {
     const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
 #if HANDMADE_INTERNAL
-    const void* baseAddress{ reinterpret_cast<void*>(TERABYTES(2)) };
+    void* baseAddress{ reinterpret_cast<void*>(TERABYTES(2)) };
 #else
-    const void* baseAddress{};
+    void* baseAddress{};
 #endif
 
     GameMemory gameMemory{};
@@ -322,7 +426,7 @@ main() {
 
     const u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
     gameMemory.permanentStorage =
-        mmap(baseAddress, totalSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+        mmap(baseAddress, totalSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
     gameMemory.transientStorage =
         static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
@@ -333,12 +437,12 @@ main() {
 
 #if HANDMADE_INTERNAL
     // Platform exports
-    //gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
-    //gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
-    //gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
-    //gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
-    //gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
-    //gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
+    gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
+    gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
+    gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
+    gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
+    gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+    gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
 #endif
 
     allState.gameMemory = gameMemory.permanentStorage;
