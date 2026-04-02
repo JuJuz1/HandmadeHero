@@ -966,10 +966,10 @@ WinMain(
     }
 
     // NOTE: I don't need WS_EX_TOPMOST on dwExStyle as I have 2 monitors
-    HWND windowHandle = CreateWindowExA(WS_EX_LAYERED, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                        // Window size and position
-                                        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                        0, 0, hInstance, 0);
+    const HWND windowHandle{ CreateWindowExA(
+        WS_EX_LAYERED, name, name, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        // Window size and position
+        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, hInstance, 0) };
 
     if (!windowHandle) {
         // NOTE: Log?
