@@ -151,6 +151,52 @@ main(int argc, char** argv) {
 
     sdl::ResizeTexture(&gScreenBuff, renderer, startingWidth, startingHeight);
 
+    i32 monitorHz{ 60 };
+    const i32 displayIndex{ SDL_GetWindowDisplayIndex(window) };
+    SDL_DisplayMode displayMode{};
+    const i32 displayModeResult{ SDL_GetDesktopDisplayMode(displayIndex, &displayMode) };
+    if (displayModeResult == 0 && displayMode.refresh_rate > 1) {
+        monitorHz = displayMode.refresh_rate;
+        printf("Detected valid monitorHz: %d\n", monitorHz);
+        //monitorHz = 60;
+    } else {
+        printf("Using default monitorHz: %d\n", monitorHz);
+    }
+
+    const f32 gameUpdateHz{ static_cast<f32>(monitorHz) / 2.0f };
+    const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
+
+#if HANDMADE_INTERNAL
+    void* baseAddress{ reinterpret_cast<void*>(TERABYTES(2)) };
+#else
+    void* baseAddress{};
+#endif
+
+    GameMemory gameMemory{};
+    gameMemory.permanentStorageSize = MEGABYTES(64);
+    gameMemory.transientStorageSize = MEGABYTES(128);
+
+    const u64 totalSize{ gameMemory.permanentStorageSize + gameMemory.transientStorageSize };
+    gameMemory.permanentStorage =
+        mmap(baseAddress, totalSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+
+    gameMemory.transientStorage =
+        static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize;
+    if (!( //soundBuffSamples&&
+            gameMemory.permanentStorage && gameMemory.transientStorage)) {
+        ASSERT(!"One or more of the game memory allocations failed!");
+    }
+
+#if HANDMADE_INTERNAL
+    // Platform exports
+    //gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
+    //gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
+    //gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
+    //gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
+    //gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+    //gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
+#endif
+
     gIsGameRunning = true;
 
     while (gIsGameRunning) {

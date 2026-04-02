@@ -48,7 +48,7 @@ If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat)
 
 Using David Gow's [Handmade Penguin](https://davidgow.net/handmadepenguin/) SDL 2 port of the platform layer. A repository containing all the things needed here [SDL Handmade](https://github.com/KimJorgensen/sdl_handmade)
 
-Heavily modified to match the code structure and style of the project
+Heavily modified to match the code structure and style of the project. As the logic is very similar to the Windows platform layer I didn't bother to keep the same comments on the source files
 
 LLVM compiler (Clang) supporting C++20 (almost any version not older than ~3 years, so 16.0+)
 
