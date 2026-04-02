@@ -8,15 +8,15 @@ pushd build
 
 commonCompilerWarnings="-Wall -Wextra -Wpedantic"
 commonCompilerDefines="-DHANDMADE_LINUX=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1"
-commonCompilerFlags="$commonCompilerDefines $commonCompilerWarnings -std=c++20"
-#commonLinkerFlags=/OPT:REF /OPT:NOICF /INCENTAL:NO
+commonCompilerFlags="$commonCompilerDefines $commonCompilerWarnings -g -v -std=c++20"
+#commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
 
 #linuxLibraries??? =User32.lib Gdi32.lib Winmm.lib
 #gameExportedFunctions=/EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
 
+sdl2=$(sdl2-config --cflags --libs)
+
 # Build
-clang++ "$commonCompilerFlags" -c ../src/linux/linux_handmade.cpp -I ../src -o linux_handmade.o
-# Link
-clang++ linux_handmade.o -o linux_handmade
+clang++ "$commonCompilerFlags" ../src/linux/linux_handmade.cpp -I ../src -o linux_handmade $sdl2
 
 popd
