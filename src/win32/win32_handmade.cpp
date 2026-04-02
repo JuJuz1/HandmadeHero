@@ -934,10 +934,6 @@ WinMain(
     char lockFilePath[win32::all_State_File_Name_Count];
     win32::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
 
-    constexpr i32 startingWidth{ 960 };
-    constexpr i32 startingHeight{ 540 };
-    win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
-
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = win32::MainWindowCallback;
@@ -980,6 +976,10 @@ WinMain(
         OutputDebugStringA("Failed to create windowHandle!\n");
         return 0;
     }
+
+    constexpr i32 startingWidth{ 960 };
+    constexpr i32 startingHeight{ 540 };
+    win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     char buf[64];
     // NOTE: in the future make the game function with arbitrary frame rate?
@@ -1246,7 +1246,7 @@ WinMain(
         const f64 ms{ 1000 * win32::GetSecondsElapsed(lastCounter, endCounter) };
         const f64 FPS{ 1000 / ms };
 
-        auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
+        const auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
         win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                    wndDimension.height);
 
