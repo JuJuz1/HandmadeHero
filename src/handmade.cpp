@@ -42,25 +42,7 @@ ActionReleased(const Button* button) {
 
 // Write the sound data to buff
 INTERNAL void
-OutputSound(GameState* gameState, const SoundOutputBuffer* buff, i32 toneHz) {
-    constexpr i32 toneVolume{ 3000 };
-    const i32 wavePeriod{ buff->samplesPerSecond / toneHz };
-
-    // NOTE: invalid semantics as buff is const but we copy the pointer...
-    i16* sampleOut{ buff->samples };
-
-    for (i32 i{}; i < buff->sampleCount; ++i) {
-        // Sine wave
-#if 1
-        const i16 sampleValue{};
-#else
-        const f32 sineValue{ sinf(gameState->tSine) };
-        const i16 sampleValue{ static_cast<i16>(sineValue * toneVolume) };
-#endif
-        *sampleOut++ = sampleValue;
-        *sampleOut++ = sampleValue;
-    }
-}
+OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {}
 
 INTERNAL void
 DrawRectangle(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
@@ -1345,7 +1327,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // Highlight the tile for the player controlling the camera
-            Entity* entity{ GetEntity(gameState, gameState->cameraFollowingEntityIndex) };
+            const Entity* entity{ GetEntity(gameState, gameState->cameraFollowingEntityIndex) };
             if (entity->exists) {
                 if (row == entity->pos.absTileY && column == entity->pos.absTileX) {
                     green = 0.25f;
@@ -1431,5 +1413,5 @@ extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
     UNUSED_PARAMS(threadContext);
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
-    OutputSound(gameState, soundBuff, 256);
+    OutputSound(gameState, soundBuff);
 }
