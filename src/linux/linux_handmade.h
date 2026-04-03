@@ -33,7 +33,6 @@ GLOBAL i32 constexpr all_State_File_Name_Count{ 4096 };
 
 struct ReplayBuffer {
     i32 fileHandle;
-    void* memoryMap;
     void* memoryBlock;
     char replayFilePath[all_State_File_Name_Count];
 

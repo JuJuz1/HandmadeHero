@@ -30,6 +30,7 @@
 
 GLOBAL bool32 gIsGameRunning;
 GLOBAL bool32 gIsGamePaused;
+GLOBAL bool32 gShowCursor;
 
 GLOBAL sdl::OffScreenBuffer gScreenBuff;
 GLOBAL i64 gPerfCounterFreq;
@@ -268,12 +269,7 @@ BeginRecordInput(AllState* allState, i32 recordingIndex) {
 
 INTERNAL void
 EndRecordInput(AllState* allState) {
-    // TODO: not this check is not needed?
-    //if (allState->recordingHandle != INVALID_HANDLE_VALUE) {
     close(allState->recordingHandle);
-    //allState->recordingHandle = INVALID_HANDLE_VALUE;
-    //}
-
     allState->recordingIndex = replay_Buffer_Not_Recording;
 }
 
@@ -313,6 +309,9 @@ EndInputPlayback(AllState* allState) {
 INTERNAL void
 RecordInput(AllState* allState, Input* input) {
     ssize_t bytesWritten = write(allState->recordingHandle, input, sizeof(*input));
+    if (bytesWritten != sizeof(*input)) {
+        printf("RecordInput writing to file failed!\n");
+    }
 }
 
 INTERNAL void
@@ -404,104 +403,116 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             gIsGameRunning = false;
         } break;
 
-        // Keyboard
+        // Keyboard input
         case SDL_KEYUP:
         case SDL_KEYDOWN: {
             const SDL_Keycode keyCode{ event.key.keysym.sym };
             const bool32 isDown{ event.key.state == SDL_PRESSED };
-            const bool32 shiftPressed{ event.key.keysym.mod & KMOD_SHIFT };
+
+            const u8* kbState{ SDL_GetKeyboardState(0) };
+            const bool32 shiftPressed{ kbState[SDL_SCANCODE_LSHIFT] ||
+                                       kbState[SDL_SCANCODE_RSHIFT] };
+            const bool32 altPressed{ kbState[SDL_SCANCODE_LALT] || kbState[SDL_SCANCODE_RALT] };
 
             // NOTE: In the windows version, we used "if (isDown != WasDown)"
             // to detect key repeats. SDL has the 'repeat' value, though,
             // which we'll use
-            if (event.key.repeat == 0) {
-                if (keyCode == SDLK_w) {
-                    printf("W\n");
-                    ProcessInputEvent(&input->playerInputs->up, isDown);
-                } else if (keyCode == SDLK_a) {
-                    printf("A\n");
-                    ProcessInputEvent(&input->playerInputs->left, isDown);
-                } else if (keyCode == SDLK_s) {
-                    printf("S\n");
-                    ProcessInputEvent(&input->playerInputs->down, isDown);
-                } else if (keyCode == SDLK_d) {
-                    printf("D\n");
-                    ProcessInputEvent(&input->playerInputs->right, isDown);
-                } else if (keyCode == SDLK_UP) {
-                    ProcessInputEvent(&input->playerInputs->up, isDown);
-                } else if (keyCode == SDLK_LEFT) {
-                    ProcessInputEvent(&input->playerInputs->left, isDown);
-                } else if (keyCode == SDLK_DOWN) {
-                    ProcessInputEvent(&input->playerInputs->down, isDown);
-                } else if (keyCode == SDLK_RIGHT) {
-                    ProcessInputEvent(&input->playerInputs->right, isDown);
-                }
+            if (event.key.repeat != 0) {
+                continue;
+            }
 
-                else if (keyCode == SDLK_q) {
-                    ProcessInputEvent(&input->playerInputs->Q, isDown);
-                } else if (keyCode == SDLK_e) {
-                    ProcessInputEvent(&input->playerInputs->E, isDown);
-                }
+            if (keyCode == SDLK_w) {
+                printf("W\n");
+                ProcessInputEvent(&input->playerInputs->up, isDown);
+            } else if (keyCode == SDLK_a) {
+                printf("A\n");
+                ProcessInputEvent(&input->playerInputs->left, isDown);
+            } else if (keyCode == SDLK_s) {
+                printf("S\n");
+                ProcessInputEvent(&input->playerInputs->down, isDown);
+            } else if (keyCode == SDLK_d) {
+                printf("D\n");
+                ProcessInputEvent(&input->playerInputs->right, isDown);
+            } else if (keyCode == SDLK_UP) {
+                ProcessInputEvent(&input->playerInputs->up, isDown);
+            } else if (keyCode == SDLK_LEFT) {
+                ProcessInputEvent(&input->playerInputs->left, isDown);
+            } else if (keyCode == SDLK_DOWN) {
+                ProcessInputEvent(&input->playerInputs->down, isDown);
+            } else if (keyCode == SDLK_RIGHT) {
+                ProcessInputEvent(&input->playerInputs->right, isDown);
+            }
+
+            else if (keyCode == SDLK_q) {
+                ProcessInputEvent(&input->playerInputs->Q, isDown);
+            } else if (keyCode == SDLK_e) {
+                ProcessInputEvent(&input->playerInputs->E, isDown);
+            } else if (keyCode == SDLK_LSHIFT || keyCode == SDLK_RSHIFT) {
+                ProcessInputEvent(&input->playerInputs->shift, isDown);
+            } else if (keyCode == SDLK_RETURN) {
+                ProcessInputEvent(&input->playerInputs->enter, isDown);
+            }
+
 #if HANDMADE_INTERNAL
-                else if (keyCode == SDLK_l) {
-                    if (isDown) {
-                        if (shiftPressed) {
-                            if (allState->isReplayLooping) {
-                                printf("Shift + L: Disable replay loop!\n");
-                            } else {
-                                printf("Shift + L: Enable replay loop!\n");
-                            }
-
-                            allState->isReplayLooping = !allState->isReplayLooping;
+            else if (keyCode == SDLK_l) {
+                if (isDown) {
+                    if (shiftPressed) {
+                        if (allState->isReplayLooping) {
+                            printf("Shift + L: Disable replay loop!\n");
                         } else {
-                            HandleRecordButton(allState, input, allState->selectedIndex);
-                        }
-                    }
-                } else if (keyCode == SDLK_1) {
-                    if (isDown) {
-                        HandleSwitchReplayBuffer(allState, input, 0, shiftPressed);
-                    }
-                } else if (keyCode == SDLK_2) {
-                    if (isDown) {
-                        HandleSwitchReplayBuffer(allState, input, 1, shiftPressed);
-                    }
-                } else if (keyCode == SDLK_3) {
-                    if (isDown) {
-                        HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
-                    }
-                } else if (keyCode == SDLK_4) {
-                    if (isDown) {
-                        HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
-                    }
-                }
-
-                else if (keyCode == SDLK_p) {
-                    if (isDown) {
-                        if (gIsGamePaused) {
-                            printf("P: Game unpaused!\n");
-                        } else {
-                            printf("P: Game paused!\n");
+                            printf("Shift + L: Enable replay loop!\n");
                         }
 
-                        gIsGamePaused = !gIsGamePaused;
+                        allState->isReplayLooping = !allState->isReplayLooping;
+                    } else {
+                        HandleRecordButton(allState, input, allState->selectedIndex);
                     }
                 }
-
-                else if (keyCode == SDLK_z) {
-                    ProcessInputEvent(&input->playerInputs->Z, isDown);
+            } else if (keyCode == SDLK_1) {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 0, shiftPressed);
                 }
+            } else if (keyCode == SDLK_2) {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 1, shiftPressed);
+                }
+            } else if (keyCode == SDLK_3) {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
+                }
+            } else if (keyCode == SDLK_4) {
+                if (isDown) {
+                    HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
+                }
+            }
+
+            else if (keyCode == SDLK_p) {
+                if (isDown) {
+                    if (gIsGamePaused) {
+                        printf("P: Game unpaused!\n");
+                    } else {
+                        printf("P: Game paused!\n");
+                    }
+
+                    gIsGamePaused = !gIsGamePaused;
+                }
+            }
+
+            else if (keyCode == SDLK_z) {
+                ProcessInputEvent(&input->playerInputs->Z, isDown);
+            }
 #endif
-                else {
-                    if (isDown) {
-                        bool AltKeyWasDown = (event.key.keysym.mod & KMOD_ALT);
-                        if (keyCode == SDLK_F4 && AltKeyWasDown) {
+
+            else {
+                if (isDown) {
+                    if (keyCode == SDLK_F4) {
+                        if (altPressed) {
                             gIsGameRunning = false;
                         }
-                        if ((keyCode == SDLK_F11) && AltKeyWasDown) {
-                            SDL_Window* window = SDL_GetWindowFromID(event.window.windowID);
-                            if (window) {
-                                ToggleFullscreen(window);
-                            }
+                    } else if ((keyCode == SDLK_F11)) {
+                        SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
+                        if (window) {
+                            ToggleFullscreen(window);
                         }
                     }
                 }
@@ -569,9 +580,6 @@ GetLastWriteTime(const char* filename) {
 INTERNAL GameCode
 LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) {
     GameCode gameCode{};
-
-    // TODO: Check if .tmp file still exists
-
     gameCode.lastWritetime = GetLastWriteTime(srcDll);
 
     // Here is an extra check for the existence of lastWriteTime
@@ -586,7 +594,7 @@ LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) 
             gameCode.isValid = gameCode.updateAndRender && gameCode.getSoundSamples;
         } else {
             printf("Failed to load dll!\n");
-            puts(dlerror());
+            //puts(dlerror());
         }
     } else {
         printf("lastWriteTime was invalid\n");
@@ -648,6 +656,12 @@ main() {
     }
 
     sdl::ResizeTexture(&gScreenBuff, renderer, startingWidth, startingHeight);
+
+#if HANDMADE_INTERNAL
+    gShowCursor = true;
+#endif
+
+    SDL_ShowCursor(gShowCursor ? SDL_ENABLE : SDL_DISABLE);
 
     i32 monitorHz{ 60 };
     const i32 displayIndex{ SDL_GetWindowDisplayIndex(window) };
@@ -745,6 +759,10 @@ main() {
         }
 
         sdl::ProcessPendingEvents(&gameInput, &allState);
+
+        if (gIsGamePaused) {
+            continue;
+        }
 
         OffScreenBuffer screenBuff{};
         screenBuff.memory = gScreenBuff.memory;

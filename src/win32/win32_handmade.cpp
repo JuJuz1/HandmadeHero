@@ -572,7 +572,7 @@ RecordInput(AllState* allState, const Input* input) {
         bytesWritten == sizeof(*input)) {
         // Success
     } else {
-        OutputDebugStringA("RecordInput RecordInput writing to file failed!\n");
+        OutputDebugStringA("RecordInput writing to file failed!\n");
     }
 }
 
