@@ -1,14 +1,15 @@
 /*
+    Used as a very informative reference:
     https://github.com/KimJorgensen/sdl_handmade/blob/master/code/sdl_handmade.cpp
 
-    A heavily modified version of the SDL Handmade Linux platform layer using SDL2
+    A heavily modified version of the SDL Handmade Linux platform layer using SDL 2
 */
 
 #include <SDL2/SDL.h>
 
 #include <cstdio>
-#include <dlfcn.h>
-#include <fcntl.h>
+#include <dlfcn.h> // DLL unload and load
+#include <fcntl.h> // File operations
 #include <glob.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -79,7 +80,6 @@ DEBUG_READ_FILE(DEBUGReadFile) {
     }
 
     result.contentSize = static_cast<u32>(fileStatus.st_size);
-
     result.content = malloc(result.contentSize);
     if (!result.content) {
         close(fileHandle);
@@ -245,13 +245,267 @@ GetReplayBuffer(AllState* allState, i32 index) {
 }
 
 INTERNAL void
-ProcessPendingSDLEvents() {
+BeginRecordInput(AllState* allState, i32 recordingIndex) {
+    ReplayBuffer* replayBuffer = GetReplayBuffer(allState, recordingIndex);
+    if (replayBuffer->memoryBlock) {
+        allState->recordingIndex = recordingIndex;
+
+        char filePath[all_State_File_Name_Count];
+        GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
+        allState->recordingHandle =
+            open(filePath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+#if 0
+        lseek(State->recordingHandle, State->TotalSize, SEEK_SET);
+#endif
+
+        memcpy(replayBuffer->memoryBlock, allState->gameMemory, allState->memorySize);
+        if (!replayBuffer->isRecordedAtLeastOnce) {
+            replayBuffer->isRecordedAtLeastOnce = true;
+        }
+    }
+}
+
+INTERNAL void
+EndRecordInput(AllState* allState) {
+    // TODO: not this check is not needed?
+    //if (allState->recordingHandle != INVALID_HANDLE_VALUE) {
+    close(allState->recordingHandle);
+    //allState->recordingHandle = INVALID_HANDLE_VALUE;
+    //}
+
+    allState->recordingIndex = replay_Buffer_Not_Recording;
+}
+
+INTERNAL void
+BeginInputPlayback(AllState* allState, i32 playingIndex) {
+    ReplayBuffer* replayBuffer = GetReplayBuffer(allState, playingIndex);
+    if (!replayBuffer->isRecordedAtLeastOnce) {
+        printf("Can't playback buffer %d as it has not yet been recorded to!\n", playingIndex);
+        return;
+    }
+
+    if (replayBuffer->memoryBlock) {
+        allState->playingIndex = playingIndex;
+
+        char filePath[all_State_File_Name_Count];
+        GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
+        allState->playingHandle = open(filePath, O_RDONLY);
+
+#if 0
+        lseek(allState->playingHandle, allState->memorySize, SEEK_SET);
+#endif
+
+        memcpy(allState->gameMemory, replayBuffer->memoryBlock, allState->memorySize);
+    }
+}
+
+INTERNAL void
+EndInputPlayback(AllState* allState) {
+    //if (allState->playingHandle != INVALID_HANDLE_VALUE) {
+    close(allState->playingHandle);
+    //allState->playingHandle = INVALID_HANDLE_VALUE;
+    //}
+
+    allState->playingIndex = replay_Buffer_Not_Playing;
+}
+
+INTERNAL void
+RecordInput(AllState* allState, Input* input) {
+    ssize_t bytesWritten = write(allState->recordingHandle, input, sizeof(*input));
+}
+
+INTERNAL void
+PlaybackInput(AllState* allState, Input* input) {
+    ssize_t bytesRead = read(allState->playingHandle, input, sizeof(*input));
+    if (bytesRead == 0) {
+        const i32 playingIndex = allState->playingIndex;
+        EndInputPlayback(allState);
+
+        if (allState->isReplayLooping) {
+            printf("PlaybackInput starting loop again!\n");
+            BeginInputPlayback(allState, playingIndex);
+            read(allState->playingHandle, input, sizeof(*input));
+        }
+    }
+}
+
+INTERNAL void
+ClearInputMemory(Input* input) {
+    memset(input, 0, sizeof(*input));
+}
+
+INTERNAL void
+HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
+    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ClearInputMemory(input);
+
+    if (allState->playingIndex == replay_Buffer_Not_Playing) {
+        if (allState->recordingIndex == replay_Buffer_Not_Recording) {
+            printf("L: Recording STARTED, selected: %d!\n", selectedIndex);
+            BeginRecordInput(allState, selectedIndex);
+        } else {
+            printf("L: Recording STOPPED, selected: %d!\n", selectedIndex);
+            EndRecordInput(allState);
+            BeginInputPlayback(allState, selectedIndex);
+        }
+    } else {
+        printf("L: PLAYING STOPPED, selected: %d!\n", selectedIndex);
+        EndInputPlayback(allState);
+    }
+}
+
+INTERNAL void
+HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bool32 shiftPressed) {
+    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ClearInputMemory(input);
+
+    if (allState->recordingIndex == selectedIndex) {
+        printf("Selected same index when recording -> playback\n");
+        EndRecordInput(allState);
+        BeginInputPlayback(allState, selectedIndex);
+        return;
+    }
+    if (!(allState->recordingIndex == replay_Buffer_Not_Recording)) {
+        printf("Can't switch buffer while recording!\n");
+        return;
+    }
+
+    allState->selectedIndex = selectedIndex;
+    printf("Replay buffer %d selected\n", selectedIndex);
+
+    EndInputPlayback(allState);
+
+    if (shiftPressed) {
+        BeginRecordInput(allState, selectedIndex);
+    } else {
+        const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, selectedIndex) };
+        if (replayBuffer->isRecordedAtLeastOnce) {
+            BeginInputPlayback(allState, allState->selectedIndex);
+        }
+    }
+}
+
+INTERNAL void
+ProcessInputEvent(Button* button, bool32 isDown) {
+    if (button->endedDown != isDown) {
+        button->endedDown = isDown;
+        ++button->halfTransitionCount;
+    }
+}
+
+INTERNAL void
+ProcessPendingEvents(Input* input, AllState* allState) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_QUIT: {
             printf("SDL_QUIT\n");
             gIsGameRunning = false;
+        } break;
+
+        // Keyboard
+        case SDL_KEYUP:
+        case SDL_KEYDOWN: {
+            const SDL_Keycode keyCode{ event.key.keysym.sym };
+            const bool32 isDown{ event.key.state == SDL_PRESSED };
+            const bool32 shiftPressed{ event.key.keysym.mod & KMOD_SHIFT };
+
+            // NOTE: In the windows version, we used "if (isDown != WasDown)"
+            // to detect key repeats. SDL has the 'repeat' value, though,
+            // which we'll use
+            if (event.key.repeat == 0) {
+                if (keyCode == SDLK_w) {
+                    printf("W\n");
+                    ProcessInputEvent(&input->playerInputs->up, isDown);
+                } else if (keyCode == SDLK_a) {
+                    printf("A\n");
+                    ProcessInputEvent(&input->playerInputs->left, isDown);
+                } else if (keyCode == SDLK_s) {
+                    printf("S\n");
+                    ProcessInputEvent(&input->playerInputs->down, isDown);
+                } else if (keyCode == SDLK_d) {
+                    printf("D\n");
+                    ProcessInputEvent(&input->playerInputs->right, isDown);
+                } else if (keyCode == SDLK_UP) {
+                    ProcessInputEvent(&input->playerInputs->up, isDown);
+                } else if (keyCode == SDLK_LEFT) {
+                    ProcessInputEvent(&input->playerInputs->left, isDown);
+                } else if (keyCode == SDLK_DOWN) {
+                    ProcessInputEvent(&input->playerInputs->down, isDown);
+                } else if (keyCode == SDLK_RIGHT) {
+                    ProcessInputEvent(&input->playerInputs->right, isDown);
+                }
+
+                else if (keyCode == SDLK_q) {
+                    ProcessInputEvent(&input->playerInputs->Q, isDown);
+                } else if (keyCode == SDLK_e) {
+                    ProcessInputEvent(&input->playerInputs->E, isDown);
+                }
+#if HANDMADE_INTERNAL
+                else if (keyCode == SDLK_l) {
+                    if (isDown) {
+                        if (shiftPressed) {
+                            if (allState->isReplayLooping) {
+                                printf("Shift + L: Disable replay loop!\n");
+                            } else {
+                                printf("Shift + L: Enable replay loop!\n");
+                            }
+
+                            allState->isReplayLooping = !allState->isReplayLooping;
+                        } else {
+                            HandleRecordButton(allState, input, allState->selectedIndex);
+                        }
+                    }
+                } else if (keyCode == SDLK_1) {
+                    if (isDown) {
+                        HandleSwitchReplayBuffer(allState, input, 0, shiftPressed);
+                    }
+                } else if (keyCode == SDLK_2) {
+                    if (isDown) {
+                        HandleSwitchReplayBuffer(allState, input, 1, shiftPressed);
+                    }
+                } else if (keyCode == SDLK_3) {
+                    if (isDown) {
+                        HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
+                    }
+                } else if (keyCode == SDLK_4) {
+                    if (isDown) {
+                        HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
+                    }
+                }
+
+                else if (keyCode == SDLK_p) {
+                    if (isDown) {
+                        if (gIsGamePaused) {
+                            printf("P: Game unpaused!\n");
+                        } else {
+                            printf("P: Game paused!\n");
+                        }
+
+                        gIsGamePaused = !gIsGamePaused;
+                    }
+                }
+
+                else if (keyCode == SDLK_z) {
+                    ProcessInputEvent(&input->playerInputs->Z, isDown);
+                }
+#endif
+                else {
+                    if (isDown) {
+                        bool AltKeyWasDown = (event.key.keysym.mod & KMOD_ALT);
+                        if (keyCode == SDLK_F4 && AltKeyWasDown) {
+                            gIsGameRunning = false;
+                        }
+                        if ((keyCode == SDLK_F11) && AltKeyWasDown) {
+                            SDL_Window* window = SDL_GetWindowFromID(event.window.windowID);
+                            if (window) {
+                                ToggleFullscreen(window);
+                            }
+                        }
+                    }
+                }
+            }
         } break;
 
         // Window events
@@ -280,10 +534,6 @@ ProcessPendingSDLEvents() {
 
             } break;
             }
-        } break;
-
-        default: {
-            //printf("Default event\n");
         } break;
         }
     }
@@ -448,28 +698,30 @@ main() {
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
 
-    //for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
-    //    sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
+    for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
+        sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
-    //    sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
-    //                          sizeof(replayBuffer->replayFilePath));
+        sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
+                              sizeof(replayBuffer->replayFilePath));
 
-    //    replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
-    //                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
+                                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
-    //    ftruncate(replayBuffer->fileHandle, allState.memorySize);
+        ftruncate(replayBuffer->fileHandle, allState.memorySize);
 
-    //    replayBuffer->memoryBlock = mmap(0, allState.memorySize, PROT_READ | PROT_WRITE,
-    //                                     MAP_PRIVATE, replayBuffer->fileHandle, 0);
-    //    ASSERT(replayBuffer->memoryBlock);
-    //}
+        replayBuffer->memoryBlock = mmap(0, allState.memorySize, PROT_READ | PROT_WRITE,
+                                         MAP_PRIVATE, replayBuffer->fileHandle, 0);
+        ASSERT(replayBuffer->memoryBlock);
+    }
 
-    //allState.recordingIndex = sdl::replay_Buffer_Not_Recording;
-    //allState.playingIndex = sdl::replay_Buffer_Not_Playing;
-    //allState.isReplayLooping = true;
+    allState.recordingIndex = sdl::replay_Buffer_Not_Recording;
+    allState.playingIndex = sdl::replay_Buffer_Not_Playing;
+    allState.isReplayLooping = true;
 
-    // TODO: other performance statistics
     gPerfCounterFreq = SDL_GetPerformanceFrequency();
+
+    u64 lastCounter{ sdl::GetWallClock() };
+    u64 lastCycleCount{ _rdtsc() };
 
     sdl::GameCode game{ sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
     Input gameInput{};
@@ -492,7 +744,7 @@ main() {
             }
         }
 
-        sdl::ProcessPendingSDLEvents();
+        sdl::ProcessPendingEvents(&gameInput, &allState);
 
         OffScreenBuffer screenBuff{};
         screenBuff.memory = gScreenBuff.memory;
@@ -501,14 +753,61 @@ main() {
         screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
+        if (allState.recordingIndex != sdl::replay_Buffer_Not_Recording) {
+            sdl::RecordInput(&allState, &gameInput);
+        } else if (allState.playingIndex != sdl::replay_Buffer_Not_Playing) {
+            sdl::PlaybackInput(&allState, &gameInput);
+        }
+
         ThreadContext threadContext{};
+
+        gameInput.frameDeltaTime = targetSecondsPerFrame;
 
         if (game.updateAndRender) {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
         }
 
+        u64 endCounter{ sdl::GetWallClock() };
+        const f64 secondsElapsed{ sdl::GetSecondsElapsed(lastCounter, endCounter) };
+        f64 secondsElapedForFrame{ secondsElapsed };
+
+#if 1
+        if (secondsElapedForFrame < targetSecondsPerFrame) {
+            // SDL doesn't have TimeBeginPeriod so we can't determine if sleep is granular
+            // So we just spinlock every time
+            while (secondsElapedForFrame < targetSecondsPerFrame) {
+                const u32 remainingMS{ static_cast<u32>(
+                    (targetSecondsPerFrame - secondsElapedForFrame) * 1000.0f) };
+                if (remainingMS > 0) {
+                    SDL_Delay(remainingMS);
+                }
+
+                secondsElapedForFrame = sdl::GetSecondsElapsed(lastCounter, sdl::GetWallClock());
+            }
+        } else {
+            // log the missed frame!!!
+        }
+#endif
+
+        endCounter = sdl::GetWallClock();
+        const f64 ms{ 1000 * sdl::GetSecondsElapsed(lastCounter, endCounter) };
+        const f64 FPS{ 1000 / ms };
+
         const auto wndDimension{ sdl::GetWindowDimensions(window) };
         sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width, wndDimension.height);
+
+        const u64 endCycleCount{ _rdtsc() };
+        const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) /
+                                 (1000 * 1000) };
+
+#if 0
+        printf("frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS, cycleElapsedM);
+#endif
+
+        lastCycleCount = endCycleCount;
+
+        const u64 resetCounter{ sdl::GetWallClock() };
+        lastCounter = resetCounter;
     }
 
     SDL_Quit();
