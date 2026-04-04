@@ -740,6 +740,7 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             case 'E': {
                 ProcessInputMessage(&input->playerInputs->E, isDown);
             } break;
+
             case VK_SHIFT: {
                 ProcessInputMessage(&input->playerInputs->shift, isDown);
             } break;
@@ -800,7 +801,6 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                     HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
                 }
             } break;
-
             case 'P': {
                 if (isDown) {
                     if (gIsGamePaused) {

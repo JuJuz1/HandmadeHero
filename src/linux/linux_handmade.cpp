@@ -3,6 +3,9 @@
     https://github.com/KimJorgensen/sdl_handmade/blob/master/code/sdl_handmade.cpp
 
     A heavily modified version of the SDL Handmade Linux platform layer using SDL 2
+
+    IMPORTANT: can likely work on Mac without having to change too much stuff!
+    Probably only need to change some of the system calls and flags
 */
 
 #include <SDL2/SDL.h>
@@ -21,7 +24,7 @@
 
 #include "linux_handmade.h"
 
-// NOTE: MAP_ANONYMOUS is not defined on macOS X and some other UNIX systems
+// NOTE: MAP_ANONYMOUS is not defined on Mac and some other UNIX systems
 // On the vast majority of those systems, one can use MAP_ANON instead
 // Huge thanks to Adam Rosenfield for investigating this, and suggesting this workaround:
 #ifndef MAP_ANONYMOUS
@@ -421,40 +424,66 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 continue;
             }
 
-            if (keyCode == SDLK_w) {
-                printf("W\n");
+            switch (keyCode) {
+            case SDLK_w: {
                 ProcessInputEvent(&input->playerInputs->up, isDown);
-            } else if (keyCode == SDLK_a) {
-                printf("A\n");
-                ProcessInputEvent(&input->playerInputs->left, isDown);
-            } else if (keyCode == SDLK_s) {
-                printf("S\n");
+            } break;
+            case SDLK_s: {
                 ProcessInputEvent(&input->playerInputs->down, isDown);
-            } else if (keyCode == SDLK_d) {
-                printf("D\n");
-                ProcessInputEvent(&input->playerInputs->right, isDown);
-            } else if (keyCode == SDLK_UP) {
-                ProcessInputEvent(&input->playerInputs->up, isDown);
-            } else if (keyCode == SDLK_LEFT) {
+            } break;
+            case SDLK_a: {
                 ProcessInputEvent(&input->playerInputs->left, isDown);
-            } else if (keyCode == SDLK_DOWN) {
-                ProcessInputEvent(&input->playerInputs->down, isDown);
-            } else if (keyCode == SDLK_RIGHT) {
+            } break;
+            case SDLK_d: {
                 ProcessInputEvent(&input->playerInputs->right, isDown);
-            }
+            } break;
 
-            else if (keyCode == SDLK_q) {
+            case SDLK_UP: {
+                ProcessInputEvent(&input->playerInputs->up, isDown);
+            } break;
+            case SDLK_DOWN: {
+                ProcessInputEvent(&input->playerInputs->down, isDown);
+            } break;
+            case SDLK_LEFT: {
+                ProcessInputEvent(&input->playerInputs->left, isDown);
+            } break;
+            case SDLK_RIGHT: {
+                ProcessInputEvent(&input->playerInputs->right, isDown);
+            } break;
+
+            case SDLK_q: {
                 ProcessInputEvent(&input->playerInputs->Q, isDown);
-            } else if (keyCode == SDLK_e) {
+            } break;
+            case SDLK_e: {
                 ProcessInputEvent(&input->playerInputs->E, isDown);
-            } else if (keyCode == SDLK_LSHIFT || keyCode == SDLK_RSHIFT) {
+            } break;
+
+            case SDLK_LSHIFT:
+            case SDLK_RSHIFT: {
                 ProcessInputEvent(&input->playerInputs->shift, isDown);
-            } else if (keyCode == SDLK_RETURN) {
+            } break;
+            case SDLK_RETURN: {
                 ProcessInputEvent(&input->playerInputs->enter, isDown);
-            }
+            } break;
+
+            case SDLK_F4: {
+                if (isDown) {
+                    if (altPressed) {
+                        gIsGameRunning = false;
+                    }
+                }
+            } break;
+            case SDLK_F11: {
+                if (isDown) {
+                    SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
+                    if (window) {
+                        ToggleFullscreen(window);
+                    }
+                }
+            } break;
 
 #if HANDMADE_INTERNAL
-            else if (keyCode == SDLK_l) {
+            case SDLK_l: {
                 if (isDown) {
                     if (shiftPressed) {
                         if (allState->isReplayLooping) {
@@ -468,25 +497,28 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                         HandleRecordButton(allState, input, allState->selectedIndex);
                     }
                 }
-            } else if (keyCode == SDLK_1) {
+            } break;
+            case SDLK_1: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 0, shiftPressed);
                 }
-            } else if (keyCode == SDLK_2) {
+            } break;
+            case SDLK_2: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 1, shiftPressed);
                 }
-            } else if (keyCode == SDLK_3) {
+            } break;
+            case SDLK_3: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
                 }
-            } else if (keyCode == SDLK_4) {
+            } break;
+            case SDLK_4: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
                 }
-            }
-
-            else if (keyCode == SDLK_p) {
+            } break;
+            case SDLK_p: {
                 if (isDown) {
                     if (gIsGamePaused) {
                         printf("P: Game unpaused!\n");
@@ -496,26 +528,18 @@ ProcessPendingEvents(Input* input, AllState* allState) {
 
                     gIsGamePaused = !gIsGamePaused;
                 }
-            }
+            } break;
 
-            else if (keyCode == SDLK_z) {
+            case SDLK_z: {
                 ProcessInputEvent(&input->playerInputs->Z, isDown);
-            }
+            } break;
 #endif
 
-            else {
+            default: {
                 if (isDown) {
-                    if (keyCode == SDLK_F4) {
-                        if (altPressed) {
-                            gIsGameRunning = false;
-                        }
-                    } else if ((keyCode == SDLK_F11)) {
-                        SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
-                        if (window) {
-                            ToggleFullscreen(window);
-                        }
-                    }
+                    printf("keyCode %u NOT HANDLED\n", keyCode);
                 }
+            } break;
             }
         } break;
 
@@ -524,7 +548,6 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             switch (event.window.event) {
             case SDL_WINDOWEVENT_SIZE_CHANGED: {
                 SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
-                SDL_Renderer* renderer{ SDL_GetRenderer(window) };
                 printf("SDL_WINDOWEVENT_SIZE_CHANGED (%d, %d)\n", event.window.data1,
                        event.window.data2);
             } break;
@@ -624,10 +647,8 @@ UnloadGameCode(GameCode* gameCode) {
 int
 main() {
     sdl::AllState allState{};
-    // Exe paths and stuff
     sdl::GetExePathAndFilename(&allState);
 
-    // NOTE: a little string processing cause we are handmade
     char srcDllPath[sdl::all_State_File_Name_Count];
     sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath, sizeof(srcDllPath));
     char tempDllPath[sdl::all_State_File_Name_Count];
