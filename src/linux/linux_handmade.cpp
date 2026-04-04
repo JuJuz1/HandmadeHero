@@ -10,15 +10,14 @@
 
 #include <SDL2/SDL.h>
 
-#include <cstdio>
-#include <dlfcn.h> // DLL unload and load
-#include <fcntl.h> // File operations
-#include <glob.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <x86intrin.h>
+#include <cstdio>      // Console I/O
+#include <dlfcn.h>     // DLL unload and load
+#include <fcntl.h>     // File operation options
+#include <sys/mman.h>  // Memory mapping
+#include <sys/stat.h>  // File metadata
+#include <sys/types.h> // Standard types
+#include <unistd.h>    // File operations
+#include <x86intrin.h> // Cpu intrinsics
 
 #include "handmade.h"
 
