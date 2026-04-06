@@ -35,7 +35,7 @@ GLOBAL bool32 gIsGamePaused;
 GLOBAL bool32 gShowCursor;
 
 GLOBAL sdl::OffScreenBuffer gScreenBuff;
-GLOBAL i64 gPerfCounterFreq;
+GLOBAL u64 gPerfCounterFreq;
 
 #if HANDMADE_INTERNAL
 
@@ -93,10 +93,10 @@ DEBUG_READ_FILE(DEBUGReadFile) {
     u32 bytesToRead{ result.contentSize };
     u8* nextByteLocation{ static_cast<u8*>(result.content) };
     while (bytesToRead) {
-        ssize_t bytesRead{ read(fileHandle, nextByteLocation, bytesToRead) };
+        const ssize_t bytesRead{ read(fileHandle, nextByteLocation, bytesToRead) };
         if (bytesRead == -1) {
             free(result.content);
-            result.content = 0;
+            result.content = nullptr;
             result.contentSize = 0;
             close(fileHandle);
             return result;
@@ -121,7 +121,7 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
     u32 bytesToWrite{ fileSize };
     u8* nextByteLocation{ static_cast<u8*>(memory) };
     while (bytesToWrite) {
-        ssize_t bytesWritten{ write(fileHandle, nextByteLocation, bytesToWrite) };
+        const ssize_t bytesWritten{ write(fileHandle, nextByteLocation, bytesToWrite) };
         if (bytesWritten == -1) {
             close(fileHandle);
             return false;
@@ -210,12 +210,9 @@ DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i
 
 INTERNAL void
 GetExePathAndFilename(AllState* allState) {
-    // TODO: Is this needed?
-    memset(allState->exePath, 0, sizeof(allState->exePath));
-    // Also this?
-    ssize_t charactersRead{ readlink("/proc/self/exe", allState->exePath,
-                                     sizeof(allState->exePath) - 1) };
-
+    // Needed to check?
+    const ssize_t charactersRead{ readlink("/proc/self/exe", allState->exePath,
+                                           sizeof(allState->exePath) - 1) };
     allState->exeFilename = allState->exePath;
 
     for (char* scan{ allState->exePath }; *scan; ++scan) {
@@ -249,7 +246,7 @@ GetReplayBuffer(AllState* allState, i32 index) {
 
 INTERNAL void
 BeginRecordInput(AllState* allState, i32 recordingIndex) {
-    ReplayBuffer* replayBuffer = GetReplayBuffer(allState, recordingIndex);
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, recordingIndex) };
     if (replayBuffer->memoryBlock) {
         allState->recordingIndex = recordingIndex;
 
@@ -277,7 +274,7 @@ EndRecordInput(AllState* allState) {
 
 INTERNAL void
 BeginInputPlayback(AllState* allState, i32 playingIndex) {
-    ReplayBuffer* replayBuffer = GetReplayBuffer(allState, playingIndex);
+    ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     if (!replayBuffer->isRecordedAtLeastOnce) {
         printf("Can't playback buffer %d as it has not yet been recorded to!\n", playingIndex);
         return;
@@ -310,7 +307,7 @@ EndInputPlayback(AllState* allState) {
 
 INTERNAL void
 RecordInput(AllState* allState, Input* input) {
-    ssize_t bytesWritten = write(allState->recordingHandle, input, sizeof(*input));
+    const ssize_t bytesWritten{ write(allState->recordingHandle, input, sizeof(*input)) };
     if (bytesWritten != sizeof(*input)) {
         printf("RecordInput writing to file failed!\n");
     }
@@ -318,9 +315,9 @@ RecordInput(AllState* allState, Input* input) {
 
 INTERNAL void
 PlaybackInput(AllState* allState, Input* input) {
-    ssize_t bytesRead = read(allState->playingHandle, input, sizeof(*input));
+    const ssize_t bytesRead{ read(allState->playingHandle, input, sizeof(*input)) };
     if (bytesRead == 0) {
-        const i32 playingIndex = allState->playingIndex;
+        const i32 playingIndex{ allState->playingIndex };
         EndInputPlayback(allState);
 
         if (allState->isReplayLooping) {
@@ -546,7 +543,6 @@ ProcessPendingEvents(Input* input, AllState* allState) {
         case SDL_WINDOWEVENT: {
             switch (event.window.event) {
             case SDL_WINDOWEVENT_SIZE_CHANGED: {
-                SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
                 printf("SDL_WINDOWEVENT_SIZE_CHANGED (%d, %d)\n", event.window.data1,
                        event.window.data2);
             } break;
@@ -566,7 +562,13 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                                     wndDimension.height);
 
             } break;
+
+            default: {
+            } break;
             }
+        } break;
+
+        default: {
         } break;
         }
     }
@@ -633,12 +635,12 @@ INTERNAL void
 UnloadGameCode(GameCode* gameCode) {
     if (gameCode->dll) {
         dlclose(gameCode->dll);
-        gameCode->dll = 0;
+        gameCode->dll = nullptr;
     }
 
     gameCode->isValid = false;
-    gameCode->updateAndRender = 0;
-    gameCode->getSoundSamples = 0;
+    gameCode->updateAndRender = nullptr;
+    gameCode->getSoundSamples = nullptr;
 }
 
 } //namespace sdl
@@ -741,10 +743,11 @@ main() {
         replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
                                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
-        ftruncate(replayBuffer->fileHandle, allState.memorySize);
+        ftruncate(replayBuffer->fileHandle, static_cast<off_t>(allState.memorySize));
 
-        replayBuffer->memoryBlock = mmap(0, allState.memorySize, PROT_READ | PROT_WRITE,
-                                         MAP_PRIVATE, replayBuffer->fileHandle, 0);
+        replayBuffer->memoryBlock =
+            mmap(0, static_cast<size_t>(allState.memorySize), PROT_READ | PROT_WRITE, MAP_PRIVATE,
+                 replayBuffer->fileHandle, 0);
         ASSERT(replayBuffer->memoryBlock);
     }
 
