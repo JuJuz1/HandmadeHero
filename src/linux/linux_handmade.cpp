@@ -114,7 +114,8 @@ DEBUG_READ_FILE(DEBUGReadFile) {
 DEBUG_WRITE_FILE(DEBUGWriteFile) {
     const i32 fileHandle{ open(filename, O_WRONLY | O_CREAT | O_TRUNC,
                                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) };
-    if (!fileHandle) {
+    if (fileHandle == -1) {
+        printf("DEBUGWriteFile opening file failed\n");
         return false;
     }
 
