@@ -12,6 +12,9 @@ rem /TP compile all files as c++
 rem /EHa- disable exception handling for asynchronous and synchronous
 rem /GR- disable RTTI
 rem /Bt better output info
+
+rem /Zc:__cplusplus make __cplusplus reflect true version of the standard used https://learn.microsoft.com/en-us/cpp/build/reference/zc-cplusplus?view=msvc-170
+
 rem /MT vs /MD https://learn.microsoft.com/en-us/cpp/build/reference/md-mt-ld-use-run-time-library?view=msvc-170
 rem by default the cli uses /MT
 rem we use /MTd to add extra checks
@@ -27,7 +30,7 @@ rem /Fm map file https://learn.microsoft.com/fi-fi/cpp/build/reference/fm-name-m
 rem pass to linker:
 rem /OPT https://learn.microsoft.com/en-us/cpp/build/reference/opt-optimizations?view=msvc-170
 rem /OPT:REF disable functions and data which are not referenced
-rem recommended my docs: /OPT:NOICF to preserve identical functions in debug builds
+rem recommended by docs: /OPT:NOICF to preserve identical functions in debug builds
 rem link the User32.lib, Gdi32.lib to create UI
 
 rem /LD to tell linker its going to be a dll
@@ -38,11 +41,10 @@ rem this way we get the maximum flexibility though and we don't boilerplate the 
 
 rem /wd4201 nonstandard extension used: nameless struct/union
 rem /wd4127 conditional expression is constant NOT USED
-rem TODO: this is raised from ASSERT(false...) -> fix ASSERT
 rem TODO: enable /WX back, remove /wd4505 /wd4100 /wd4189
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
 set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
-set commonCompilerFlags=%commonCompilerDefines% /MTd /Zi /FC /Fm /Od /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set commonCompilerFlags=%commonCompilerDefines% /MTd /Zi /Zc:__cplusplus /FC /Fm /Od /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
 
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib

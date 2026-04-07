@@ -62,9 +62,8 @@ HANDMADE_DEBUG:
 #define MAX(a, b) (((a) >= (b)) ? (a) : (b))
 
 // C++17 required
-// Can be opted out of easily by just checking C++ standard version when compiling
-// Although on MSVC at least when compiling with an older standard like c++14, it still
-// works and produces the warning. Clang produces warnings
+// Although on MSVC at least when compiling with an older standard like C++14, it still
+// works and produces the warnings correctly. Clang warns when using an older standard!
 #if __cplusplus >= 201703L
 #    define NODISCARD [[nodiscard]]
 #else

@@ -17,7 +17,10 @@
             "intelliSenseMode": "windows-msvc-x64",
             "recursiveIncludes": {
                 "reduce": "${default}"
-            }
+            },
+            "compilerArgs": [
+                "/Zc:__cplusplus"
+            ]
         },
         {
             "name": "Linux",

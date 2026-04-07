@@ -18,7 +18,7 @@ GLOBAL bool32 gIsGamePaused;
 GLOBAL bool32 gShowCursor;
 GLOBAL HCURSOR gCursor;
 
-GLOBAL win32::OffScreenBuffer gScreenBuff;
+GLOBAL hm_win32::OffScreenBuffer gScreenBuff;
 GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
 GLOBAL WINDOWPLACEMENT gWindowPlacement{ sizeof(gWindowPlacement) };
@@ -931,21 +931,22 @@ WinMain(
     LPSTR /*unused*/,     // lpCmdLine, Command line arguments
     int /*unused*/        // nCmdShow Window visibility option
 ) {
-    win32::AllState allState{};
-    win32::GetExePathAndFilename(&allState);
+    hm_win32::AllState allState{};
+    hm_win32::GetExePathAndFilename(&allState);
 
     // NOTE: a little string processing cause we are handmade
-    char srcDllPath[win32::all_State_File_Name_Count];
-    win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
-    char tempDllPath[win32::all_State_File_Name_Count];
-    win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath, sizeof(tempDllPath));
+    char srcDllPath[hm_win32::all_State_File_Name_Count];
+    hm_win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
+    char tempDllPath[hm_win32::all_State_File_Name_Count];
+    hm_win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath,
+                                    sizeof(tempDllPath));
 
-    char lockFilePath[win32::all_State_File_Name_Count];
-    win32::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
+    char lockFilePath[hm_win32::all_State_File_Name_Count];
+    hm_win32::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
 
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc = win32::MainWindowCallback;
+    windowClass.lpfnWndProc = hm_win32::MainWindowCallback;
     windowClass.hInstance = hInstance;
 
     const char* name{ "Handmade Hero" };
@@ -988,7 +989,7 @@ WinMain(
 
     constexpr i32 startingWidth{ 960 };
     constexpr i32 startingHeight{ 540 };
-    win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
+    hm_win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     char buf[64];
     // NOTE: in the future make the game function with arbitrary frame rate?
@@ -1011,7 +1012,7 @@ WinMain(
     const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
 
     // DirectSound
-    win32::SoundOutput soundOutput{};
+    hm_win32::SoundOutput soundOutput{};
     soundOutput.samplesPerSecond = 48000;
     soundOutput.bytesPerSample = sizeof(u16) * 2;
     soundOutput.buffSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
@@ -1019,8 +1020,8 @@ WinMain(
     soundOutput.latencySampleCount =
         framesOfAudioLatency * soundOutput.samplesPerSecond / static_cast<i32>(gameUpdateHz);
 
-    win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
-    win32::ClearSoundBuffer(&soundOutput);
+    hm_win32::InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.buffSize);
+    hm_win32::ClearSoundBuffer(&soundOutput);
     gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
 
     // TODO: pool with bitmap
@@ -1056,14 +1057,14 @@ WinMain(
 
 #if HANDMADE_INTERNAL
     // Platform exports
-    gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintUInt = platform_export::DEBUGPrintUInt;
-    gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
-    gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
+    gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
+    gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
+    gameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
+    gameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
 
-    gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
-    gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
-    gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
+    gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
+    gameMemory.exports.DEBUGReadFile = hm_platform_export::DEBUGReadFile;
+    gameMemory.exports.DEBUGWriteFile = hm_platform_export::DEBUGWriteFile;
 
 #endif
 
@@ -1072,10 +1073,10 @@ WinMain(
 
     // Saving game memory in memory, piggy time!
     for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
-        win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
+        hm_win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
         // Using memory mapping
-        char filePath[win32::all_State_File_Name_Count];
+        char filePath[hm_win32::all_State_File_Name_Count];
         GetInputFilePath(&allState, false, i, filePath, sizeof(filePath));
         HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE | GENERIC_READ, 0, 0, CREATE_ALWAYS,
                                        0, 0) };
@@ -1096,8 +1097,8 @@ WinMain(
         ASSERT(replayBuffer->memoryBlock);
     }
 
-    allState.recordingIndex = win32::replay_Buffer_Not_Recording;
-    allState.playingIndex = win32::replay_Buffer_Not_Playing;
+    allState.recordingIndex = hm_win32::replay_Buffer_Not_Recording;
+    allState.playingIndex = hm_win32::replay_Buffer_Not_Playing;
     allState.isReplayLooping = true;
 
     // Performance statistics
@@ -1105,7 +1106,7 @@ WinMain(
     QueryPerformanceFrequency(&freqCounter);
     gPerfCounterFreq = freqCounter.QuadPart;
 
-    LARGE_INTEGER lastCounter{ win32::GetWallClock() };
+    LARGE_INTEGER lastCounter{ hm_win32::GetWallClock() };
     // RDTSC
     u64 lastCycleCount{ __rdtsc() };
 
@@ -1113,17 +1114,17 @@ WinMain(
     bool32 isSoundValid{};
 
     // The game represented as a DLL which allows hot reloading and more fun stuff!
-    win32::GameCode game{ win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
+    hm_win32::GameCode game{ hm_win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
     Input gameInput{};
 
     // Main loop
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
-        const FILETIME newDllWriteTime{ win32::GetLastWriteTime(srcDllPath) };
+        const FILETIME newDllWriteTime{ hm_win32::GetLastWriteTime(srcDllPath) };
         if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
-            win32::UnloadGameCode(&game);
-            game = win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
+            hm_win32::UnloadGameCode(&game);
+            game = hm_win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
         }
 
         // Keyboard input
@@ -1135,7 +1136,7 @@ WinMain(
             }
         }
 
-        win32::ProcessPendingMessages(&gameInput, &allState);
+        hm_win32::ProcessPendingMessages(&gameInput, &allState);
 
         // Copy the first player input to all the other players to test
         // NOTE: this is only here to test multiplayer with a single keyboard using the same input
@@ -1158,23 +1159,23 @@ WinMain(
         }
 
         // NOTE: query these in ProcessPendingMessages so everything is in one place?
-        win32::ProcessInputMessage(&gameInput.mouseButtons.left,
-                                   GetKeyState(VK_LBUTTON) & (1 << 15));
-        win32::ProcessInputMessage(&gameInput.mouseButtons.middle,
-                                   GetKeyState(VK_MBUTTON) & (1 << 15));
-        win32::ProcessInputMessage(&gameInput.mouseButtons.right,
-                                   GetKeyState(VK_RBUTTON) & (1 << 15));
-        win32::ProcessInputMessage(&gameInput.mouseButtons.x1,
-                                   GetKeyState(VK_XBUTTON1) & (1 << 15));
-        win32::ProcessInputMessage(&gameInput.mouseButtons.x2,
-                                   GetKeyState(VK_XBUTTON2) & (1 << 15));
+        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.left,
+                                      GetKeyState(VK_LBUTTON) & (1 << 15));
+        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.middle,
+                                      GetKeyState(VK_MBUTTON) & (1 << 15));
+        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.right,
+                                      GetKeyState(VK_RBUTTON) & (1 << 15));
+        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.x1,
+                                      GetKeyState(VK_XBUTTON1) & (1 << 15));
+        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.x2,
+                                      GetKeyState(VK_XBUTTON2) & (1 << 15));
 
         if (gIsGamePaused) {
             continue;
         }
 
         // Directsound
-        const win32::DSoundParams dSoundParams{ win32::ProcessDSoundParams(
+        const hm_win32::DSoundParams dSoundParams{ hm_win32::ProcessDSoundParams(
             &soundOutput, lastPlayCursor, isSoundValid) };
 
         // Call game code
@@ -1186,10 +1187,10 @@ WinMain(
         screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
-        if (allState.recordingIndex != win32::replay_Buffer_Not_Recording) {
-            win32::RecordInput(&allState, &gameInput);
-        } else if (allState.playingIndex != win32::replay_Buffer_Not_Playing) {
-            win32::PlaybackInput(&allState, &gameInput);
+        if (allState.recordingIndex != hm_win32::replay_Buffer_Not_Recording) {
+            hm_win32::RecordInput(&allState, &gameInput);
+        } else if (allState.playingIndex != hm_win32::replay_Buffer_Not_Playing) {
+            hm_win32::PlaybackInput(&allState, &gameInput);
         }
 
         // TODO: Don't update this every frame? will be revised later
@@ -1215,8 +1216,8 @@ WinMain(
 
         if (isSoundValid) {
             // soundBuff now contains game generated output
-            win32::FillSoundBuffer(&soundOutput, dSoundParams.byteToLock, dSoundParams.bytesToWrite,
-                                   &soundBuff);
+            hm_win32::FillSoundBuffer(&soundOutput, dSoundParams.byteToLock,
+                                      dSoundParams.bytesToWrite, &soundBuff);
             // TODO: look up episode 20 if we want to continue fixing the audio sync
             // For now we skip fixing the issues as it is very complicated and I think I
             // wouldn't get much out of it...
@@ -1226,8 +1227,8 @@ WinMain(
         // We only query the performance once per frame so that we don't leave out the
         // time between the frame's end and start
 
-        LARGE_INTEGER endCounter{ win32::GetWallClock() };
-        const f64 secondsElapsed{ win32::GetSecondsElapsed(lastCounter, endCounter) };
+        LARGE_INTEGER endCounter{ hm_win32::GetWallClock() };
+        const f64 secondsElapsed{ hm_win32::GetSecondsElapsed(lastCounter, endCounter) };
         f64 secondsElapedForFrame{ secondsElapsed };
 
 #if 1 // NOTE: if some macro?
@@ -1243,25 +1244,25 @@ WinMain(
                 }
 
                 // NOTE: this would not always work...
-                //f32 testSecondsElapsedForFrame{ win32::GetSecondsElapsed(
-                //    lastCounter, win32::GetWallClock()) };
+                //f32 testSecondsElapsedForFrame{ hm_win32::GetSecondsElapsed(
+                //    lastCounter, hm_win32::GetWallClock()) };
                 //ASSERT(testSecondsElapsedForFrame < targetSecondsPerFrame);
 
                 secondsElapedForFrame =
-                    win32::GetSecondsElapsed(lastCounter, win32::GetWallClock());
+                    hm_win32::GetSecondsElapsed(lastCounter, hm_win32::GetWallClock());
             }
         } else {
             // log the missed frame!!!
         }
 #endif
 
-        endCounter = win32::GetWallClock();
-        const f64 ms{ 1000 * win32::GetSecondsElapsed(lastCounter, endCounter) };
+        endCounter = hm_win32::GetWallClock();
+        const f64 ms{ 1000 * hm_win32::GetSecondsElapsed(lastCounter, endCounter) };
         const f64 FPS{ 1000 / ms };
 
-        const auto wndDimension{ win32::GetWindowDimensions(windowHandle) };
-        win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
-                                   wndDimension.height);
+        const auto wndDimension{ hm_win32::GetWindowDimensions(windowHandle) };
+        hm_win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
+                                      wndDimension.height);
 
         DWORD playCursor;
         DWORD writeCursor;
@@ -1290,7 +1291,7 @@ WinMain(
 
         lastCycleCount = endCycleCount;
 
-        const LARGE_INTEGER resetCounter{ win32::GetWallClock() };
+        const LARGE_INTEGER resetCounter{ hm_win32::GetWallClock() };
         lastCounter = resetCounter;
     }
 
