@@ -48,6 +48,15 @@ DEBUG_PRINT_INT(DEBUGPrintInt) {
 }
 
 INTERNAL
+DEBUG_PRINT_UINT(DEBUGPrintUInt) {
+    UNUSED_PARAMS(threadContext);
+
+    char buf[32];
+    sprintf_s(buf, "%s: %u\n", valueName, value);
+    OutputDebugStringA(buf);
+}
+
+INTERNAL
 DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
     UNUSED_PARAMS(threadContext);
 
@@ -96,7 +105,7 @@ DEBUG_READ_FILE(DEBUGReadFile) {
             result.contentSize = bytesToRead;
         } else {
             DEBUGFreeFileMemory(threadContext, result.content);
-            result.content = 0;
+            result.content = nullptr;
         }
     } else {
         // log
@@ -904,11 +913,11 @@ INTERNAL void
 UnloadGameCode(GameCode* gamecode) {
     if (gamecode->dll) {
         FreeLibrary(gamecode->dll);
-        gamecode->dll = 0;
+        gamecode->dll = nullptr;
     }
 
-    gamecode->updateAndRender = 0;
-    gamecode->getSoundSamples = 0;
+    gamecode->updateAndRender = nullptr;
+    gamecode->getSoundSamples = nullptr;
     gamecode->isValid = false;
 }
 
@@ -1047,12 +1056,15 @@ WinMain(
 
 #if HANDMADE_INTERNAL
     // Platform exports
+    gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
+    gameMemory.exports.DEBUGPrintUInt = platform_export::DEBUGPrintUInt;
+    gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
+    gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
+
     gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
     gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
     gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
-    gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
-    gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
+
 #endif
 
     allState.gameMemory = gameMemory.permanentStorage;

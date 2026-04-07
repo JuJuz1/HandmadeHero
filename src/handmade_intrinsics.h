@@ -167,4 +167,11 @@ FindLeastSignificantBitSet(u32 value) {
     return result;
 }
 
+NODISCARD
+INTERNAL i32
+SignOf(i32 value) {
+    const i32 result{ value >= 0 ? 1 : -1 };
+    return result;
+}
+
 #endif // HANDMADE_INTRINSICS_H

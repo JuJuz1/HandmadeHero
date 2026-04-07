@@ -109,18 +109,19 @@ IsTilemapPointEmpty(const Tilemap* tileMap, TilemapPosition pos) {
 
 INTERNAL void
 ReCanonicalizeCoordinate(const Tilemap* tileMap, u32* tileIndex, f32* relPos) {
+
     const i32 offset{ RoundF32ToI32(*relPos / tileMap->tileSideInMeters) };
     // NOTE: tileMap is assumed to be toroidal, if you step over the end you start at the
     // beginning
     *tileIndex += offset;
-    *relPos -= static_cast<f32>(offset) * tileMap->tileSideInMeters;
 
+    *relPos -= static_cast<f32>(offset) * tileMap->tileSideInMeters;
     // TODO: what to do if: *relPos == tileMap->tilesideinpixels
     // This can happen because we do the divide and floor and then multiple, the player might
     // end up being on the same tile Relative positions must be within the tile size in pixels
     // TODO: fix the floating point math to not allow the case above of ==
-    ASSERT(*relPos * 0.5f >= -tileMap->tileSideInMeters &&
-           *relPos * 0.5f <= tileMap->tileSideInMeters);
+    ASSERT(*relPos >= -tileMap->tileSideInMeters * 0.5f &&
+           *relPos <= tileMap->tileSideInMeters * 0.5f);
 }
 
 NODISCARD
@@ -131,6 +132,15 @@ RecanonicalizePosition(const Tilemap* tileMap, TilemapPosition pos) {
     ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffset.y);
 
     return result;
+}
+
+NODISCARD
+INTERNAL TilemapPosition
+OffsetTilemapPosition(const Tilemap* tileMap, TilemapPosition pos, Vec2 offset) {
+    pos.tileOffset += offset;
+    pos = RecanonicalizePosition(tileMap, pos);
+
+    return pos;
 }
 
 NODISCARD

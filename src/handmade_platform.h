@@ -77,6 +77,9 @@ typedef DEBUG_PRINT(debug_print);
 #define DEBUG_PRINT_INT(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
 typedef DEBUG_PRINT_INT(debug_print_int);
 
+#define DEBUG_PRINT_UINT(name) void name(ThreadContext* threadContext, const char* valueName, u32 value)
+typedef DEBUG_PRINT_UINT(debug_print_uint);
+
 #define DEBUG_PRINT_FLOAT(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
 typedef DEBUG_PRINT_FLOAT(debug_print_float);
 
@@ -94,6 +97,7 @@ typedef DEBUG_WRITE_FILE(debug_write_file);
 typedef struct PlatformExports {
     debug_print* DEBUGPrint;
     debug_print_int* DEBUGPrintInt;
+    debug_print_uint* DEBUGPrintUInt;
     debug_print_float* DEBUGPrintFloat;
 
     debug_free_file_memory* DEBUGFreeFileMemory;

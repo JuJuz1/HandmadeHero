@@ -8,6 +8,7 @@ GLOBAL ThreadContext* gThreadContext;
 GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
+// TODO: think of a better way!
 #define DEBUG_PLATFORM_PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
 
 namespace input {
@@ -251,7 +252,6 @@ NODISCARD
 INTERNAL i32
 AddEntity(GameState* gameState) {
     ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->entities));
-
     const i32 entityIndex{ gameState->entityCount++ };
     Entity* entity{ GetEntity(gameState, entityIndex) };
     *entity = Entity{};
@@ -259,6 +259,7 @@ AddEntity(GameState* gameState) {
     return entityIndex;
 }
 
+// TODO: move to a seperate file, readability
 // https://www.random.org/integers/?mode=advanced
 GLOBAL constexpr u32 randomNumbers[4096]{
     0x47fefa6, 0x5dfc5d9, 0x410a95e, 0x366c0bd, 0x5035026, 0x2128c83, 0x1dd2cf2, 0x26c8bdb,
@@ -830,11 +831,6 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gameState->cameraPos.absTileY = 9 / 2;
     gameState->cameraPos.absTileZ = 0;
 
-    //gameState->playerPos.absTileX = 3;
-    //gameState->playerPos.absTileY = 3;
-    //gameState->playerPos.tileOffset.x = 1.2f;
-    //gameState->playerPos.tileOffset.y = 0.5f;
-
     InitializeArena(&gameState->worldArena,
                     static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
                     memory->permanentStorageSize - sizeof(GameState));
@@ -1025,9 +1021,7 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     const Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     const TilemapPosition oldPlayerPos{ entity->pos };
-    TilemapPosition newPlayerPos{ entity->pos };
-    newPlayerPos.tileOffset += playerDelta;
-    newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
+    TilemapPosition newPlayerPos{ OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta) };
 
 #if 0
 
@@ -1082,22 +1076,36 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     }
 #else
 
-    // Search in t
+// Search in t
 
-    // Take the "starting" tile and the "ending" tile
-    // Taking MIN and MAX takes into account
-    // all possible directions (left to right, right to left, ...)
+// Take the "starting" tile and the "ending" tile
+// Taking MIN and MAX takes into account
+// all possible directions (left to right, right to left, ...)
+#    if 0
     const u32 minTileX{ MIN(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
     const u32 minTileY{ MIN(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
     const u32 onePastMaxTileX{ MAX(oldPlayerPos.absTileX, newPlayerPos.absTileX) + 1 };
     const u32 onePastMaxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) + 1 };
-    const u32 absTileZ{ entity->pos.absTileZ };
+#    else
 
+    const u32 startTileX{ oldPlayerPos.absTileX };
+    const u32 startTileY{ oldPlayerPos.absTileY };
+    const u32 endTileX{ newPlayerPos.absTileX };
+    const u32 endTileY{ newPlayerPos.absTileY };
+
+    const i32 deltaTileX{ SignOf(endTileX - startTileX) };
+    const i32 deltaTileY{ SignOf(endTileY - startTileY) };
+
+#    endif
+
+    const u32 absTileZ{ entity->pos.absTileZ };
     f32 tMin{ 1.0f }; // Assume we can go the full distance
 
+    u32 absTileY{ startTileY };
     // != to allow wrapping
-    for (u32 absTileY{ minTileY }; absTileY != onePastMaxTileY; ++absTileY) {
-        for (u32 absTileX{ minTileX }; absTileX != onePastMaxTileX; ++absTileX) {
+    while (true) {
+        u32 absTileX{ startTileX };
+        while (true) {
             const TilemapPosition testPos{ absTileX, absTileY, absTileZ };
             if (!IsTilemapPointEmpty(tilemap, testPos)) {
                 const f32 halfTileSide{ 0.5f * tilemap->tileSideInMeters };
@@ -1120,13 +1128,21 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
                 tMin = TestWall(maxCorner.y, relPosXY.y, relPosXY.x, playerDelta.y, playerDelta.x,
                                 tMin, minCorner.x, maxCorner.x);
             }
+            if (absTileX == endTileX) {
+                break;
+            } else {
+                absTileX += deltaTileX;
+            }
+        }
+
+        if (absTileY == endTileY) {
+            break;
+        } else {
+            absTileY += deltaTileY;
         }
     }
 
-    newPlayerPos = entity->pos;
-    newPlayerPos.tileOffset += playerDelta * tMin;
-    entity->pos = newPlayerPos;
-    newPlayerPos = RecanonicalizePosition(tilemap, newPlayerPos);
+    entity->pos = OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta * tMin);
 
 #endif
 
@@ -1274,23 +1290,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
 // Debug printing
-#if 0
-    const TilechunkPosition chunkPos{ GetChunkPosition(tilemap, gameState->playerPos.absTileX,
-                                                       gameState->playerPos.absTileY,
-                                                       gameState->playerPos.absTileZ) };
+#if 1
+    const Entity* player{ cameraFollowingEntity };
+    const TilechunkPosition chunkPos{ GetChunkPosition(
+        tilemap, player->pos.absTileX, player->pos.absTileY, player->pos.absTileZ) };
 
     DEBUG_PLATFORM_PRINT("\n");
-    memory->exports.DEBUGPrintInt(threadContext, "tileChunkX", chunkPos.chunkX);
-    memory->exports.DEBUGPrintInt(threadContext, "tileChunkY", chunkPos.chunkY);
-    memory->exports.DEBUGPrintInt(threadContext, "tileChunkZ", chunkPos.chunkZ);
-    memory->exports.DEBUGPrintInt(threadContext, "chunkRelativeX", chunkPos.chunkRelativeTileX);
-    memory->exports.DEBUGPrintInt(threadContext, "chunkRelativeY", chunkPos.chunkRelativeTileY);
+    memory->exports.DEBUGPrintUInt(threadContext, "tileChunkX", chunkPos.chunkX);
+    memory->exports.DEBUGPrintUInt(threadContext, "tileChunkY", chunkPos.chunkY);
+    memory->exports.DEBUGPrintUInt(threadContext, "tileChunkZ", chunkPos.chunkZ);
+    memory->exports.DEBUGPrintUInt(threadContext, "chunkRelativeX", chunkPos.chunkRelativeTileX);
+    memory->exports.DEBUGPrintUInt(threadContext, "chunkRelativeY", chunkPos.chunkRelativeTileY);
 
-    memory->exports.DEBUGPrintInt(threadContext, "absTileX", gameState->playerPos.absTileX);
-    memory->exports.DEBUGPrintInt(threadContext, "absTileY", gameState->playerPos.absTileY);
-    memory->exports.DEBUGPrintInt(threadContext, "absTileZ", gameState->playerPos.absTileZ);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", gameState->playerPos.tileOffsetX);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", gameState->playerPos.tileOffsetY);
+    memory->exports.DEBUGPrintUInt(threadContext, "absTileX", player->pos.absTileX);
+    memory->exports.DEBUGPrintUInt(threadContext, "absTileY", player->pos.absTileY);
+    memory->exports.DEBUGPrintUInt(threadContext, "absTileZ", player->pos.absTileZ);
+    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", player->pos.tileOffset.x);
+    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", player->pos.tileOffset.y);
 #endif
 
     // Background
