@@ -34,12 +34,12 @@ GLOBAL bool32 gIsGameRunning;
 GLOBAL bool32 gIsGamePaused;
 GLOBAL bool32 gShowCursor;
 
-GLOBAL sdl::OffScreenBuffer gScreenBuff;
+GLOBAL hm_sdl::OffScreenBuffer gScreenBuff;
 GLOBAL u64 gPerfCounterFreq;
 
 #if HANDMADE_INTERNAL
 
-namespace platform_export {
+namespace hm_platform_export {
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
@@ -53,6 +53,13 @@ DEBUG_PRINT_INT(DEBUGPrintInt) {
     UNUSED_PARAMS(threadContext);
 
     printf("%s: %d\n", valueName, value);
+}
+
+INTERNAL
+DEBUG_PRINT_UINT(DEBUGPrintUInt) {
+    UNUSED_PARAMS(threadContext);
+
+    printf("%s: %u\n", valueName, value);
 }
 
 INTERNAL
@@ -137,11 +144,11 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
     return true;
 }
 
-} //namespace platform_export
+} //namespace hm_platform_export
 
 #endif // HANDMADE_INTERNAL
 
-namespace sdl {
+namespace hm_sdl {
 
 INTERNAL void
 ToggleFullscreen(SDL_Window* window) {
@@ -644,20 +651,20 @@ UnloadGameCode(GameCode* gameCode) {
     gameCode->getSoundSamples = nullptr;
 }
 
-} //namespace sdl
+} //namespace hm_sdl
 
 int
 main() {
-    sdl::AllState allState{};
-    sdl::GetExePathAndFilename(&allState);
+    hm_sdl::AllState allState{};
+    hm_sdl::GetExePathAndFilename(&allState);
 
-    char srcDllPath[sdl::all_State_File_Name_Count];
-    sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath, sizeof(srcDllPath));
-    char tempDllPath[sdl::all_State_File_Name_Count];
-    sdl::BuildGamePathFilename(&allState, "handmade_temp.so", tempDllPath, sizeof(tempDllPath));
+    char srcDllPath[hm_sdl::all_State_File_Name_Count];
+    hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath, sizeof(srcDllPath));
+    char tempDllPath[hm_sdl::all_State_File_Name_Count];
+    hm_sdl::BuildGamePathFilename(&allState, "handmade_temp.so", tempDllPath, sizeof(tempDllPath));
 
-    char lockFilePath[sdl::all_State_File_Name_Count];
-    sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
+    char lockFilePath[hm_sdl::all_State_File_Name_Count];
+    hm_sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO);
 
@@ -678,7 +685,7 @@ main() {
         return 0;
     }
 
-    sdl::ResizeTexture(&gScreenBuff, renderer, startingWidth, startingHeight);
+    hm_sdl::ResizeTexture(&gScreenBuff, renderer, startingWidth, startingHeight);
 
 #if HANDMADE_INTERNAL
     gShowCursor = true;
@@ -724,22 +731,24 @@ main() {
 
 #if HANDMADE_INTERNAL
     // Platform exports
-    gameMemory.exports.DEBUGFreeFileMemory = platform_export::DEBUGFreeFileMemory;
-    gameMemory.exports.DEBUGReadFile = platform_export::DEBUGReadFile;
-    gameMemory.exports.DEBUGWriteFile = platform_export::DEBUGWriteFile;
-    gameMemory.exports.DEBUGPrintInt = platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintFloat = platform_export::DEBUGPrintFloat;
-    gameMemory.exports.DEBUGPrint = platform_export::DEBUGPrint;
+    gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
+    gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
+    gameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
+    gameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
+
+    gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
+    gameMemory.exports.DEBUGReadFile = hm_platform_export::DEBUGReadFile;
+    gameMemory.exports.DEBUGWriteFile = hm_platform_export::DEBUGWriteFile;
 #endif
 
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
 
     for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
-        sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
+        hm_sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
-        sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
-                              sizeof(replayBuffer->replayFilePath));
+        hm_sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
+                                 sizeof(replayBuffer->replayFilePath));
 
         replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
                                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -752,25 +761,25 @@ main() {
         ASSERT(replayBuffer->memoryBlock);
     }
 
-    allState.recordingIndex = sdl::replay_Buffer_Not_Recording;
-    allState.playingIndex = sdl::replay_Buffer_Not_Playing;
+    allState.recordingIndex = hm_sdl::replay_Buffer_Not_Recording;
+    allState.playingIndex = hm_sdl::replay_Buffer_Not_Playing;
     allState.isReplayLooping = true;
 
     gPerfCounterFreq = SDL_GetPerformanceFrequency();
 
-    u64 lastCounter{ sdl::GetWallClock() };
+    u64 lastCounter{ hm_sdl::GetWallClock() };
     u64 lastCycleCount{ _rdtsc() };
 
-    sdl::GameCode game{ sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
+    hm_sdl::GameCode game{ hm_sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
     Input gameInput{};
 
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
-        const time_t newDllWriteTime{ sdl::GetLastWriteTime(srcDllPath) };
+        const time_t newDllWriteTime{ hm_sdl::GetLastWriteTime(srcDllPath) };
         if (game.lastWritetime != newDllWriteTime) {
-            sdl::UnloadGameCode(&game);
-            game = sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
+            hm_sdl::UnloadGameCode(&game);
+            game = hm_sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
         }
 
         // Keyboard input
@@ -782,7 +791,7 @@ main() {
             }
         }
 
-        sdl::ProcessPendingEvents(&gameInput, &allState);
+        hm_sdl::ProcessPendingEvents(&gameInput, &allState);
 
         if (gIsGamePaused) {
             continue;
@@ -795,10 +804,10 @@ main() {
         screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
-        if (allState.recordingIndex != sdl::replay_Buffer_Not_Recording) {
-            sdl::RecordInput(&allState, &gameInput);
-        } else if (allState.playingIndex != sdl::replay_Buffer_Not_Playing) {
-            sdl::PlaybackInput(&allState, &gameInput);
+        if (allState.recordingIndex != hm_sdl::replay_Buffer_Not_Recording) {
+            hm_sdl::RecordInput(&allState, &gameInput);
+        } else if (allState.playingIndex != hm_sdl::replay_Buffer_Not_Playing) {
+            hm_sdl::PlaybackInput(&allState, &gameInput);
         }
 
         ThreadContext threadContext{};
@@ -809,8 +818,8 @@ main() {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
         }
 
-        u64 endCounter{ sdl::GetWallClock() };
-        const f64 secondsElapsed{ sdl::GetSecondsElapsed(lastCounter, endCounter) };
+        u64 endCounter{ hm_sdl::GetWallClock() };
+        const f64 secondsElapsed{ hm_sdl::GetSecondsElapsed(lastCounter, endCounter) };
         f64 secondsElapedForFrame{ secondsElapsed };
 
 #if 1
@@ -824,19 +833,21 @@ main() {
                     SDL_Delay(remainingMS);
                 }
 
-                secondsElapedForFrame = sdl::GetSecondsElapsed(lastCounter, sdl::GetWallClock());
+                secondsElapedForFrame =
+                    hm_sdl::GetSecondsElapsed(lastCounter, hm_sdl::GetWallClock());
             }
         } else {
             // log the missed frame!!!
         }
 #endif
 
-        endCounter = sdl::GetWallClock();
-        const f64 ms{ 1000 * sdl::GetSecondsElapsed(lastCounter, endCounter) };
+        endCounter = hm_sdl::GetWallClock();
+        const f64 ms{ 1000 * hm_sdl::GetSecondsElapsed(lastCounter, endCounter) };
         const f64 FPS{ 1000 / ms };
 
-        const auto wndDimension{ sdl::GetWindowDimensions(window) };
-        sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width, wndDimension.height);
+        const auto wndDimension{ hm_sdl::GetWindowDimensions(window) };
+        hm_sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width,
+                                    wndDimension.height);
 
         const u64 endCycleCount{ _rdtsc() };
         const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) /
@@ -848,7 +859,7 @@ main() {
 
         lastCycleCount = endCycleCount;
 
-        const u64 resetCounter{ sdl::GetWallClock() };
+        const u64 resetCounter{ hm_sdl::GetWallClock() };
         lastCounter = resetCounter;
     }
 

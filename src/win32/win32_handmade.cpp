@@ -25,7 +25,7 @@ GLOBAL WINDOWPLACEMENT gWindowPlacement{ sizeof(gWindowPlacement) };
 
 #if HANDMADE_INTERNAL
 
-namespace platform_export {
+namespace hm_platform_export {
 
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
@@ -139,11 +139,11 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
     return result;
 }
 
-} //namespace platform_export
+} //namespace hm_platform_export
 
 #endif // HANDMADE_INTERNAL
 
-namespace win32 {
+namespace hm_win32 {
 
 // Raymond Chen's example modified sligthly
 // https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
@@ -921,7 +921,7 @@ UnloadGameCode(GameCode* gamecode) {
     gamecode->isValid = false;
 }
 
-} //namespace win32
+} //namespace hm_win32
 
 int WINAPI
 WinMain(

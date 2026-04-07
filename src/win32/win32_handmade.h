@@ -4,7 +4,7 @@
 // Compiler switch
 #if HANDMADE_WIN32
 
-namespace win32 {
+namespace hm_win32 {
 
 struct OffScreenBuffer {
     BITMAPINFO info;
@@ -81,7 +81,7 @@ struct AllState {
     bool32 isReplayLooping;
 };
 
-} //namespace win32
+} //namespace hm_win32
 
 #endif // HANDMADE_WIN32
 #endif // WIN32_HANDMADE_H

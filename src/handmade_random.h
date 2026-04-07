@@ -1,7 +1,7 @@
 #ifndef HANDMADE_RANDOM_H
 #define HANDMADE_RANDOM_H
 
-namespace random {
+namespace hm_random {
 
 // https://www.random.org/integers/?mode=advanced
 // Random numbers to generate the tile values from
@@ -520,6 +520,6 @@ GLOBAL constexpr u32 randomNumbers[4096]{
     0x353a3dd, 0x54e3eca, 0x103ba3a, 0x08636e3, 0x5134e95, 0x37d9934, 0x150858c, 0x21d8d30
 };
 
-} //namespace random
+} //namespace hm_random
 
 #endif // HANDMADE_RANDOM_H

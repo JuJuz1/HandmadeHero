@@ -12,7 +12,7 @@ GLOBAL GameMemory* gMemory;
 // TODO: think of a better way!
 #define DEBUG_PLATFORM_PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
 
-namespace input {
+namespace hm_input {
 
 // Returns true if the button was just pressed during the frame
 NODISCARD
@@ -40,7 +40,7 @@ ActionReleased(const Button* button) {
     return result;
 }
 
-} //namespace input
+} //namespace hm_input
 
 // Write the sound data to buff
 INTERNAL void
@@ -360,13 +360,13 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Generating tile values
     for (u32 screen{}; screen < screenCount; ++screen) {
-        ASSERT(randomNumIndex < ARRAY_COUNT(random::randomNumbers));
+        ASSERT(randomNumIndex < ARRAY_COUNT(hm_random::randomNumbers));
         u32 randomChoice;
         // Lateral only
         if (doorUp || doorDown) {
-            randomChoice = random::randomNumbers[randomNumIndex++] % 2;
+            randomChoice = hm_random::randomNumbers[randomNumIndex++] % 2;
         } else {
-            randomChoice = random::randomNumbers[randomNumIndex++] % 3;
+            randomChoice = hm_random::randomNumbers[randomNumIndex++] % 3;
         }
 
         bool32 createdZDoor{};
@@ -492,7 +492,7 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
 
     acceleration *= playerSpeed;
 
-    if (input::ActionPressed(&inputButtons->shift)) {
+    if (hm_input::ActionPressed(&inputButtons->shift)) {
         acceleration *= playerSpeedModifier;
     }
 
@@ -685,16 +685,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         if (controllingEntity->exists) {
             Vec2 acceleration{};
 
-            if (input::ActionPressed(&inputButtons->up)) {
+            if (hm_input::ActionPressed(&inputButtons->up)) {
                 acceleration.y = 1.0f;
             }
-            if (input::ActionPressed(&inputButtons->down)) {
+            if (hm_input::ActionPressed(&inputButtons->down)) {
                 acceleration.y = -1.0f;
             }
-            if (input::ActionPressed(&inputButtons->left)) {
+            if (hm_input::ActionPressed(&inputButtons->left)) {
                 acceleration.x = -1.0f;
             }
-            if (input::ActionPressed(&inputButtons->right)) {
+            if (hm_input::ActionPressed(&inputButtons->right)) {
                 acceleration.x = 1.0f;
             }
 
@@ -711,8 +711,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             // Only the first player can do certain operations
             // Switching z index
             if (controllerIndex == 0) {
-                if (input::ActionJustPressed(&inputButtons->Z)) {
-                    if (input::ActionPressed(&inputButtons->shift)) {
+                if (hm_input::ActionJustPressed(&inputButtons->Z)) {
+                    if (hm_input::ActionPressed(&inputButtons->shift)) {
                         controllingEntity->pos.absTileZ =
                             TilemapPositionModifyZChecked(tilemap, &controllingEntity->pos, -1);
                     } else {
@@ -722,7 +722,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
         } else {
-            if (input::ActionJustPressed(&inputButtons->enter) || gameState->startWithAPlayer) {
+            if (hm_input::ActionJustPressed(&inputButtons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
                     gameState->startWithAPlayer = false;
                 }

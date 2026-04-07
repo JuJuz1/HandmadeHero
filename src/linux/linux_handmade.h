@@ -3,7 +3,7 @@
 
 #if HANDMADE_LINUX
 
-namespace sdl {
+namespace hm_sdl {
 
 struct OffScreenBuffer {
     SDL_Texture* texture;
@@ -61,7 +61,7 @@ struct AllState {
     bool32 isReplayLooping;
 };
 
-} //namespace sdl
+} //namespace hm_sdl
 
 #endif // HANDMADE_LINUX
 #endif // LINUX_HANDMADE_H
