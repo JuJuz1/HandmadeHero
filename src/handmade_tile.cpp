@@ -73,7 +73,6 @@ SetTileValue(MemoryArena* worldArena, Tilemap* tileMap, u32 absTileX, u32 absTil
     const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
     Tilechunk* tileChunk{ GetTilechunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
                                        chunkPos.chunkZ) };
-
     ASSERT(tileChunk);
 
     // Create tileChunk tiles if they don't exist
@@ -109,7 +108,6 @@ IsTilemapPointEmpty(const Tilemap* tileMap, TilemapPosition pos) {
 
 INTERNAL void
 ReCanonicalizeCoordinate(const Tilemap* tileMap, u32* tileIndex, f32* relPos) {
-
     const i32 offset{ RoundF32ToI32(*relPos / tileMap->tileSideInMeters) };
     // NOTE: tileMap is assumed to be toroidal, if you step over the end you start at the
     // beginning
@@ -128,8 +126,8 @@ NODISCARD
 INTERNAL TilemapPosition
 RecanonicalizePosition(const Tilemap* tileMap, TilemapPosition pos) {
     TilemapPosition result{ pos };
-    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffset.x);
-    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffset.y);
+    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result._tileOffset.x);
+    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result._tileOffset.y);
 
     return result;
 }
@@ -137,7 +135,7 @@ RecanonicalizePosition(const Tilemap* tileMap, TilemapPosition pos) {
 NODISCARD
 INTERNAL TilemapPosition
 OffsetTilemapPosition(const Tilemap* tileMap, TilemapPosition pos, Vec2 offset) {
-    pos.tileOffset += offset;
+    pos._tileOffset += offset;
     pos = RecanonicalizePosition(tileMap, pos);
 
     return pos;
@@ -178,12 +176,13 @@ INTERNAL TilemapDiff
 SubtractTilemapPos(const Tilemap* tilemap, const TilemapPosition* a, const TilemapPosition* b) {
     TilemapDiff result{};
 
-    const Vec2 dTileXY{ static_cast<f32>(a->absTileX) - static_cast<f32>(b->absTileX),
-                        static_cast<f32>(a->absTileY) - static_cast<f32>(b->absTileY) };
-    const f32 dTileZ{ static_cast<f32>(a->absTileZ) - static_cast<f32>(b->absTileZ) };
+    const Vec3 dTile{ static_cast<f32>(a->absTileX) - static_cast<f32>(b->absTileX),
+                      static_cast<f32>(a->absTileY) - static_cast<f32>(b->absTileY),
+                      static_cast<f32>(a->absTileZ) - static_cast<f32>(b->absTileZ) };
 
-    result.dXY = (tilemap->tileSideInMeters * dTileXY) + a->tileOffset - b->tileOffset;
-    result.dZ = tilemap->tileSideInMeters * dTileZ;
+    result.x = (tilemap->tileSideInMeters * dTile.x) + a->_tileOffset.x - b->_tileOffset.x;
+    result.y = (tilemap->tileSideInMeters * dTile.y) + a->_tileOffset.y - b->_tileOffset.y;
+    result.z = tilemap->tileSideInMeters * dTile.z;
 
     return result;
 }

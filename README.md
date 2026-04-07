@@ -7,6 +7,13 @@ My implementation of the code as I followed Casey Muratori's [Handmade Hero](htt
 Unity build, game as a service to the platform
 
 Header files mostly contain definitions for structs, everything else lives in .cpp files
+
+...
+
+## Code style remarks
+
+_ is used to prefix a variable, a function or a macro meant to be accessed or called with extra caution (somewhat meaning they are private in the object-oriented sense). This is to inform the caller that these are usually internal to the data structure, implementation etc...
+
 ...
 
 ## Hot reloading

@@ -598,19 +598,20 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
 
                 const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &oldPlayerPos,
                                                                       &testPos) };
-                const Vec2 relPosXY{ relNewPlayerPos.dXY };
+                const f32 relPosX{ relNewPlayerPos.x };
+                const f32 relPosY{ relNewPlayerPos.y };
 
                 // Test all four walls and take the minimum Z
 
-                tMin = TestWall(minCorner.x, relPosXY.x, relPosXY.y, playerDelta.x, playerDelta.y,
-                                tMin, minCorner.y, maxCorner.y);
-                tMin = TestWall(maxCorner.x, relPosXY.x, relPosXY.y, playerDelta.x, playerDelta.y,
-                                tMin, minCorner.y, maxCorner.y);
+                tMin = TestWall(minCorner.x, relPosX, relPosY, playerDelta.x, playerDelta.y, tMin,
+                                minCorner.y, maxCorner.y);
+                tMin = TestWall(maxCorner.x, relPosX, relPosY, playerDelta.x, playerDelta.y, tMin,
+                                minCorner.y, maxCorner.y);
 
-                tMin = TestWall(minCorner.y, relPosXY.y, relPosXY.x, playerDelta.y, playerDelta.x,
-                                tMin, minCorner.x, maxCorner.x);
-                tMin = TestWall(maxCorner.y, relPosXY.y, relPosXY.x, playerDelta.y, playerDelta.x,
-                                tMin, minCorner.x, maxCorner.x);
+                tMin = TestWall(minCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x, tMin,
+                                minCorner.x, maxCorner.x);
+                tMin = TestWall(maxCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x, tMin,
+                                minCorner.x, maxCorner.x);
             }
             if (absTileX == endTileX) {
                 break;
@@ -758,15 +759,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         const TilemapDiff diff{ SubtractTilemapPos(tilemap, &cameraFollowingEntity->pos,
                                                    &gameState->cameraPos) };
 
-        if (diff.dXY.x > (9.0f * tilemap->tileSideInMeters)) {
+        if (diff.x > (9.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileX += 17;
-        } else if (diff.dXY.x < -(9.0f * tilemap->tileSideInMeters)) {
+        } else if (diff.x < -(9.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileX -= 17;
         }
 
-        if (diff.dXY.y > (5.0f * tilemap->tileSideInMeters)) {
+        if (diff.y > (5.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileY += 9;
-        } else if (diff.dXY.y < -(5.0f * tilemap->tileSideInMeters)) {
+        } else if (diff.y < -(5.0f * tilemap->tileSideInMeters)) {
             gameState->cameraPos.absTileY -= 9;
         }
 
@@ -789,8 +790,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     memory->exports.DEBUGPrintUInt(threadContext, "absTileX", player->pos.absTileX);
     memory->exports.DEBUGPrintUInt(threadContext, "absTileY", player->pos.absTileY);
     memory->exports.DEBUGPrintUInt(threadContext, "absTileZ", player->pos.absTileZ);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", player->pos.tileOffset.x);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", player->pos.tileOffset.y);
+    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", player->pos._tileOffset.x);
+    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", player->pos._tileOffset.y);
 #endif
 
     // Background
@@ -854,10 +855,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             const Vec2 tileCen{ screenCenter.x -
-                                    (metersToPixels * gameState->cameraPos.tileOffset.x) +
+                                    (metersToPixels * gameState->cameraPos._tileOffset.x) +
                                     (static_cast<f32>(relColumn * tileSideInPixels)),
                                 screenCenter.y +
-                                    (metersToPixels * gameState->cameraPos.tileOffset.y) -
+                                    (metersToPixels * gameState->cameraPos._tileOffset.y) -
                                     (static_cast<f32>(relRow * tileSideInPixels)) };
 
             const Vec2 tileSide{ (static_cast<f32>(tileSideInPixels) * 0.5f),
@@ -885,8 +886,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         const TilemapDiff diff{ SubtractTilemapPos(tilemap, &entity->pos, &gameState->cameraPos) };
 
         // Real position
-        const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * diff.dXY.x),
-                                      screenCenter.y - (metersToPixels * diff.dXY.y) };
+        const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * diff.x),
+                                      screenCenter.y - (metersToPixels * diff.y) };
 
         constexpr f32 playerR{ 0.5f };
         constexpr f32 playerG{ 0.1f };

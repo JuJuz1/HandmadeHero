@@ -25,9 +25,9 @@ struct TilechunkPosition {
 };
 
 struct TilemapDiff {
-    // Vec3 could look nice here :)
-    Vec2 dXY;
-    f32 dZ;
+    f32 x;
+    f32 y;
+    f32 z;
 };
 
 struct TilemapPosition {
@@ -38,7 +38,7 @@ struct TilemapPosition {
     u32 absTileZ;
 
     // Tile-relative x and y from the center of the tile
-    Vec2 tileOffset;
+    Vec2 _tileOffset;
 };
 
 struct Tilechunk {
