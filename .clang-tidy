@@ -30,6 +30,7 @@ Checks: >
   -modernize-use-std-numbers,
   -modernize-use-using,
   -modernize-use-designated-initializers,
+  -modernize-use-integer-sign-comparison,
 
   readability-*,
   -readability-implicit-bool-conversion,

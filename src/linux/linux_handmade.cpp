@@ -610,8 +610,15 @@ GetLastWriteTime(const char* filename) {
 }
 
 INTERNAL GameCode
-LoadGameCode(const char* srcDll, const char* tempDll, const char* lockFilename) {
+LoadGameCode(const char* srcDll, const char* lockFilename) {
     GameCode gameCode{};
+
+    struct stat ignored;
+    if (stat(lockFilename, &ignored) == 0) {
+        printf("Lockfile is still present!\n");
+        return gameCode;
+    }
+
     gameCode.lastWritetime = GetLastWriteTime(srcDll);
 
     // Here is an extra check for the existence of lastWriteTime
@@ -660,8 +667,6 @@ main() {
 
     char srcDllPath[hm_sdl::all_State_File_Name_Count];
     hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath, sizeof(srcDllPath));
-    char tempDllPath[hm_sdl::all_State_File_Name_Count];
-    hm_sdl::BuildGamePathFilename(&allState, "handmade_temp.so", tempDllPath, sizeof(tempDllPath));
 
     char lockFilePath[hm_sdl::all_State_File_Name_Count];
     hm_sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
@@ -770,7 +775,7 @@ main() {
     u64 lastCounter{ hm_sdl::GetWallClock() };
     u64 lastCycleCount{ _rdtsc() };
 
-    hm_sdl::GameCode game{ hm_sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
+    hm_sdl::GameCode game{ hm_sdl::LoadGameCode(srcDllPath, lockFilePath) };
     Input gameInput{};
 
     gIsGameRunning = true;
@@ -779,7 +784,7 @@ main() {
         const time_t newDllWriteTime{ hm_sdl::GetLastWriteTime(srcDllPath) };
         if (game.lastWritetime != newDllWriteTime) {
             hm_sdl::UnloadGameCode(&game);
-            game = hm_sdl::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
+            game = hm_sdl::LoadGameCode(srcDllPath, lockFilePath);
         }
 
         // Keyboard input

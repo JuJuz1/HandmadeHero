@@ -12,10 +12,9 @@ Header files mostly contain definitions for structs, everything else lives in .c
 
 ## Code style remarks
 
-Global variables which are meant to be modified are prefixed with g
+Global variables which are meant to be modified are prefixed with a "g"
 
-_ is used to prefix a variable, a function or a macro meant to be accessed or called with extra caution (somewhat meaning they are private in the object-oriented sense). This is to inform the caller that these are usually internal to the data structure, implementation etc...
-
+_ is used to postfix a variable, a function or a macro meant to be accessed or called with extra caution (somewhat meaning they are private in the object-oriented sense). This is to inform the caller that these are usually internal to the data structure, implementation etc... Prefixing with _ is problematic as these are reserved for standard library definitions and such!
 
 ...
 

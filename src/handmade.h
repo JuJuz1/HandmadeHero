@@ -26,8 +26,8 @@ HANDMADE_INTERNAL:
     1: developer builds
 
 HANDMADE_DEBUG:
-    0: enables assertions
-    1: disables assertions
+    0: disables assertions
+    1: enables assertions
 */
 
 // TODO: use these ASSERT(s) vs assert from <cassert>?
@@ -35,7 +35,7 @@ HANDMADE_DEBUG:
 // arguments of values?)
 #if HANDMADE_DEBUG
 // clang-format off
-    #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(0)) = 0; } // clang-tidy NOLINT
+    #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(nullptr)) = 0; } // clang-tidy NOLINT
 // clang-format on
 #else
 #    define ASSERT(expr)
@@ -58,14 +58,18 @@ HANDMADE_DEBUG:
 #define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
 
 // Returns the first if equal, same for MAX
-#define MIN(a, b) ((a <= b) ? (a) : (b))
-#define MAX(a, b) ((a >= b) ? (a) : (b))
+#define MIN(a, b) (((a) <= (b)) ? (a) : (b))
+#define MAX(a, b) (((a) >= (b)) ? (a) : (b))
 
-// c++17 required
-// Can be opted out of easily by just checking c++ standard version when compiling
+// C++17 required
+// Can be opted out of easily by just checking C++ standard version when compiling
 // Although on MSVC at least when compiling with an older standard like c++14, it still
-// works and produces the warning
-#define NODISCARD [[nodiscard]]
+// works and produces the warning. Clang produces warnings
+#if __cplusplus >= 201703L
+#    define NODISCARD [[nodiscard]]
+#else
+#    define NODISCARD
+#endif
 
 /// Services that the platform layer provides to the game ///
 
@@ -123,12 +127,12 @@ InitializeArena(MemoryArena* arena, u8* base, memory_index size) {
     arena->used = 0;
 }
 
-#define PushSize(arena, type) (type*)_PushSize(arena, sizeof(type))
-#define PushArray(arena, count, type) (type*)_PushSize(arena, (count) * sizeof(type))
+#define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
+#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
 
 NODISCARD
 INTERNAL void*
-_PushSize(MemoryArena* arena, memory_index size) {
+PushSize_(MemoryArena* arena, memory_index size) {
     ASSERT(arena->used + size <= arena->size);
     void* result{ arena->base + arena->used };
     arena->used += size;
@@ -173,7 +177,7 @@ struct GameState {
     Entity entities[256];
     i32 entityCount;
     // Cursed cast... probably reconsider your use of free will
-    i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(0))->playerInputs)];
+    i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
 
     LoadedBitmapInfo background;
     HeroBitmaps heroBitmaps[4];

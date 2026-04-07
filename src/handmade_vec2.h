@@ -120,7 +120,7 @@ Vec2::operator*=(Vec2 a) {
 NODISCARD
 INTERNAL inline f32
 Dot(Vec2 a, Vec2 b) {
-    const f32 result{ a.x * b.x + a.y * b.y };
+    const f32 result{ (a.x * b.x) + (a.y * b.y) };
     return result;
 }
 

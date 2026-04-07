@@ -783,8 +783,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     memory->exports.DEBUGPrintUInt(threadContext, "absTileX", player->pos.absTileX);
     memory->exports.DEBUGPrintUInt(threadContext, "absTileY", player->pos.absTileY);
     memory->exports.DEBUGPrintUInt(threadContext, "absTileZ", player->pos.absTileZ);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", player->pos._tileOffset.x);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", player->pos._tileOffset.y);
+    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", player->pos.tileOffset_.x);
+    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", player->pos.tileOffset_.y);
 #endif
 
     // Background
@@ -848,10 +848,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             const Vec2 tileCen{ screenCenter.x -
-                                    (metersToPixels * gameState->cameraPos._tileOffset.x) +
+                                    (metersToPixels * gameState->cameraPos.tileOffset_.x) +
                                     (static_cast<f32>(relColumn * tileSideInPixels)),
                                 screenCenter.y +
-                                    (metersToPixels * gameState->cameraPos._tileOffset.y) -
+                                    (metersToPixels * gameState->cameraPos.tileOffset_.y) -
                                     (static_cast<f32>(relRow * tileSideInPixels)) };
 
             const Vec2 tileSide{ (static_cast<f32>(tileSideInPixels) * 0.5f),
