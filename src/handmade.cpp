@@ -462,7 +462,7 @@ InitializePlayer(Entity* entity) {
 INTERNAL f32
 TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 tMin, f32 minY,
          f32 maxY) {
-    constexpr f32 tEps{ 1e-2f };
+    constexpr f32 tEps{ 0.01f };
     f32 newTMin{ tMin };
 
     if (playerDeltaX != 0.0f) {
@@ -505,10 +505,9 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     const Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     const TilemapPosition oldPlayerPos{ entity->pos };
-    TilemapPosition newPlayerPos{ OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta) };
+    const TilemapPosition newPlayerPos{ OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta) };
 
 #if 0
-
     TilemapPosition testplayerPosLeft{ newPlayerPos };
     testplayerPosLeft.tileOffset.x -= entity->dimensions.x * 0.5f;
     testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
@@ -560,27 +559,19 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     }
 #else
 
-// Search in t
+    // Search in t
 
-// Take the "starting" tile and the "ending" tile
-// Taking MIN and MAX takes into account
-// all possible directions (left to right, right to left, ...)
-#    if 0
-    const u32 minTileX{ MIN(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
-    const u32 minTileY{ MIN(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
-    const u32 onePastMaxTileX{ MAX(oldPlayerPos.absTileX, newPlayerPos.absTileX) + 1 };
-    const u32 onePastMaxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) + 1 };
-#    else
+    // Take the "starting" tile and the "ending" tile
+    // Taking MIN and MAX takes into account
+    // all possible directions (left to right, right to left, ...)
 
     const u32 startTileX{ oldPlayerPos.absTileX };
     const u32 startTileY{ oldPlayerPos.absTileY };
     const u32 endTileX{ newPlayerPos.absTileX };
     const u32 endTileY{ newPlayerPos.absTileY };
 
-    const i32 deltaTileX{ SignOf(endTileX - startTileX) };
-    const i32 deltaTileY{ SignOf(endTileY - startTileY) };
-
-#    endif
+    const i32 deltaTileX{ SignOf(static_cast<i32>(endTileX - startTileX)) };
+    const i32 deltaTileY{ SignOf(static_cast<i32>(endTileY - startTileY)) };
 
     const u32 absTileZ{ entity->pos.absTileZ };
     f32 tMin{ 1.0f }; // Assume we can go the full distance
@@ -613,20 +604,22 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
                 tMin = TestWall(maxCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x, tMin,
                                 minCorner.x, maxCorner.x);
             }
+
             if (absTileX == endTileX) {
                 break;
-            } else {
-                absTileX += deltaTileX;
             }
+
+            absTileX += deltaTileX;
         }
 
         if (absTileY == endTileY) {
             break;
-        } else {
-            absTileY += deltaTileY;
         }
+
+        absTileY += deltaTileY;
     }
 
+    //gMemory->exports.DEBUGPrintFloat(gThreadContext, "tMin", tMin);
     entity->pos = OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta * tMin);
 
 #endif

@@ -1205,7 +1205,8 @@ WinMain(
 
         SoundOutputBuffer soundBuff{};
         soundBuff.samplesPerSecond = soundOutput.samplesPerSecond;
-        soundBuff.sampleCount = dSoundParams.bytesToWrite / soundOutput.bytesPerSample;
+        soundBuff.sampleCount =
+            static_cast<i32>(dSoundParams.bytesToWrite) / soundOutput.bytesPerSample;
         soundBuff.samples = soundBuffSamples;
 
         if (game.getSoundSamples) {
