@@ -41,7 +41,7 @@ Supported automatically when modifying game code only! All other files except pl
 Visual Studio 2022+ (or build tools). Also earlier versions might work. Have to test GCC and Clang
 
 - Clone the repository if you already haven't
-- Open x64 Native Tools Command Prompt for Visual Studio 2022 (or 2026?)
+- Open x64 Native Tools Command Prompt for VS <*some version*> (or similar named)
 - Navigate to the project root
 - run [scripts/win32_build.bat](scripts/win32_build.bat) FROM THE ROOT
 
@@ -51,5 +51,47 @@ Visual Studio 2022+ (or build tools). Also earlier versions might work. Have to 
 
 which puts the executable into the created build folder
 
+Run it:
+
+```
+.\build\win32_handmade.exe
+```
+
 If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat) script to have vcvarsall.bat path to your Visual Studio installation before running [scripts/win32_build.bat](scripts/win32_build.bat). This varies between Visual Studio installations
 - run [scripts/setup_env.bat](scripts/setup_env.bat) to initialize x64 environment for MSVC and then build according to the instructions above
+
+### Linux
+
+Using David Gow's [Handmade Penguin](https://davidgow.net/handmadepenguin/) SDL 2 port of the platform layer. A repository which I used as a reference [SDL Handmade](https://github.com/KimJorgensen/sdl_handmade)
+
+Heavily modified to match the code structure and style of the project. As the logic is very similar to the Windows platform layer I didn't bother to keep the same comments on the source files
+
+---
+
+#### Requirements
+
+LLVM compiler (clang++) supporting C++20 (almost any version not older than ~3 years, so 16.0+)
+
+SDL 2, installing this should be as simple as running
+
+```
+sudo apt install libsdl2-dev
+```
+
+In other cases more information can be found here: https://wiki.libsdl.org/SDL2/Installation
+
+- Clone the repository if you already haven't
+- Navigate to the project root
+- run [scripts/linux_build.sh](scripts/linux_build.sh) FROM THE ROOT
+
+```
+./scripts/linux_build.sh
+```
+
+which puts the executable into the created build folder
+
+Run it:
+
+```
+./build/linux_handmade
+```

@@ -505,7 +505,7 @@ BeginRecordInput(AllState* allState, i32 recordingIndex) {
     // TODO: cleanup the files after exiting the game?
     allState->recordingIndex = recordingIndex;
 
-    char filePath[win32::all_State_File_Name_Count];
+    char filePath[all_State_File_Name_Count];
     GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
     HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
@@ -581,7 +581,7 @@ RecordInput(AllState* allState, const Input* input) {
         bytesWritten == sizeof(*input)) {
         // Success
     } else {
-        OutputDebugStringA("RecordInput RecordInput writing to file failed!\n");
+        OutputDebugStringA("RecordInput writing to file failed!\n");
     }
 }
 
@@ -637,7 +637,7 @@ HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
 }
 
 INTERNAL void
-HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, i32 shiftPressed) {
+HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bool32 shiftPressed) {
     ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
     ClearInputMemory(input);
 
@@ -749,6 +749,7 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             case 'E': {
                 ProcessInputMessage(&input->playerInputs->E, isDown);
             } break;
+
             case VK_SHIFT: {
                 ProcessInputMessage(&input->playerInputs->shift, isDown);
             } break;
@@ -809,7 +810,6 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                     HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
                 }
             } break;
-
             case 'P': {
                 if (isDown) {
                     if (gIsGamePaused) {

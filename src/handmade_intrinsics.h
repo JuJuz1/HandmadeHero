@@ -130,14 +130,14 @@ Sqrt(f32 value) {
 NODISCARD
 INTERNAL inline u32
 AbsI32(i32 value) {
-    const u32 result{ static_cast<u32>(fabs(value)) };
+    const u32 result{ static_cast<u32>(abs(value)) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline f32
 AbsF32(f32 value) {
-    const f32 result{ fabs(value) };
+    const f32 result{ fabsf(value) };
     return result;
 }
 
