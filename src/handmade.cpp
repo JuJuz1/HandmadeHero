@@ -621,8 +621,6 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
         entity->velocity *= friction;
     }
 
-#endif
-
     // Door checks
     if (!AreOnSameTiles(&oldPlayerPos, &entity->pos)) {
         const u32 newTileValue{ GetTileValue(tilemap, entity->pos.absTileX, entity->pos.absTileY,
