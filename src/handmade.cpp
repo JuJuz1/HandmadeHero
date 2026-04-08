@@ -455,14 +455,21 @@ InitializePlayer(Entity* entity) {
 
     entity->pos.absTileX = 3;
     entity->pos.absTileY = 3;
-    entity->dimensions.y = 1.4f;
-    entity->dimensions.x = entity->dimensions.y * 0.75f;
+    entity->dimensions.y = 0.5f;  // 1.4f;
+    entity->dimensions.x = 0.75f; // entity->dimensions.y * 0.75f;
 }
 
-INTERNAL f32
+struct TestWallResult {
+    f32 tMin;
+    bool32 hit;
+};
+
+INTERNAL TestWallResult
 TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 tMin, f32 minY,
          f32 maxY) {
-    constexpr f32 tEps{ 0.01f };
+    // TODO: this should be moved elsewhere and not be in playerDelta space
+    constexpr f32 tEps{ 0.0001f };
+    TestWallResult result{};
     f32 newTMin{ tMin };
 
     if (playerDeltaX != 0.0f) {
@@ -471,11 +478,13 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
         if (tResult >= 0.0f && tResult < tMin) {
             if (newY >= minY && newY <= maxY) {
                 newTMin = MAX(0.0f, tResult - tEps);
+                result.tMin = newTMin;
+                result.hit = true;
             }
         }
     }
 
-    return newTMin;
+    return result;
 }
 
 INTERNAL void
@@ -502,125 +511,115 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     entity->velocity += acceleration * delta;
 
     // p' = 0.5 * at^2 + vt + p
-    const Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
+    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     const TilemapPosition oldPlayerPos{ entity->pos };
     const TilemapPosition newPlayerPos{ OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta) };
-
-#if 0
-    TilemapPosition testplayerPosLeft{ newPlayerPos };
-    testplayerPosLeft.tileOffset.x -= entity->dimensions.x * 0.5f;
-    testplayerPosLeft = RecanonicalizePosition(tilemap, testplayerPosLeft);
-
-    TilemapPosition testplayerPosRight{ newPlayerPos };
-    testplayerPosRight.tileOffset.x += entity->dimensions.x * 0.5f;
-    testplayerPosRight = RecanonicalizePosition(tilemap, testplayerPosRight);
-
-    bool32 collided{};
-    TilemapPosition colPos{};
-
-    if (!IsTilemapPointEmpty(tilemap, newPlayerPos)) {
-        collided = true;
-        colPos = newPlayerPos;
-    }
-
-    if (!IsTilemapPointEmpty(tilemap, testplayerPosLeft)) {
-        collided = true;
-        colPos = testplayerPosLeft;
-    }
-    if (!IsTilemapPointEmpty(tilemap, testplayerPosRight)) {
-        collided = true;
-        colPos = testplayerPosRight;
-    }
-
-    // Reflect
-    if (collided) {
-        constexpr f32 bounceStrength{ 0.2f };
-        Vec2 n{};
-        // Left
-        if (colPos.absTileX < entity->pos.absTileX) {
-            n = Vec2{ 1, 0 };
-        }
-        if (colPos.absTileX > entity->pos.absTileX) {
-            n = Vec2{ -1, 0 };
-        }
-        if (colPos.absTileY < entity->pos.absTileY) {
-            n = Vec2{ 0, 1 };
-        }
-        if (colPos.absTileY > entity->pos.absTileY) {
-            n = Vec2{ 0, -1 };
-        }
-
-        // To slide along the wall multiply by 1.0f in Reflect
-        entity->velocity = Reflect(entity->velocity, n) * bounceStrength;
-        DEBUG_PLATFORM_PRINT("Reflect!\n");
-    } else {
-        entity->pos = newPlayerPos;
-    }
-#else
 
     // Search in t
 
     // Take the "starting" tile and the "ending" tile
     // Taking MIN and MAX takes into account
     // all possible directions (left to right, right to left, ...)
+    u32 minTileX{ MIN(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
+    u32 minTileY{ MIN(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
+    u32 maxTileX{ MAX(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
+    u32 maxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
 
-    const u32 startTileX{ oldPlayerPos.absTileX };
-    const u32 startTileY{ oldPlayerPos.absTileY };
-    const u32 endTileX{ newPlayerPos.absTileX };
-    const u32 endTileY{ newPlayerPos.absTileY };
+    const i32 entityTileWidth{ CeilF32ToI32(entity->dimensions.x / tilemap->tileSideInMeters) };
+    const i32 entityTileHeight{ CeilF32ToI32(entity->dimensions.y / tilemap->tileSideInMeters) };
 
-    const i32 deltaTileX{ SignOf(static_cast<i32>(endTileX - startTileX)) };
-    const i32 deltaTileY{ SignOf(static_cast<i32>(endTileY - startTileY)) };
+    // Extend bounds for Minkowkski collision detection
+    minTileX -= entityTileWidth;
+    minTileY -= entityTileHeight;
+    maxTileX += entityTileWidth;
+    maxTileY += entityTileHeight;
 
     const u32 absTileZ{ entity->pos.absTileZ };
-    f32 tMin{ 1.0f }; // Assume we can go the full distance
 
-    u32 absTileY{ startTileY };
-    // != to allow wrapping
-    while (true) {
-        u32 absTileX{ startTileX };
-        while (true) {
-            const TilemapPosition testPos{ absTileX, absTileY, absTileZ };
-            if (!IsTilemapPointEmpty(tilemap, testPos)) {
-                const f32 halfTileSide{ 0.5f * tilemap->tileSideInMeters };
-                const Vec2 minCorner{ -halfTileSide, -halfTileSide };
-                const Vec2 maxCorner{ halfTileSide, halfTileSide };
+    f32 tRemaining{ 1.0f }; // Keeps track of how much t we moved per iteration
+    bool32 hitWall{};       // Used to modify velocity if we hit a wall during the frame
 
-                const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &oldPlayerPos,
-                                                                      &testPos) };
-                const f32 relPosX{ relNewPlayerPos.x };
-                const f32 relPosY{ relNewPlayerPos.y };
+    constexpr i32 iterationCount{ 4 };
+    for (i32 iteration{}; (iteration < iterationCount) && (tRemaining > 0.0f); ++iteration) {
+        f32 tMin{ 1.0f };
+        Vec2 wallNormal{};
+        TestWallResult result{};
 
-                // Test all four walls and take the minimum Z
+        // Assert that we are never wrapping
+        // We should never be moving more than 1 or 2 tiles per frame? so 32 is enough when taking
+        // into account the Minkowski sum
+        ASSERT((maxTileX - minTileX) < 32);
+        ASSERT((maxTileY - minTileY) < 32);
+        ASSERT(maxTileX < (UINT32_MAX - 100));
+        ASSERT(maxTileY < (UINT32_MAX - 100));
 
-                tMin = TestWall(minCorner.x, relPosX, relPosY, playerDelta.x, playerDelta.y, tMin,
-                                minCorner.y, maxCorner.y);
-                tMin = TestWall(maxCorner.x, relPosX, relPosY, playerDelta.x, playerDelta.y, tMin,
-                                minCorner.y, maxCorner.y);
+        for (u32 absTileY{ minTileY }; absTileY <= maxTileY; ++absTileY) {
+            for (u32 absTileX{ minTileX }; absTileX <= maxTileX; ++absTileX) {
+                const TilemapPosition testPos{ absTileX, absTileY, absTileZ };
+                if (!IsTilemapPointEmpty(tilemap, testPos)) {
+                    const f32 diameterWidth{ tilemap->tileSideInMeters + entity->dimensions.x };
+                    const f32 diameterHeight{ tilemap->tileSideInMeters + entity->dimensions.y };
+                    const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
+                    const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
 
-                tMin = TestWall(minCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x, tMin,
-                                minCorner.x, maxCorner.x);
-                tMin = TestWall(maxCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x, tMin,
-                                minCorner.x, maxCorner.x);
+                    const TilemapDiff relNewPlayerPos{ SubtractTilemapPos(tilemap, &entity->pos,
+                                                                          &testPos) };
+                    const f32 relPosX{ relNewPlayerPos.x };
+                    const f32 relPosY{ relNewPlayerPos.y };
+
+                    // Test all four walls
+
+                    // x
+                    result = TestWall(minCorner.x, relPosX, relPosY, playerDelta.x, playerDelta.y,
+                                      tMin, minCorner.y, maxCorner.y);
+                    if (result.hit) {
+                        tMin = result.tMin;
+                        wallNormal = Vec2{ -1, 0 };
+                        hitWall = true;
+                    }
+
+                    result = TestWall(maxCorner.x, relPosX, relPosY, playerDelta.x, playerDelta.y,
+                                      tMin, minCorner.y, maxCorner.y);
+                    if (result.hit) {
+                        tMin = result.tMin;
+                        wallNormal = Vec2{ 1, 0 };
+                        hitWall = true;
+                    }
+
+                    // y
+                    result = TestWall(minCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x,
+                                      tMin, minCorner.x, maxCorner.x);
+                    if (result.hit) {
+                        tMin = result.tMin;
+                        wallNormal = Vec2{ 0, -1 };
+                        hitWall = true;
+                    }
+
+                    result = TestWall(maxCorner.y, relPosY, relPosX, playerDelta.y, playerDelta.x,
+                                      tMin, minCorner.x, maxCorner.x);
+                    if (result.hit) {
+                        tMin = result.tMin;
+                        wallNormal = Vec2{ 0, 1 };
+                        hitWall = true;
+                    }
+                }
             }
-
-            if (absTileX == endTileX) {
-                break;
-            }
-
-            absTileX += deltaTileX;
         }
 
-        if (absTileY == endTileY) {
-            break;
-        }
-
-        absTileY += deltaTileY;
+        //gMemory->exports.DEBUGPrintFloat(gThreadContext, "tMin", tMin);
+        entity->pos = OffsetTilemapPosition(tilemap, entity->pos, playerDelta * tMin);
+        entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
+        playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
+        tRemaining -= tMin * tRemaining;
     }
 
-    //gMemory->exports.DEBUGPrintFloat(gThreadContext, "tMin", tMin);
-    entity->pos = OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta * tMin);
+    // Delta independent friction using exponential decay: e^(-kt)
+    if (hitWall) {
+        constexpr f32 frictionModifier{ 2.0f };
+        const f32 friction{ ExpF32(-frictionModifier * delta) };
+        entity->velocity *= friction;
+    }
 
 #endif
 
@@ -887,12 +886,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         constexpr f32 playerB{ 0.5f };
         // TODO: fix player graphics positioning
 
-        const Vec2 playerPosXY{ playerGroundPoint.x -
-                                    (entity->dimensions.x * 0.5f * metersToPixels),
-                                playerGroundPoint.y - (entity->dimensions.y * metersToPixels) };
+        const Vec2 playerPosXY{
+            playerGroundPoint.x - (entity->dimensions.x * 0.5f * metersToPixels),
+            playerGroundPoint.y - (entity->dimensions.y * 0.5f * metersToPixels)
+        };
 
         const Vec2 maxPos{ playerPosXY.x + (entity->dimensions.x * metersToPixels),
                            playerPosXY.y + (entity->dimensions.y * metersToPixels) };
+        // Debug collision box
         DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
 
         const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };

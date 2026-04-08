@@ -141,6 +141,13 @@ AbsF32(f32 value) {
     return result;
 }
 
+NODISCARD
+INTERNAL inline f32
+ExpF32(f32 value) {
+    const f32 result{ expf(value) };
+    return result;
+}
+
 struct BitscanResult {
     bool32 found;
     u32 index;

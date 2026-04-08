@@ -11,8 +11,8 @@
 extern "C" {
 #endif
 
-#include <stddef.h> // for size_t
-#include <stdint.h>
+#include <stddef.h> // size_t
+#include <stdint.h> // common types
 
 // Compilers
 
