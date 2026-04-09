@@ -171,10 +171,18 @@ struct HighFEntity {
  */
 struct LowFEntity {};
 
+enum class EntityType {
+    NON_EXISTENT = 0,
+    HERO,
+    WALL,
+};
+
 /**
  * Dormant
  */
 struct DormantEntity {
+    EntityType type;
+
     TilemapPosition pos;
     f32 width, height;
 
@@ -209,10 +217,10 @@ struct GameState {
     TilemapPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    EntityResidency entityResidencies[256];
-    HighFEntity highFEntities[256];
-    LowFEntity lowFEntities[256];
-    DormantEntity dormantEntities[256];
+    EntityResidency entityResidencies[512]; // Holds the residencies of the entities
+    HighFEntity highFEntities[512];         // Holds the high frequency entities
+    LowFEntity lowFEntities[512];           // Holds the low frequency entities
+    DormantEntity dormantEntities[512];     // Holds the dormant  entities
     i32 entityCount;
 
     // Cursed cast... probably reconsider your use of free will

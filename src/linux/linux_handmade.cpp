@@ -52,21 +52,21 @@ INTERNAL
 DEBUG_PRINT_INT(DEBUGPrintInt) {
     UNUSED_PARAMS(threadContext);
 
-    printf("%s: %d\n", valueName, value);
+    printf("%s%d\n", valueName, value);
 }
 
 INTERNAL
 DEBUG_PRINT_UINT(DEBUGPrintUInt) {
     UNUSED_PARAMS(threadContext);
 
-    printf("%s: %u\n", valueName, value);
+    printf("%s%u\n", valueName, value);
 }
 
 INTERNAL
 DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
     UNUSED_PARAMS(threadContext);
 
-    printf("%s: %f\n", valueName, value);
+    printf("%s%f\n", valueName, value);
 }
 
 DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {

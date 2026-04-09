@@ -43,7 +43,7 @@ DEBUG_PRINT_INT(DEBUGPrintInt) {
     UNUSED_PARAMS(threadContext);
 
     char buf[32];
-    sprintf_s(buf, "%s: %d\n", valueName, value);
+    sprintf_s(buf, "%s%d\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
@@ -52,7 +52,7 @@ DEBUG_PRINT_UINT(DEBUGPrintUInt) {
     UNUSED_PARAMS(threadContext);
 
     char buf[32];
-    sprintf_s(buf, "%s: %u\n", valueName, value);
+    sprintf_s(buf, "%s%u\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
@@ -61,7 +61,7 @@ DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
     UNUSED_PARAMS(threadContext);
 
     char buf[32];
-    sprintf_s(buf, "%s: %f\n", valueName, value);
+    sprintf_s(buf, "%s%f\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
