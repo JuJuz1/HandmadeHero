@@ -145,10 +145,12 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
 
 namespace hm_win32 {
 
-// Raymond Chen's example modified sligthly
-// https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
-// Using ChangeDisplaySettingsA we can have more control over the changes
-// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-changedisplaysettingsa
+/**
+ * Raymond Chen's example modified sligthly
+ * https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+ * Using ChangeDisplaySettingsA we can have more control over the changes
+ * https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-changedisplaysettingsa
+ */
 INTERNAL void
 ToggleFullscreen(HWND hWnd) {
     const LONG style{ GetWindowLongA(hWnd, GWL_STYLE) };
@@ -366,7 +368,6 @@ FillSoundBuffer(SoundOutput* soundOutput, DWORD byteToLock, DWORD bytesToWrite,
     }
 }
 
-// Circular buffer so we might get two regions to write to
 NODISCARD
 INTERNAL DSoundParams
 ProcessDSoundParams(const SoundOutput* soundOutput, DWORD lastPlayCursor, bool32 isSoundValid) {
@@ -379,6 +380,7 @@ ProcessDSoundParams(const SoundOutput* soundOutput, DWORD lastPlayCursor, bool32
         dSoundParams.targetCursor =
             (lastPlayCursor + (soundOutput->latencySampleCount * soundOutput->bytesPerSample)) %
             soundOutput->buffSize;
+        // Circular buffer so we might get two regions to write to
         // To the end and wrap behind playCursor
         if (dSoundParams.byteToLock > dSoundParams.targetCursor) {
             dSoundParams.bytesToWrite = soundOutput->buffSize - dSoundParams.byteToLock;
@@ -572,7 +574,7 @@ EndInputPlayback(AllState* allState) {
     allState->playingIndex = replay_Buffer_Not_Playing;
 }
 
-// These functions are the ones called in the loop
+/// These functions are the ones called in the loop ///
 
 INTERNAL void
 RecordInput(AllState* allState, const Input* input) {
@@ -673,7 +675,6 @@ HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bo
     }
 }
 
-// The fired message should never have the same state (wasDown == isDown)
 INTERNAL void
 ProcessInputMessage(Button* button, bool32 isDown) {
     // NOTE: maybe just use if instead of ASSERT due to the way we do mouse input polling atm

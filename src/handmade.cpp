@@ -14,7 +14,9 @@ GLOBAL GameMemory* gMemory;
 
 namespace hm_input {
 
-// Returns true if the button was just pressed during the frame
+/**
+ * Returns true if the button was just pressed during the frame
+ */
 NODISCARD
 INTERNAL bool32
 ActionJustPressed(const Button* button) {
@@ -22,9 +24,11 @@ ActionJustPressed(const Button* button) {
     return result;
 }
 
-// Returns true if the button was pressed during the frame
-// As this returns true for the first frame as well, ActionJustPressed and ActionPressed both return
-// true for the first frame for the same button
+/**
+ * Returns true if the button was pressed during the frame
+ * As this returns true for the first frame as well, ActionJustPressed and ActionPressed both return
+ * true for the first frame for the same button
+ */
 NODISCARD
 INTERNAL bool32
 ActionPressed(const Button* button) {
@@ -32,7 +36,9 @@ ActionPressed(const Button* button) {
     return result;
 }
 
-// Returns true if the button was just released during the frame
+/**
+ * Returns true if the button was just released during the frame
+ */
 NODISCARD
 INTERNAL bool32
 ActionReleased(const Button* button) {
@@ -42,7 +48,9 @@ ActionReleased(const Button* button) {
 
 } //namespace hm_input
 
-// Write the sound data to buff
+/**
+ * Write the sound data to buff
+ */
 INTERNAL void
 OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {}
 
@@ -158,6 +166,7 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         for (i32 y{}; y < bitMapHeader->height; ++y) {
             for (i32 x{}; x < bitMapHeader->width; ++x) {
                 const u32 C{ *srcDest };
+                // TODO: episode 52, use rotateleft and right?
                 *srcDest++ = ((((C >> alphaShift.index) & 0xFF) << 24) |
                               (((C >> redShift.index) & 0xFF) << 16) |
                               (((C >> greenShift.index) & 0xFF) << 8) |
@@ -240,24 +249,64 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
     }
 }
 
+INTERNAL void
+ChangeEntityResidence(GameState* gameState, Entity* entity, EntityResidency residence) {
+    // TODO:
+}
+
+/**
+ * If entityCount is already at max, returns a zero-initalized entity
+ */
 NODISCARD
-INTERNAL Entity*
-GetEntity(GameState* gameState, i32 entityIndex) {
-    // Or just return nullptr if not inside bounds?
-    ASSERT(entityIndex >= 0 && entityIndex < ARRAY_COUNT(gameState->entities));
-    Entity* result{ &gameState->entities[entityIndex] };
-    return result;
+INTERNAL Entity
+GetEntity(GameState* gameState, i32 entityIndex, EntityResidency residence) {
+    ASSERT(entityIndex >= 0 && entityIndex < gameState->entityCount);
+
+    Entity entity{};
+
+    if (entityIndex >= 0 && entityIndex < gameState->entityCount) {
+        entity.residence = static_cast<u32>(residence);
+        entity.high = &gameState->highFEntities[entityIndex];
+        entity.low = &gameState->lowFEntities[entityIndex];
+        entity.dormant = &gameState->dormantEntities[entityIndex];
+    }
+
+    return entity;
 }
 
 NODISCARD
 INTERNAL i32
 AddEntity(GameState* gameState) {
-    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->entities));
+    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->entityResidencies));
+    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->highFEntities));
+    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->lowFEntities));
+    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->dormantEntities));
+
     const i32 entityIndex{ gameState->entityCount++ };
-    Entity* entity{ GetEntity(gameState, entityIndex) };
-    *entity = Entity{};
+
+    gameState->entityResidencies[entityIndex] = EntityResidency::DORMANT;
+    gameState->highFEntities[entityIndex] = HighFEntity{};
+    gameState->lowFEntities[entityIndex] = LowFEntity{};
+    gameState->dormantEntities[entityIndex] = DormantEntity{};
 
     return entityIndex;
+}
+
+INTERNAL void
+InitializePlayer(GameState* gameState, i32 entityIndex) {
+    Entity entity{ GetEntity(gameState, entityIndex, EntityResidency::DORMANT) };
+
+    entity.dormant->pos.absTileX = 3;
+    entity.dormant->pos.absTileY = 3;
+    entity.dormant->dimensions.y = 0.5f;  // 1.4f;
+    entity.dormant->dimensions.x = 0.75f; // entity->dimensions.y * 0.75f;
+
+    ChangeEntityResidence(gameState, &entity, EntityResidency::HIGH);
+
+    // Camera to follow first player
+    if (!gameState->cameraFollowingEntityIndex) {
+        gameState->cameraFollowingEntityIndex = entityIndex;
+    }
 }
 
 INTERNAL void
@@ -449,16 +498,6 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     }
 }
 
-INTERNAL void
-InitializePlayer(Entity* entity) {
-    entity->exists = true;
-
-    entity->pos.absTileX = 3;
-    entity->pos.absTileY = 3;
-    entity->dimensions.y = 0.5f;  // 1.4f;
-    entity->dimensions.x = 0.75f; // entity->dimensions.y * 0.75f;
-}
-
 struct TestWallResult {
     f32 tMin;
     bool32 hit;
@@ -488,7 +527,7 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
 }
 
 INTERNAL void
-MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButtons,
+MovePlayer(const GameState* gameState, Entity* entity, const InputButtons* inputButtons,
            Vec2 acceleration, f32 delta) {
     constexpr f32 playerSpeed{ 30 };
     constexpr f32 playerSpeedModifier{ 4 };
@@ -506,16 +545,17 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     }
 
     // TODO: ordinary differential equations
-    acceleration += -4.0f * entity->velocity;
+    acceleration += -4.0f * entity->high->velocity;
     // v' = at + v
-    entity->velocity += acceleration * delta;
+    entity->high->velocity += acceleration * delta;
 
     // p' = 0.5 * at^2 + vt + p
-    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
+    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->high->velocity * delta) };
 
-    const TilemapPosition oldPlayerPos{ entity->pos };
-    const TilemapPosition newPlayerPos{ OffsetTilemapPosition(tilemap, oldPlayerPos, playerDelta) };
+    const Vec2 oldPlayerPos{ entity->high->pos };
+    const Vec2 newPlayerPos{ oldPlayerPos + playerDelta };
 
+#if 0
     // Search in t
 
     // Take the "starting" tile and the "ending" tile
@@ -536,6 +576,7 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     maxTileY += entityTileHeight;
 
     const u32 absTileZ{ entity->pos.absTileZ };
+#endif
 
     f32 tRemaining{ 1.0f }; // Keeps track of how much t we moved per iteration
     bool32 hitWall{};       // Used to modify velocity if we hit a wall during the frame
@@ -633,20 +674,20 @@ MovePlayer(const Tilemap* tilemap, Entity* entity, const InputButtons* inputButt
     }
 
     // Facing direction checks
-    const Vec2 velocity{ entity->velocity };
+    const Vec2 velocity{ entity->high->velocity };
     if (velocity.x == 0.0f && velocity.y == 0.0f) {
         // Keep previous
     } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
         if (velocity.x > 0) {
-            entity->facingDir = 3;
+            entity->high->facingDir = 3;
         } else {
-            entity->facingDir = 1;
+            entity->high->facingDir = 1;
         }
     } else {
         if (velocity.y > 0) {
-            entity->facingDir = 2;
+            entity->high->facingDir = 2;
         } else {
-            entity->facingDir = 0;
+            entity->high->facingDir = 0;
         }
     }
 }
@@ -676,10 +717,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
         const InputButtons* inputButtons{ &input->playerInputs[controllerIndex] };
-        Entity* controllingEntity{ GetEntity(
-            gameState, gameState->playerIndexForController[controllerIndex]) };
+        Entity controllingEntity{ GetEntity(gameState,
+                                            gameState->playerIndexForController[controllerIndex],
+                                            EntityResidency::HIGH) };
 
-        if (controllingEntity->exists) {
+        if (controllingEntity.residence != EntityResidency::NON_EXISTENT) {
             Vec2 acceleration{};
 
             if (hm_input::ActionPressed(&inputButtons->up)) {
@@ -701,7 +743,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // The separation of handling input and moving the player is not yet clear
-            MovePlayer(tilemap, controllingEntity, inputButtons, acceleration, delta);
+            MovePlayer(gameState, &controllingEntity, inputButtons, acceleration, delta);
 
             // Other actions:
 
@@ -710,11 +752,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             if (controllerIndex == 0) {
                 if (hm_input::ActionJustPressed(&inputButtons->Z)) {
                     if (hm_input::ActionPressed(&inputButtons->shift)) {
-                        controllingEntity->pos.absTileZ =
-                            TilemapPositionModifyZChecked(tilemap, &controllingEntity->pos, -1);
+                        controllingEntity.dormant->pos.absTileZ = TilemapPositionModifyZChecked(
+                            tilemap, &controllingEntity.dormant->pos, -1);
                     } else {
-                        controllingEntity->pos.absTileZ =
-                            TilemapPositionModifyZChecked(tilemap, &controllingEntity->pos, 1);
+                        controllingEntity.dormant->pos.absTileZ = TilemapPositionModifyZChecked(
+                            tilemap, &controllingEntity.dormant->pos, 1);
                     }
                 }
             }
@@ -726,14 +768,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                 DEBUG_PLATFORM_PRINT("New player!\n");
                 const i32 entityIndex{ AddEntity(gameState) };
-                controllingEntity = GetEntity(gameState, entityIndex);
-                InitializePlayer(controllingEntity);
+                //controllingEntity = GetEntity(gameState, entityIndex);
+                //InitializePlayer(controllingEntity);
+                InitializePlayer(gameState, entityIndex);
                 gameState->playerIndexForController[controllerIndex] = entityIndex;
-
-                // Camera to follow first player
-                if (!gameState->cameraFollowingEntityIndex) {
-                    gameState->cameraFollowingEntityIndex = entityIndex;
-                }
             }
         }
     }
@@ -742,11 +780,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr i32 tileSideInPixels{ 60 };
     const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tilemap->tileSideInMeters };
 
-    const Entity* cameraFollowingEntity{ GetEntity(gameState,
-                                                   gameState->cameraFollowingEntityIndex) };
-    if (cameraFollowingEntity->exists) {
+    const Entity cameraFollowingEntity{ GetEntity(gameState, gameState->cameraFollowingEntityIndex,
+                                                  EntityResidency::HIGH) };
+    if (cameraFollowingEntity.residence != EntityResidency::NON_EXISTENT) {
         // Camera position
-        const TilemapDiff diff{ SubtractTilemapPos(tilemap, &cameraFollowingEntity->pos,
+        const TilemapDiff diff{ SubtractTilemapPos(tilemap, &cameraFollowingEntity.dormant->pos,
                                                    &gameState->cameraPos) };
 
         if (diff.x > (9.0f * tilemap->tileSideInMeters)) {
@@ -761,12 +799,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             gameState->cameraPos.absTileY -= 9;
         }
 
-        gameState->cameraPos.absTileZ = cameraFollowingEntity->pos.absTileZ;
+        gameState->cameraPos.absTileZ = cameraFollowingEntity.dormant->pos.absTileZ;
     }
 
 // Debug printing
 #if 1
-    const Entity* player{ cameraFollowingEntity };
+    const Entity player{ cameraFollowingEntity };
     const TilechunkPosition chunkPos{ GetChunkPosition(
         tilemap, player->pos.absTileX, player->pos.absTileY, player->pos.absTileZ) };
 
@@ -867,44 +905,45 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     // Drawing players
 
-    Entity* entity{ gameState->entities };
-    for (i32 entityIndex{}; entityIndex < gameState->entityCount; ++entityIndex, ++entity) {
-        if (!entity->exists) {
-            continue;
+    for (i32 entityIndex{}; entityIndex < gameState->entityCount; ++entityIndex) {
+        if (gameState->entityResidencies[entityIndex] == EntityResidency::HIGH) {
+            HighFEntity* highFEntity{ &gameState->highFEntities[entityIndex] };
+            LowFEntity* lowFEntity{ &gameState->lowFEntities[entityIndex] };
+            DormantEntity* dormantEntity{ &gameState->dormantEntities[entityIndex] };
+
+            // Real position
+            const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * highFEntity->pos.x),
+                                          screenCenter.y - (metersToPixels * highFEntity->pos.y) };
+
+            constexpr f32 playerR{ 0.5f };
+            constexpr f32 playerG{ 0.1f };
+            constexpr f32 playerB{ 0.5f };
+
+            // TODO: fix player graphics positioning
+            const Vec2 playerPosXY{
+                playerGroundPoint.x - (dormantEntity->dimensions.x * 0.5f * metersToPixels),
+                playerGroundPoint.y - (dormantEntity->dimensions.y * 0.5f * metersToPixels)
+            };
+
+            const Vec2 maxPos{ playerPosXY.x + (dormantEntity->dimensions.x * metersToPixels),
+                               playerPosXY.y + (dormantEntity->dimensions.y * metersToPixels) };
+            // Debug collision box
+            DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
+
+            const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highFEntity->facingDir] };
+            DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x, playerGroundPoint.y,
+                       static_cast<i32>(heroBitmaps->align.x),
+                       static_cast<i32>(heroBitmaps->align.y));
+            DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,
+                       static_cast<i32>(heroBitmaps->align.x),
+                       static_cast<i32>(heroBitmaps->align.y));
         }
-
-        const TilemapDiff diff{ SubtractTilemapPos(tilemap, &entity->pos, &gameState->cameraPos) };
-
-        // Real position
-        const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * diff.x),
-                                      screenCenter.y - (metersToPixels * diff.y) };
-
-        constexpr f32 playerR{ 0.5f };
-        constexpr f32 playerG{ 0.1f };
-        constexpr f32 playerB{ 0.5f };
-        // TODO: fix player graphics positioning
-
-        const Vec2 playerPosXY{
-            playerGroundPoint.x - (entity->dimensions.x * 0.5f * metersToPixels),
-            playerGroundPoint.y - (entity->dimensions.y * 0.5f * metersToPixels)
-        };
-
-        const Vec2 maxPos{ playerPosXY.x + (entity->dimensions.x * metersToPixels),
-                           playerPosXY.y + (entity->dimensions.y * metersToPixels) };
-        // Debug collision box
-        DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
-
-        const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
-        DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x, playerGroundPoint.y,
-                   static_cast<i32>(heroBitmaps->align.x), static_cast<i32>(heroBitmaps->align.y));
-        DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,
-                   static_cast<i32>(heroBitmaps->align.x), static_cast<i32>(heroBitmaps->align.y));
     }
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {
     UNUSED_PARAMS(threadContext);
 
-    GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
+    const GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     OutputSound(gameState, soundBuff);
 }

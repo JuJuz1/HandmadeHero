@@ -1,6 +1,7 @@
 # clang-format -style=llvm -dump-config > .clang-format
 
 # Modified:
+# AllowShortEnumsOnASingleLine: false
 # AlwaysBreakAfterDefinitionReturnType: All
 # ColumnLimit:     100
 # Cpp11BracedListStyle: Block
@@ -92,7 +93,7 @@ AllowShortBlocksOnASingleLine: Never
 AllowShortCaseExpressionOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortCompoundRequirementOnASingleLine: true
-AllowShortEnumsOnASingleLine: true
+AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLambdasOnASingleLine: All

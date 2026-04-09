@@ -141,6 +141,9 @@ AbsF32(f32 value) {
     return result;
 }
 
+/**
+ * e^value
+ */
 NODISCARD
 INTERNAL inline f32
 ExpF32(f32 value) {

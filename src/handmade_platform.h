@@ -3,8 +3,8 @@
 
 /*
     Platform specific code aimed for C-compatibility that is seperated from everything else
-    TODO: This seperation needs to be refined though if we want win32_handmade.cpp to only include
-    this file!
+    TODO: This seperation needs to be refined, though, if we want the platform file to only include
+   this file!
 */
 
 #ifdef __cplusplus

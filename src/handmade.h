@@ -155,17 +155,48 @@ struct HeroBitmaps {
     Vec2 align;
 };
 
-struct Entity {
-    TilemapPosition pos;
+/**
+ * High frequency
+ */
+struct HighFEntity {
+    Vec2 pos; // NOTE: This is now already relative to the camera center
     Vec2 velocity;
-
-    Vec2 dimensions;
     i32 facingDir;
-
-    bool32 exists;
 };
 
-// The game state
+/**
+ * Low frequency
+ */
+struct LowFEntity {};
+
+/**
+ * Dormant
+ */
+struct DormantEntity {
+    TilemapPosition pos;
+    Vec2 dimensions;
+};
+
+/**
+ * Determines to which array the entity belongs to stored in GameState
+ */
+enum class EntityResidency {
+    HIGH,
+    LOW,
+    DORMANT,
+    NON_EXISTENT
+};
+
+struct Entity {
+    HighFEntity* high;
+    LowFEntity* low;
+    DormantEntity* dormant;
+    EntityResidency residence;
+};
+
+/**
+ * The game state!
+ */
 struct GameState {
     MemoryArena worldArena;
     World* world;
@@ -173,8 +204,12 @@ struct GameState {
     TilemapPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    Entity entities[256];
+    EntityResidency entityResidencies[256];
+    HighFEntity highFEntities[256];
+    LowFEntity lowFEntities[256];
+    DormantEntity dormantEntities[256];
     i32 entityCount;
+
     // Cursed cast... probably reconsider your use of free will
     i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
 
