@@ -443,16 +443,16 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             } break;
 
             case SDLK_UP: {
-                ProcessInputEvent(&input->playerInputs->up, isDown);
+                ProcessInputEvent(&input->playerInputs[1].up, isDown);
             } break;
             case SDLK_DOWN: {
-                ProcessInputEvent(&input->playerInputs->down, isDown);
+                ProcessInputEvent(&input->playerInputs[1].down, isDown);
             } break;
             case SDLK_LEFT: {
-                ProcessInputEvent(&input->playerInputs->left, isDown);
+                ProcessInputEvent(&input->playerInputs[1].left, isDown);
             } break;
             case SDLK_RIGHT: {
-                ProcessInputEvent(&input->playerInputs->right, isDown);
+                ProcessInputEvent(&input->playerInputs[1].right, isDown);
             } break;
 
             case SDLK_q: {
@@ -797,6 +797,8 @@ main() {
         }
 
         hm_sdl::ProcessPendingEvents(&gameInput, &allState);
+
+        gameInput.playerInputs[1].enter = gameInput.playerInputs[0].enter;
 
         if (gIsGamePaused) {
             continue;
