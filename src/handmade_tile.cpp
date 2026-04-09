@@ -124,21 +124,14 @@ ReCanonicalizeCoordinate(const Tilemap* tileMap, u32* tileIndex, f32* relPos) {
 
 NODISCARD
 INTERNAL TilemapPosition
-RecanonicalizePosition(const Tilemap* tileMap, TilemapPosition pos) {
+MapIntoTileSpace(const Tilemap* tileMap, TilemapPosition pos, Vec2 offset) {
     TilemapPosition result{ pos };
+    result.tileOffset_ += offset;
+
     ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffset_.x);
     ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffset_.y);
 
     return result;
-}
-
-NODISCARD
-INTERNAL TilemapPosition
-OffsetTilemapPosition(const Tilemap* tileMap, TilemapPosition pos, Vec2 offset) {
-    pos.tileOffset_ += offset;
-    pos = RecanonicalizePosition(tileMap, pos);
-
-    return pos;
 }
 
 NODISCARD

@@ -731,17 +731,18 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 ProcessInputMessage(&input->playerInputs->right, isDown);
             } break;
 
+            // TODO: remove these, only for debugging the second player
             case VK_UP: {
-                ProcessInputMessage(&input->playerInputs->up, isDown);
+                ProcessInputMessage(&input->playerInputs[1].up, isDown);
             } break;
             case VK_DOWN: {
-                ProcessInputMessage(&input->playerInputs->down, isDown);
+                ProcessInputMessage(&input->playerInputs[1].down, isDown);
             } break;
             case VK_LEFT: {
-                ProcessInputMessage(&input->playerInputs->left, isDown);
+                ProcessInputMessage(&input->playerInputs[1].left, isDown);
             } break;
             case VK_RIGHT: {
-                ProcessInputMessage(&input->playerInputs->right, isDown);
+                ProcessInputMessage(&input->playerInputs[1].right, isDown);
             } break;
 
             case 'Q': {
@@ -1145,6 +1146,15 @@ WinMain(
         //for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs); ++i) {
         //    gameInput.playerInputs[i] = gameInput.playerInputs[0];
         //}
+
+        // NOTE: we store all key presses to the first playerInputs struct for now
+        // Just copy these to the second player for debugging
+        //gameInput.playerInputs[1].up = gameInput.playerInputs[0].up;
+        //gameInput.playerInputs[1].down = gameInput.playerInputs[0].down;
+        //gameInput.playerInputs[1].left = gameInput.playerInputs[0].left;
+        //gameInput.playerInputs[1].right = gameInput.playerInputs[0].right;
+        // To be able to join the game
+        gameInput.playerInputs[1].enter = gameInput.playerInputs[0].enter;
 
         // Mouse input
 

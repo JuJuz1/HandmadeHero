@@ -160,7 +160,9 @@ struct HeroBitmaps {
  */
 struct HighFEntity {
     Vec2 pos; // NOTE: This is now already relative to the camera center
+    u32 absTileZ;
     Vec2 velocity;
+
     i32 facingDir;
 };
 
@@ -174,17 +176,20 @@ struct LowFEntity {};
  */
 struct DormantEntity {
     TilemapPosition pos;
-    Vec2 dimensions;
+    f32 width, height;
+
+    bool32 collides;
+    i32 dAbsTileZ; // Stairs
 };
 
 /**
  * Determines to which array the entity belongs to stored in GameState
  */
 enum class EntityResidency {
-    HIGH,
-    LOW,
+    NON_EXISTENT = 0,
     DORMANT,
-    NON_EXISTENT
+    LOW,
+    HIGH,
 };
 
 struct Entity {
@@ -211,7 +216,7 @@ struct GameState {
     i32 entityCount;
 
     // Cursed cast... probably reconsider your use of free will
-    i32 playerIndexForController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
+    i32 playerIndexFromController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
 
     LoadedBitmapInfo background;
     HeroBitmaps heroBitmaps[4];
