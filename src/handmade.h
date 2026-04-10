@@ -8,7 +8,7 @@
     - It declares the services the game can call back into the platform (file I/O, debug, etc.)
     - It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
 
-    This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
+    This allows the game code to be compiled separately (as a DLL) and hotreloaded without
     restarting the platform layer
 
     Split into handmade_platform.h which is designed to be C-compatible
@@ -75,10 +75,6 @@ HANDMADE_DEBUG:
 #else
 #    define NODISCARD
 #endif
-
-/// Services that the platform layer provides to the game ///
-
-GLOBAL constexpr f32 PI32f{ 3.14159265359f };
 
 INTERNAL void
 CatStrings(const char* srcA, i64 srcASize, const char* srcB, i64 srcBSize, char* dest,

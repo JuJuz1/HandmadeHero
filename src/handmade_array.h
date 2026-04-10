@@ -1,6 +1,11 @@
 #ifndef HANDMADE_ARRAY_H
 #define HANDMADE_ARRAY_H
 
+/**
+ * A simple array wrapper to make life a bit easier with arrays
+ * Simply made so that we have to worry about arrays decaying to pointers a bit less!
+ * A rare case of template usage (here it is very useful!) in this codebase
+ */
 template <typename T, memory_index N>
 struct Array {
     // Don't allow even non-standard extensions

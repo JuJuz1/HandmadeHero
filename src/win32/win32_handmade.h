@@ -59,7 +59,6 @@ struct ReplayBuffer {
     bool32 isRecordedAtLeastOnce;
 };
 
-GLOBAL constexpr i32 replay_Buffer_Count{ 4 };
 GLOBAL constexpr i32 replay_Buffer_Not_Recording{ -1 };
 GLOBAL constexpr i32 replay_Buffer_Not_Playing{ -1 };
 
@@ -67,7 +66,7 @@ GLOBAL constexpr i32 replay_Buffer_Not_Playing{ -1 };
 struct AllState {
     void* gameMemory;
     u64 memorySize;
-    Array<ReplayBuffer, replay_Buffer_Count> replayBuffers;
+    Array<ReplayBuffer, 4> replayBuffers;
 
     Array<char, file_Name_Count> exePath;
     char* exeFilename;
