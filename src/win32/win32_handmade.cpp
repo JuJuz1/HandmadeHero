@@ -470,10 +470,10 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 INTERNAL void
 GetExePathAndFilename(AllState* allState) {
-    GetModuleFileNameA(0, allState->exePath, sizeof(allState->exePath));
-    allState->exeFilename = allState->exePath;
+    GetModuleFileNameA(0, allState->exePath.data_, allState->exePath.size);
+    allState->exeFilename = allState->exePath.data_;
 
-    for (char* scan{ allState->exePath }; *scan; ++scan) {
+    for (char* scan{ allState->exePath.data_ }; *scan; ++scan) {
         if (*scan == '\\') {
             allState->exeFilename = scan + 1;
         }
@@ -482,22 +482,22 @@ GetExePathAndFilename(AllState* allState) {
 
 INTERNAL void
 BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, i32 destCount) {
-    CatStrings(allState->exePath, allState->exeFilename - allState->exePath, filename,
+    CatStrings(allState->exePath.data_, allState->exeFilename - allState->exePath.data_, filename,
                StrLength(filename), dest, destCount);
 }
 
 INTERNAL void
 GetInputFilePath(const AllState* allState, bool32 inputStream, i32 slotIndex, char* dest,
                  i32 destCount) {
-    char temp[32];
-    wsprintfA(temp, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
-    BuildGamePathFilename(allState, temp, dest, destCount);
+    Array<char, 32> temp;
+    wsprintfA(temp.data_, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
+    BuildGamePathFilename(allState, temp.data_, dest, destCount);
 }
 
 NODISCARD
 INTERNAL ReplayBuffer*
 GetReplayBuffer(AllState* allState, i32 index) {
-    ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
+    ASSERT(index < allState->replayBuffers.size);
     ReplayBuffer* replayBuffer{ &allState->replayBuffers[index] };
     return replayBuffer;
 }
@@ -507,9 +507,9 @@ BeginRecordInput(AllState* allState, i32 recordingIndex) {
     // TODO: cleanup the files after exiting the game?
     allState->recordingIndex = recordingIndex;
 
-    char filePath[all_State_File_Name_Count];
-    GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
-    HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
+    Array<char, file_Name_Count> filePath;
+    GetInputFilePath(allState, true, recordingIndex, filePath.data_, filePath.size);
+    HANDLE fileHandle{ CreateFileA(filePath.data_, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
         allState->recordingHandle = fileHandle;
     } else {
@@ -551,10 +551,10 @@ BeginInputPlayback(AllState* allState, i32 playingIndex) {
 
     allState->playingIndex = playingIndex;
 
-    char filePath[all_State_File_Name_Count];
-    GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
-    HANDLE fileHandle{ CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
-                                   0) };
+    Array<char, file_Name_Count> filePath;
+    GetInputFilePath(allState, true, playingIndex, filePath.data_, filePath.size);
+    HANDLE fileHandle{ CreateFileA(filePath.data_, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING,
+                                   0, 0) };
     if (fileHandle != INVALID_HANDLE_VALUE) {
         allState->playingHandle = fileHandle;
     } else {
@@ -615,7 +615,7 @@ ClearInputMemory(Input* input) {
 
 INTERNAL void
 HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
-    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ASSERT(0 <= selectedIndex && selectedIndex < allState->replayBuffers.size);
     ClearInputMemory(input);
 
     char buf[64];
@@ -640,7 +640,7 @@ HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
 
 INTERNAL void
 HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bool32 shiftPressed) {
-    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ASSERT(0 <= selectedIndex && selectedIndex < allState->replayBuffers.size);
     ClearInputMemory(input);
 
     if (allState->recordingIndex == selectedIndex) {
@@ -937,14 +937,14 @@ WinMain(
     hm_win32::GetExePathAndFilename(&allState);
 
     // NOTE: a little string processing cause we are handmade
-    char srcDllPath[hm_win32::all_State_File_Name_Count];
-    hm_win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath, sizeof(srcDllPath));
-    char tempDllPath[hm_win32::all_State_File_Name_Count];
-    hm_win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath,
-                                    sizeof(tempDllPath));
+    Array<char, hm_win32::file_Name_Count> srcDllPath;
+    hm_win32::BuildGamePathFilename(&allState, "handmade.dll", srcDllPath.data_, srcDllPath.size);
+    Array<char, hm_win32::file_Name_Count> tempDllPath;
+    hm_win32::BuildGamePathFilename(&allState, "handmade_temp.dll", tempDllPath.data_,
+                                    tempDllPath.size);
 
-    char lockFilePath[hm_win32::all_State_File_Name_Count];
-    hm_win32::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
+    Array<char, hm_win32::file_Name_Count> lockFilePath;
+    hm_win32::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath.data_, lockFilePath.size);
 
     WNDCLASSA windowClass{};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
@@ -1074,14 +1074,14 @@ WinMain(
     allState.memorySize = totalSize;
 
     // Saving game memory in memory, piggy time!
-    for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
+    for (i32 i{}; i < allState.replayBuffers.size; ++i) {
         hm_win32::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
         // Using memory mapping
-        char filePath[hm_win32::all_State_File_Name_Count];
-        GetInputFilePath(&allState, false, i, filePath, sizeof(filePath));
-        HANDLE fileHandle{ CreateFileA(filePath, GENERIC_WRITE | GENERIC_READ, 0, 0, CREATE_ALWAYS,
-                                       0, 0) };
+        Array<char, hm_win32::file_Name_Count> filePath;
+        GetInputFilePath(&allState, false, i, filePath.data_, filePath.size);
+        HANDLE fileHandle{ CreateFileA(filePath.data_, GENERIC_WRITE | GENERIC_READ, 0, 0,
+                                       CREATE_ALWAYS, 0, 0) };
         if (fileHandle != INVALID_HANDLE_VALUE) {
             replayBuffer->fileHandle = fileHandle;
         } else {
@@ -1116,17 +1116,18 @@ WinMain(
     bool32 isSoundValid{};
 
     // The game represented as a DLL which allows hot reloading and more fun stuff!
-    hm_win32::GameCode game{ hm_win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath) };
+    hm_win32::GameCode game{ hm_win32::LoadGameCode(srcDllPath.data_, tempDllPath.data_,
+                                                    lockFilePath.data_) };
     Input gameInput{};
 
     // Main loop
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
-        const FILETIME newDllWriteTime{ hm_win32::GetLastWriteTime(srcDllPath) };
+        const FILETIME newDllWriteTime{ hm_win32::GetLastWriteTime(srcDllPath.data_) };
         if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
             hm_win32::UnloadGameCode(&game);
-            game = hm_win32::LoadGameCode(srcDllPath, tempDllPath, lockFilePath);
+            game = hm_win32::LoadGameCode(srcDllPath.data_, tempDllPath.data_, lockFilePath.data_);
         }
 
         // Keyboard input

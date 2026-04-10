@@ -3,6 +3,10 @@
 
 template <typename T, memory_index N>
 struct Array {
+    // Don't allow even non-standard extensions
+    // MSVC checks for >= 0 by default at least
+    static_assert(N > 0, "Array size must be greater than 0!");
+
     T data_[N];
     NOT_BOUND constexpr memory_index size{ N };
 

@@ -474,6 +474,7 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
         if (lowEntity->highEntityIndex) {
             continue;
         }
+
         if (lowEntity->pos.absTileZ == gameState->cameraPos.absTileZ &&
             lowEntity->pos.absTileX >= minTileX && lowEntity->pos.absTileX <= maxTileX &&
             lowEntity->pos.absTileY >= minTileY && lowEntity->pos.absTileY <= maxTileY) {

@@ -51,7 +51,7 @@ HANDMADE_DEBUG:
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
-#define NOT_BOUND static // The variable is not bound to the struct, used by Array
+#define NOT_BOUND static // The member variable is not bound to the struct, used by Array
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -219,11 +219,10 @@ struct GameState {
     i32 lowEntityCount;
     i32 highEntityCount;
 
-    // Cursed cast... probably reconsider your use of free will
-    i32 playerIndexFromController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
+    Array<i32, ARRAY_COUNT(Input::playerInputs)> playerIndexFromController;
 
     LoadedBitmapInfo background;
-    HeroBitmaps heroBitmaps[4];
+    Array<HeroBitmaps, 4> heroBitmaps;
 
     bool32 startWithAPlayer;
 };
