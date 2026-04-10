@@ -29,26 +29,26 @@ struct GameCode {
     bool32 isValid;
 };
 
-GLOBAL i32 constexpr all_State_File_Name_Count{ 4096 };
+// IMPORTANT: Take care of stack size limit
+GLOBAL constexpr i32 file_Name_Count{ 1024 };
 
 struct ReplayBuffer {
     i32 fileHandle;
     void* memoryBlock;
-    char replayFilePath[all_State_File_Name_Count];
+    Array<char, file_Name_Count> replayFilePath;
 
     bool32 isRecordedAtLeastOnce;
 };
 
-GLOBAL i32 constexpr replay_Buffer_Count{ 4 };
-GLOBAL i32 constexpr replay_Buffer_Not_Recording{ -1 };
-GLOBAL i32 constexpr replay_Buffer_Not_Playing{ -1 };
+GLOBAL constexpr i32 replay_Buffer_Not_Recording{ -1 };
+GLOBAL constexpr i32 replay_Buffer_Not_Playing{ -1 };
 
 struct AllState {
     void* gameMemory;
     u64 memorySize;
-    ReplayBuffer replayBuffers[replay_Buffer_Count];
+    Array<ReplayBuffer, 4> replayBuffers;
 
-    char exePath[all_State_File_Name_Count];
+    Array<char, file_Name_Count> exePath;
     char* exeFilename;
 
     i32 selectedIndex;

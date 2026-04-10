@@ -474,7 +474,7 @@ GetExePathAndFilename(AllState* allState) {
     allState->exeFilename = allState->exePath.data_;
 
     for (char* scan{ allState->exePath.data_ }; *scan; ++scan) {
-        if (*scan == '\\') {
+        if (*scan == '\\' || *scan == '/') {
             allState->exeFilename = scan + 1;
         }
     }
