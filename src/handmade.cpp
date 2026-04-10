@@ -273,9 +273,11 @@ GetLowEntity(GameState* gameState, i32 lowIndex) {
 
 /**
  * Makes the entity low frequency
+ * Decrements gameState->highEntityCount
  */
 INTERNAL void
 EntityToLowFreq(GameState* gameState, i32 entityIndex) {
+    ASSERT(entityIndex);
     LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
     const i32 highIndex{ lowEntity->highEntityIndex };
     ASSERT(highIndex);                      // TODO: Null entity??
@@ -308,6 +310,7 @@ EntityToHighFreq(GameState* gameState, i32 lowIndex) {
 
     LowEntity* lowEntity{ GetLowEntity(gameState, lowIndex) };
 
+    // Already is high freq
     if (lowEntity->highEntityIndex) {
         highEntity = &gameState->highEntities_[lowEntity->highEntityIndex];
     } else {
@@ -399,8 +402,6 @@ AddPlayer(GameState* gameState) {
 NODISCARD
 INTERNAL i32
 AddWall(GameState* gameState, u32 absTileX, u32 absTileY, u32 absTileZ) {
-    PRINT("New wall!\n");
-
     const i32 entityIndex{ AddLowEntity(gameState, EntityType::WALL) };
     LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
@@ -418,13 +419,21 @@ AddWall(GameState* gameState, u32 absTileX, u32 absTileY, u32 absTileZ) {
 INTERNAL void
 OffsetAndCheckFrequencyByArea(GameState* gameState, Rect cameraBounds,
                               Vec2 entityOffsetFromCamera) {
-    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+    i32 movedCount{};
+    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount;) {
         HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
         highEntity->pos += entityOffsetFromCamera;
 
         if (!IsInsideRectangle(cameraBounds, highEntity->pos)) {
             EntityToLowFreq(gameState, highEntity->lowEntityIndex);
+            ++movedCount;
+        } else {
+            ++highIndex;
         }
+    }
+
+    if (movedCount > 0) {
+        PRINT_INT("Entities moved to low: ", movedCount);
     }
 }
 
@@ -442,7 +451,7 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
                     gameState->world->tilemap->tileSideInMeters) };
 
     // Add the offset to every high frequency entity when the camera moves
-    // Also update the entity residence state
+    // TODO: doesn't work with second player, walls work correctly
     OffsetAndCheckFrequencyByArea(gameState, cameraBounds, entityOffsetFromCamera);
 
     u32 minTileX{};
@@ -463,6 +472,9 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
     // Move close entities into high set
     for (i32 entityIndex{ 1 }; entityIndex < gameState->lowEntityCount; ++entityIndex) {
         const LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
+        if (lowEntity->highEntityIndex) {
+            continue;
+        }
         if (lowEntity->pos.absTileZ == gameState->cameraPos.absTileZ &&
             lowEntity->pos.absTileX >= minTileX && lowEntity->pos.absTileX <= maxTileX &&
             lowEntity->pos.absTileY >= minTileY && lowEntity->pos.absTileY <= maxTileY) {
@@ -508,21 +520,21 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_forward.bmp");
     heroBitmaps->align = Vec2{ 48, 100 };
-    heroBitmaps++;
+    ++heroBitmaps;
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_left.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_left.bmp");
     heroBitmaps->align = Vec2{ 46, 104 };
-    heroBitmaps++;
+    ++heroBitmaps;
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_backward.bmp");
     heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
                                       "test/player_torso_backward.bmp");
     heroBitmaps->align = Vec2{ 42, 100 };
-    heroBitmaps++;
+    ++heroBitmaps;
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_right.bmp");
@@ -572,6 +584,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     u32 screenY{}, screenX{};
     constexpr u32 tilesPerHeight{ 9 };
     constexpr u32 tilesPerWidth{ 17 };
+
+    i32 wallsAdded{};
 
     // Generating tile values
     for (u32 screen{}; screen < screenCount; ++screen) {
@@ -635,6 +649,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
                 if (tileValue == blocked_Tile_Value) {
                     const i32 entityIndex{ AddWall(gameState, absTileX, absTileY, absTileZ) };
+                    ++wallsAdded;
                 }
             }
         }
@@ -666,6 +681,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         } else {
             ++screenY;
         }
+    }
+
+    if (wallsAdded > 0) {
+        PRINT_INT("Walls added: ", wallsAdded);
     }
 
     TilemapPosition cameraPos{};
@@ -1084,7 +1103,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
         const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+        ASSERT(highEntity->lowEntityIndex); // Must have index to low freq if in the high freq
+
         const LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
+        ASSERT(lowEntity->highEntityIndex); // Also must be in the high freq
 
         // Real position
         const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * highEntity->pos.x),
