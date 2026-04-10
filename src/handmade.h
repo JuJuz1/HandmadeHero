@@ -51,6 +51,7 @@ HANDMADE_DEBUG:
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
+#define NOT_BOUND static // The variable is not bound to the struct, used by Array
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -114,6 +115,7 @@ StrLength(const char* str) {
 
 /// Game specific code ///
 
+#include "handmade_array.h"
 #include "handmade_intrinsics.h"
 #include "handmade_math.h"
 #include "handmade_tile.h"
@@ -212,8 +214,8 @@ struct GameState {
     TilemapPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    LowEntity lowEntities[4096];   // Holds all entities
-    HighEntity highEntities_[256]; // Holds the entities marked as high frequency
+    Array<LowEntity, 4096> lowEntities;   // Holds all entities
+    Array<HighEntity, 256> highEntities_; // Holds the entities marked as high frequency
     i32 lowEntityCount;
     i32 highEntityCount;
 
