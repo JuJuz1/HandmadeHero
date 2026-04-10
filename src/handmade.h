@@ -35,8 +35,13 @@ HANDMADE_DEBUG:
 // arguments of values?)
 #if HANDMADE_DEBUG
 // clang-format off
-    #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(nullptr)) = 0; } // clang-tidy NOLINT
+// clang-tidy NOLINTBEGIN
+    #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(nullptr)) = 0; }
+    // This is to detect invalid paths that we should never enter, BUT shouldn't cause a crash
+    // TODO: probably log also
+    #define INVALID_CODE_PATH ASSERT(!"INVALID CODE PATH")
 // clang-format on
+// clang-tidy NOLINTEND
 #else
 #    define ASSERT(expr)
 #endif
@@ -155,21 +160,7 @@ struct HeroBitmaps {
     Vec2 align;
 };
 
-/**
- * High frequency
- */
-struct HighFEntity {
-    Vec2 pos; // NOTE: This is now already relative to the camera center
-    u32 absTileZ;
-    Vec2 velocity;
-
-    i32 facingDir;
-};
-
-/**
- * Low frequency
- */
-struct LowFEntity {};
+/// Entities ///
 
 enum class EntityType {
     NON_EXISTENT = 0,
@@ -178,9 +169,9 @@ enum class EntityType {
 };
 
 /**
- * Dormant
+ * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
  */
-struct DormantEntity {
+struct LowEntity {
     EntityType type;
 
     TilemapPosition pos;
@@ -188,23 +179,27 @@ struct DormantEntity {
 
     bool32 collides;
     i32 dAbsTileZ; // Stairs
+
+    i32 highEntityIndex;
 };
 
 /**
- * Determines to which array the entity belongs to stored in GameState
+ * High frequency
  */
-enum class EntityResidency {
-    NON_EXISTENT = 0,
-    DORMANT,
-    LOW,
-    HIGH,
+struct HighEntity {
+    Vec2 pos; // NOTE: This is now already relative to the camera center
+    u32 absTileZ;
+    Vec2 velocity;
+
+    i32 facingDir;
+
+    i32 lowEntityIndex;
 };
 
 struct Entity {
-    HighFEntity* high;
-    LowFEntity* low;
-    DormantEntity* dormant;
-    EntityResidency residence;
+    LowEntity* low;
+    HighEntity* high;
+    i32 lowIndex;
 };
 
 /**
@@ -217,11 +212,10 @@ struct GameState {
     TilemapPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    EntityResidency entityResidencies[512]; // Holds the residencies of the entities
-    HighFEntity highFEntities[512];         // Holds the high frequency entities
-    LowFEntity lowFEntities[512];           // Holds the low frequency entities
-    DormantEntity dormantEntities[512];     // Holds the dormant  entities
-    i32 entityCount;
+    LowEntity lowEntities[4096];   // Holds all entities
+    HighEntity highEntities_[256]; // Holds the entities marked as high frequency
+    i32 lowEntityCount;
+    i32 highEntityCount;
 
     // Cursed cast... probably reconsider your use of free will
     i32 playerIndexFromController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];

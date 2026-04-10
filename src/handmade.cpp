@@ -10,7 +10,12 @@ GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
 // TODO: think of a better way!
-#define DEBUG_PLATFORM_PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
+#define PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
+#define PRINT_INT(message, value) (*gMemory->exports.DEBUGPrintInt)(gThreadContext, message, value)
+#define PRINT_UINT(message, value)                                                                 \
+    (*gMemory->exports.DEBUGPrintUInt)(gThreadContext, message, value)
+#define PRINT_FLOAT(message, value)                                                                \
+    (*gMemory->exports.DEBUGPrintFloat)(gThreadContext, message, value)
 
 namespace hm_input {
 
@@ -174,7 +179,7 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
             }
         }
     } else {
-        DEBUG_PLATFORM_PRINT("Couldn't load bmp!\n");
+        PRINT("Couldn't load bmp!\n");
     }
 
     return result;
@@ -249,84 +254,139 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
     }
 }
 
-INTERNAL void
-ChangeEntityResidence(GameState* gameState, i32 entityIndex, EntityResidency residence) {
-    if (residence == EntityResidency::HIGH) {
-        if (gameState->entityResidencies[entityIndex] != EntityResidency::HIGH) {
-            HighFEntity* highFEntity{ &gameState->highFEntities[entityIndex] };
-            DormantEntity* dormantEntity{ &gameState->dormantEntities[entityIndex] };
+/**
+ * If entityIndex is out of bounds, returns a 0 pointer
+ */
+NODISCARD
+INTERNAL LowEntity*
+GetLowEntity(GameState* gameState, i32 lowIndex) {
+    ASSERT(lowIndex > 0 && lowIndex < gameState->lowEntityCount);
 
-            // Map the entity to camera space
-            const TilemapDiff diff{ SubtractTilemapPos(
-                gameState->world->tilemap, &dormantEntity->pos, &gameState->cameraPos) };
+    LowEntity* lowEntity{};
 
-            highFEntity->pos = Vec2{ diff.x, diff.y };
-            highFEntity->velocity = Vec2{};
-            highFEntity->absTileZ = dormantEntity->pos.absTileZ;
-            highFEntity->facingDir = 0;
-        }
+    if (lowIndex > 0 && lowIndex < gameState->lowEntityCount) {
+        lowEntity = &gameState->lowEntities[lowIndex];
     }
 
-    gameState->entityResidencies[entityIndex] = residence;
+    return lowEntity;
 }
 
 /**
- * If entityIndex is out of bounds, returns a zero-initalized entity
+ * Makes the entity low frequency
+ */
+INTERNAL void
+EntityToLowFreq(GameState* gameState, i32 entityIndex) {
+    LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
+    const i32 highIndex{ lowEntity->highEntityIndex };
+    ASSERT(highIndex);                      // TODO: Null entity??
+    ASSERT(gameState->highEntityCount > 1); // Null entity...?
+
+    if (highIndex) {
+        const i32 lastHighIndex{ gameState->highEntityCount - 1 };
+        // If not last one -> fill the gap
+        if (highIndex != lastHighIndex) {
+            const HighEntity* lastHighEntity{ &gameState->highEntities_[lastHighIndex] };
+            HighEntity* removedEntity{ &gameState->highEntities_[highIndex] };
+
+            *removedEntity = *lastHighEntity;
+            gameState->lowEntities[lastHighEntity->lowEntityIndex].highEntityIndex = highIndex;
+        }
+    }
+
+    lowEntity->highEntityIndex = 0;
+    --gameState->highEntityCount;
+}
+
+/**
+ * Makes the entity high frequency by mapping it to camera space
+ * Doesn't do anything if the entity already is in the high frequency array
+ */
+NODISCARD
+INTERNAL HighEntity*
+EntityToHighFreq(GameState* gameState, i32 lowIndex) {
+    HighEntity* highEntity{};
+
+    LowEntity* lowEntity{ GetLowEntity(gameState, lowIndex) };
+
+    if (lowEntity->highEntityIndex) {
+        highEntity = &gameState->highEntities_[lowEntity->highEntityIndex];
+    } else {
+        if (gameState->highEntityCount < ARRAY_COUNT(gameState->highEntities_)) {
+            const i32 highIndex{ gameState->highEntityCount++ };
+            lowEntity->highEntityIndex = highIndex;
+            highEntity = &gameState->highEntities_[highIndex];
+
+            // Map the entity to camera space
+            const TilemapDiff diff{ SubtractTilemapPos(gameState->world->tilemap, &lowEntity->pos,
+                                                       &gameState->cameraPos) };
+            highEntity->pos = Vec2{ diff.x, diff.y };
+            highEntity->velocity = Vec2{};
+            highEntity->absTileZ = lowEntity->pos.absTileZ;
+            highEntity->facingDir = 0;
+
+            highEntity->lowEntityIndex = lowIndex;
+        } else {
+            INVALID_CODE_PATH;
+        }
+    }
+
+    return highEntity;
+}
+
+/**
+ * Returns an entity struct containing pointers to high and low entities
+ * If entityIndex is out of bounds or 0, returns a zero-initialized entity
  */
 NODISCARD
 INTERNAL Entity
-GetEntity(GameState* gameState, i32 entityIndex, EntityResidency residence) {
-    ASSERT(entityIndex >= 0 && entityIndex < gameState->entityCount);
+GetHighEntity(GameState* gameState, i32 lowIndex) {
+    //ASSERT(lowIndex > 0 && lowIndex < gameState->highEntityCount);
 
     Entity entity{};
 
-    if (entityIndex >= 0 && entityIndex < gameState->entityCount) {
-        // TODO: use residence as a parameter or no? and update it as we get the entity?
-        if (gameState->entityResidencies[entityIndex] < residence) {
-            ChangeEntityResidence(gameState, entityIndex, residence);
-            ASSERT(gameState->entityResidencies[entityIndex] >= residence);
-        }
-
-        entity.residence = gameState->entityResidencies[entityIndex];
-        entity.high = &gameState->highFEntities[entityIndex];
-        entity.low = &gameState->lowFEntities[entityIndex];
-        entity.dormant = &gameState->dormantEntities[entityIndex];
+    if (lowIndex > 0 && lowIndex < gameState->lowEntityCount) {
+        entity.low = GetLowEntity(gameState, lowIndex);
+        entity.high = EntityToHighFreq(gameState, lowIndex);
+        entity.lowIndex = lowIndex;
     }
 
     return entity;
 }
 
+/**
+ * Adds an entity to the low entity array
+ */
 NODISCARD
 INTERNAL i32
-AddEntity(GameState* gameState, EntityType type) {
-    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->entityResidencies));
-    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->highFEntities));
-    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->lowFEntities));
-    ASSERT(gameState->entityCount < ARRAY_COUNT(gameState->dormantEntities));
+AddLowEntity(GameState* gameState, EntityType type) {
+    //ASSERT(gameState->highEntityCount < ARRAY_COUNT(gameState->highEntities_));
+    ASSERT(gameState->lowEntityCount < ARRAY_COUNT(gameState->lowEntities));
 
-    const i32 entityIndex{ gameState->entityCount++ };
+    const i32 entityIndex{ gameState->lowEntityCount++ };
 
-    //gameState->entityResidencies[entityIndex] = EntityResidency::DORMANT;
-    gameState->dormantEntities[entityIndex].type = type;
+    // Already zero initialized
+    gameState->lowEntities[entityIndex].type = type;
 
     return entityIndex;
 }
 
+NODISCARD
 INTERNAL i32
-AddPlayer(GameState* gameState, i32 controllerIndex) {
-    DEBUG_PLATFORM_PRINT("New player!\n");
+AddPlayer(GameState* gameState) {
+    PRINT("New player!\n");
 
-    const i32 entityIndex{ AddEntity(gameState, EntityType::HERO) };
-    Entity entity{ GetEntity(gameState, entityIndex, EntityResidency::DORMANT) };
+    const i32 entityIndex{ AddLowEntity(gameState, EntityType::HERO) };
+    LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
-    entity.dormant->pos.absTileX = 3;
-    entity.dormant->pos.absTileY = 3;
-    entity.dormant->height = 0.5f; // 1.4f;
-    entity.dormant->width = 0.75f; // entity->dimensions.y * 0.75f;
+    lowEntity->pos.absTileX = 3;
+    lowEntity->pos.absTileY = 3;
+    lowEntity->height = 0.5f; // 1.4f;
+    lowEntity->width = 0.75f; // entity->dimensions.y * 0.75f;
 
-    entity.dormant->collides = true;
+    lowEntity->collides = true;
 
-    ChangeEntityResidence(gameState, entityIndex, EntityResidency::HIGH);
+    // Not needed for now
+    //EntityToHighFreq(gameState, entityIndex);
 
     // Camera to follow first player
     if (!gameState->cameraFollowingEntityIndex) {
@@ -336,22 +396,36 @@ AddPlayer(GameState* gameState, i32 controllerIndex) {
     return entityIndex;
 }
 
+NODISCARD
 INTERNAL i32
 AddWall(GameState* gameState, u32 absTileX, u32 absTileY, u32 absTileZ) {
-    DEBUG_PLATFORM_PRINT("New wall!\n");
+    PRINT("New wall!\n");
 
-    const i32 entityIndex{ AddEntity(gameState, EntityType::WALL) };
-    Entity entity{ GetEntity(gameState, entityIndex, EntityResidency::DORMANT) };
+    const i32 entityIndex{ AddLowEntity(gameState, EntityType::WALL) };
+    LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
-    entity.dormant->pos.absTileX = absTileX;
-    entity.dormant->pos.absTileY = absTileY;
-    entity.dormant->pos.absTileZ = absTileZ;
-    entity.dormant->height = gameState->world->tilemap->tileSideInMeters;
-    entity.dormant->width = gameState->world->tilemap->tileSideInMeters;
+    lowEntity->pos.absTileX = absTileX;
+    lowEntity->pos.absTileY = absTileY;
+    lowEntity->pos.absTileZ = absTileZ;
+    lowEntity->height = gameState->world->tilemap->tileSideInMeters;
+    lowEntity->width = gameState->world->tilemap->tileSideInMeters;
 
-    entity.dormant->collides = true;
+    lowEntity->collides = true;
 
     return entityIndex;
+}
+
+INTERNAL void
+OffsetAndCheckFrequencyByArea(GameState* gameState, Rect cameraBounds,
+                              Vec2 entityOffsetFromCamera) {
+    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+        HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+        highEntity->pos += entityOffsetFromCamera;
+
+        if (!IsInsideRectangle(cameraBounds, highEntity->pos)) {
+            EntityToLowFreq(gameState, highEntity->lowEntityIndex);
+        }
+    }
 }
 
 INTERNAL void
@@ -369,16 +443,7 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
 
     // Add the offset to every high frequency entity when the camera moves
     // Also update the entity residence state
-    for (i32 entityIndex{ 1 }; entityIndex < gameState->entityCount; ++entityIndex) {
-        if (gameState->entityResidencies[entityIndex] == EntityResidency::HIGH) {
-            HighFEntity* highFEntity{ &gameState->highFEntities[entityIndex] };
-            highFEntity->pos += entityOffsetFromCamera;
-
-            if (!IsInsideRectangle(cameraBounds, highFEntity->pos)) {
-                ChangeEntityResidence(gameState, entityIndex, EntityResidency::DORMANT);
-            }
-        }
-    }
+    OffsetAndCheckFrequencyByArea(gameState, cameraBounds, entityOffsetFromCamera);
 
     u32 minTileX{};
     if (newCameraPos->absTileX >= (tileSpanX / 2)) {
@@ -395,24 +460,20 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
 
     i32 movedCount{};
 
-    // TODO: don't think this works correctly yet!
     // Move close entities into high set
-    for (i32 entityIndex{ 1 }; entityIndex < gameState->entityCount; ++entityIndex) {
-        if (gameState->entityResidencies[entityIndex] == EntityResidency::DORMANT) {
-            DormantEntity* dormantEntity{ &gameState->dormantEntities[entityIndex] };
-            if (dormantEntity->pos.absTileZ == gameState->cameraPos.absTileZ &&
-                dormantEntity->pos.absTileX >= minTileX &&
-                dormantEntity->pos.absTileX <= maxTileX &&
-                dormantEntity->pos.absTileY >= minTileY &&
-                dormantEntity->pos.absTileY <= maxTileY) {
-                ChangeEntityResidence(gameState, entityIndex, EntityResidency::HIGH);
-                ++movedCount;
-            }
+    for (i32 entityIndex{ 1 }; entityIndex < gameState->lowEntityCount; ++entityIndex) {
+        const LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
+        if (lowEntity->pos.absTileZ == gameState->cameraPos.absTileZ &&
+            lowEntity->pos.absTileX >= minTileX && lowEntity->pos.absTileX <= maxTileX &&
+            lowEntity->pos.absTileY >= minTileY && lowEntity->pos.absTileY <= maxTileY) {
+            // Unused return
+            EntityToHighFreq(gameState, entityIndex);
+            ++movedCount;
         }
     }
 
     if (movedCount > 0) {
-        gMemory->exports.DEBUGPrintInt(gThreadContext, "Entities moved to high: ", movedCount);
+        PRINT_INT("Entities moved to high: ", movedCount);
     }
 }
 
@@ -424,7 +485,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // NOTE: reserve slot 0 for null entity
     // TODO: consider removing if there is no use case as this has caused a bit of problems with
     // all sorts of stuff
-    const i32 nullEntityIndex{ AddEntity(gameState, EntityType::NON_EXISTENT) };
+    const i32 nullEntityIndex{ AddLowEntity(gameState, EntityType::NON_EXISTENT) };
+    gameState->highEntityCount = 1;
 
     // Changed to false after initializing one player
     gameState->startWithAPlayer = true;
@@ -506,7 +568,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     u32 absTileZ{};
 
     // How many screens widths of chunks to generate
-    constexpr u32 screenCount{ 10 };
+    constexpr u32 screenCount{ 2 };
     u32 screenY{}, screenX{};
     constexpr u32 tilesPerHeight{ 9 };
     constexpr u32 tilesPerWidth{ 17 };
@@ -641,7 +703,7 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
 }
 
 INTERNAL void
-MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
+MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
            const InputButtons* inputButtons, Vec2 acceleration, f32 delta) {
     constexpr f32 playerSpeed{ 30 };
     constexpr f32 playerSpeedModifier{ 4 };
@@ -664,74 +726,43 @@ MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
     }
 
     // TODO: ordinary differential equations
-    acceleration += -4.0f * entity->high->velocity;
+    acceleration += -4.0f * entity.high->velocity;
     // v' = at + v
-    entity->high->velocity += acceleration * delta;
+    entity.high->velocity += acceleration * delta;
 
     // p' = 0.5 * at^2 + vt + p
-    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->high->velocity * delta) };
-
-    //const Vec2 oldPlayerPos{ entity->high->pos };
-    //const Vec2 newPlayerPos{ oldPlayerPos + playerDelta };
-
-#if 0
-    // Search in t
-
-    // Take the "starting" tile and the "ending" tile
-    // Taking MIN and MAX takes into account
-    // all possible directions (left to right, right to left, ...)
-    u32 minTileX{ MIN(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
-    u32 minTileY{ MIN(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
-    u32 maxTileX{ MAX(oldPlayerPos.absTileX, newPlayerPos.absTileX) };
-    u32 maxTileY{ MAX(oldPlayerPos.absTileY, newPlayerPos.absTileY) };
-
-    const i32 entityTileWidth{ CeilF32ToI32(entity->dimensions.x / tilemap->tileSideInMeters) };
-    const i32 entityTileHeight{ CeilF32ToI32(entity->dimensions.y / tilemap->tileSideInMeters) };
-
-    // Extend bounds for Minkowkski collision detection
-    minTileX -= entityTileWidth;
-    minTileY -= entityTileHeight;
-    maxTileX += entityTileWidth;
-    maxTileY += entityTileHeight;
-
-    // Assert that we are never wrapping
-    // We should never be moving more than 1 or 2 tiles per frame? so 32 is enough when taking
-    // into account the Minkowski sum
-    ASSERT((maxTileX - minTileX) < 32);
-    ASSERT((maxTileY - minTileY) < 32);
-    ASSERT(maxTileX < (UINT32_MAX - 100));
-    ASSERT(maxTileY < (UINT32_MAX - 100));
-
-    const u32 absTileZ{ entity->pos.absTileZ };
-#endif
+    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity.high->velocity * delta) };
 
     // Collision checks
 
-    //bool32 hitWall{};       // Used to modify velocity if we hit a wall during the frame
+    //bool32 hitWall{}; // Used to modify velocity if we hit a wall during the frame
 
     constexpr i32 iterationCount{ 4 };
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
         f32 tMin{ 1.0f };
         Vec2 wallNormal{};
         TestWallResult testWallResult{};
-        i32 hitEntityIndex{};
+        i32 hitHighEntityIndex{};
 
-        const Vec2 desiredPos{ entity->high->pos + playerDelta };
+        const Vec2 desiredPos{ entity.high->pos + playerDelta };
 
-        for (i32 entityIndex{ 1 }; entityIndex < gameState->entityCount; ++entityIndex) {
-            Entity testEntity{ GetEntity(gameState, entityIndex, EntityResidency::HIGH) };
+        for (i32 highEntityIndex{ 1 }; highEntityIndex < gameState->highEntityCount;
+             ++highEntityIndex) {
+            // FIXME wrong indexing, FIXED I THINK
+            const HighEntity* highEntity{ &gameState->highEntities_[highEntityIndex] };
+            const Entity testEntity{ GetHighEntity(gameState, highEntity->lowEntityIndex) };
             // Check if collides and don't compare to self!
-            if (!entity->dormant->collides || !testEntity.dormant->collides ||
-                testEntity.high == entity->high) {
+            if (!entity.low->collides || !testEntity.low->collides ||
+                testEntity.high == entity.high) {
                 continue;
             }
 
-            const f32 diameterWidth{ testEntity.dormant->width + entity->dormant->width };
-            const f32 diameterHeight{ testEntity.dormant->height + entity->dormant->height };
+            const f32 diameterWidth{ testEntity.low->width + entity.low->width };
+            const f32 diameterHeight{ testEntity.low->height + entity.low->height };
             const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
             const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
 
-            const Vec2 relPos{ entity->high->pos - testEntity.high->pos };
+            const Vec2 relPos{ entity.high->pos - testEntity.high->pos };
 
             // Test all four walls
 
@@ -742,7 +773,7 @@ MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ -1, 0 };
                 //hitWall = true;
-                hitEntityIndex = entityIndex;
+                hitHighEntityIndex = highEntityIndex;
             }
 
             testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
@@ -751,7 +782,7 @@ MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ 1, 0 };
                 //hitWall = true;
-                hitEntityIndex = entityIndex;
+                hitHighEntityIndex = highEntityIndex;
             }
 
             // y
@@ -761,7 +792,7 @@ MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ 0, -1 };
                 //hitwall = true;
-                hitEntityIndex = entityIndex;
+                hitHighEntityIndex = highEntityIndex;
             }
 
             testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
@@ -770,24 +801,25 @@ MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ 0, 1 };
                 //hitwall = true;
-                hitEntityIndex = entityIndex;
+                hitHighEntityIndex = highEntityIndex;
             }
         }
 
-        //gMemory->exports.DEBUGPrintFloat(gThreadContext, "tMin", tMin);
-        entity->high->pos += playerDelta * tMin;
-        if (hitEntityIndex) {
-            entity->high->velocity -= 1.0f * Dot(entity->high->velocity, wallNormal) * wallNormal;
-            playerDelta = desiredPos - entity->high->pos;
+        //PRINT_FLOAT("tMin: ", tMin);
+
+        entity.high->pos += playerDelta * tMin;
+        if (hitHighEntityIndex) {
+            entity.high->velocity -= 1.0f * Dot(entity.high->velocity, wallNormal) * wallNormal;
+            playerDelta = desiredPos - entity.high->pos;
             playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
 
-            const Entity hitEntity{ GetEntity(gameState, hitEntityIndex,
-                                              EntityResidency::DORMANT) };
+            const Entity hitEntity{ GetHighEntity(gameState, hitHighEntityIndex) };
+            const LowEntity* hitLow{ GetLowEntity(gameState, hitEntity.lowIndex) };
 
             // Door check
             const Tilemap* tilemap{ gameState->world->tilemap };
-            entity->dormant->pos.absTileZ = TilemapPositionModifyZChecked(
-                tilemap, &entity->dormant->pos, hitEntity.dormant->dAbsTileZ);
+            entity.low->pos.absTileZ =
+                TilemapPositionModifyZChecked(tilemap, &entity.low->pos, hitLow->dAbsTileZ);
         } else {
             break;
         }
@@ -801,25 +833,25 @@ MovePlayer(GameState* gameState, Entity* entity, i32 controllerIndex,
     //}
 
     // Facing direction checks
-    const Vec2 velocity{ entity->high->velocity };
+    const Vec2 velocity{ entity.high->velocity };
     if (velocity.x == 0.0f && velocity.y == 0.0f) {
         // Keep previous
     } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
         if (velocity.x > 0) {
-            entity->high->facingDir = 3;
+            entity.high->facingDir = 3;
         } else {
-            entity->high->facingDir = 1;
+            entity.high->facingDir = 1;
         }
     } else {
         if (velocity.y > 0) {
-            entity->high->facingDir = 2;
+            entity.high->facingDir = 2;
         } else {
-            entity->high->facingDir = 0;
+            entity.high->facingDir = 0;
         }
     }
 
-    entity->dormant->pos =
-        MapIntoTileSpace(gameState->world->tilemap, gameState->cameraPos, entity->high->pos);
+    entity.low->pos =
+        MapIntoTileSpace(gameState->world->tilemap, gameState->cameraPos, entity.high->pos);
 }
 
 // NOTE: use extern "C" to avoid name mangling
@@ -847,55 +879,54 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
         const InputButtons* inputButtons{ &input->playerInputs[controllerIndex] };
-        Entity controllingEntity{ GetEntity(gameState,
-                                            gameState->playerIndexFromController[controllerIndex],
-                                            EntityResidency::HIGH) };
-
-        // Need to check the type as we have the null entity...
-        if (controllingEntity.residence != EntityResidency::NON_EXISTENT &&
-            controllingEntity.dormant->type != EntityType::NON_EXISTENT) {
-            Vec2 acceleration{};
-
-            if (hm_input::ActionPressed(&inputButtons->up)) {
-                acceleration.y = 1.0f;
-            }
-            if (hm_input::ActionPressed(&inputButtons->down)) {
-                acceleration.y = -1.0f;
-            }
-            if (hm_input::ActionPressed(&inputButtons->left)) {
-                acceleration.x = -1.0f;
-            }
-            if (hm_input::ActionPressed(&inputButtons->right)) {
-                acceleration.x = 1.0f;
-            }
-
-            // The separation of handling input and moving the player is not yet clear
-            MovePlayer(gameState, &controllingEntity, controllerIndex, inputButtons, acceleration,
-                       delta);
-
-            // Other actions:
-
-            // Only the first player can do certain operations
-            // Switching z index
-            if (controllerIndex == 0) {
-                if (hm_input::ActionJustPressed(&inputButtons->Z)) {
-                    if (hm_input::ActionPressed(&inputButtons->shift)) {
-                        controllingEntity.dormant->pos.absTileZ = TilemapPositionModifyZChecked(
-                            tilemap, &controllingEntity.dormant->pos, -1);
-                    } else {
-                        controllingEntity.dormant->pos.absTileZ = TilemapPositionModifyZChecked(
-                            tilemap, &controllingEntity.dormant->pos, 1);
-                    }
-                }
-            }
-        } else {
+        const i32 lowIndex{ gameState->playerIndexFromController[controllerIndex] };
+        if (!lowIndex) {
             if (hm_input::ActionJustPressed(&inputButtons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
                     gameState->startWithAPlayer = false;
                 }
 
-                const i32 entityIndex{ AddPlayer(gameState, controllerIndex) };
+                const i32 entityIndex{ AddPlayer(gameState) };
                 gameState->playerIndexFromController[controllerIndex] = entityIndex;
+            }
+        } else {
+            const Entity controllingEntity{ GetHighEntity(gameState, lowIndex) };
+            // Need to check the type as we have the null entity...
+            if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
+                Vec2 acceleration{};
+
+                if (hm_input::ActionPressed(&inputButtons->up)) {
+                    acceleration.y = 1.0f;
+                }
+                if (hm_input::ActionPressed(&inputButtons->down)) {
+                    acceleration.y = -1.0f;
+                }
+                if (hm_input::ActionPressed(&inputButtons->left)) {
+                    acceleration.x = -1.0f;
+                }
+                if (hm_input::ActionPressed(&inputButtons->right)) {
+                    acceleration.x = 1.0f;
+                }
+
+                // The separation of handling input and moving the player is not yet clear
+                MovePlayer(gameState, controllingEntity, controllerIndex, inputButtons,
+                           acceleration, delta);
+
+                // Other actions:
+
+                // Only the first player can do certain operations
+                // Switching z index
+                if (controllerIndex == 0) {
+                    if (hm_input::ActionJustPressed(&inputButtons->Z)) {
+                        if (hm_input::ActionPressed(&inputButtons->shift)) {
+                            controllingEntity.low->pos.absTileZ = TilemapPositionModifyZChecked(
+                                tilemap, &controllingEntity.low->pos, -1);
+                        } else {
+                            controllingEntity.low->pos.absTileZ = TilemapPositionModifyZChecked(
+                                tilemap, &controllingEntity.low->pos, 1);
+                        }
+                    }
+                }
             }
         }
     }
@@ -905,9 +936,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tilemap->tileSideInMeters };
 
     // Camera position
-    const Entity cameraFollowingEntity{ GetEntity(gameState, gameState->cameraFollowingEntityIndex,
-                                                  EntityResidency::HIGH) };
-    if (cameraFollowingEntity.residence != EntityResidency::NON_EXISTENT) {
+    const Entity cameraFollowingEntity{ GetHighEntity(gameState,
+                                                      gameState->cameraFollowingEntityIndex) };
+    if (cameraFollowingEntity.high) {
         TilemapPosition newCameraPos{ gameState->cameraPos };
 
 #if 1
@@ -937,7 +968,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
 #endif
 
-        newCameraPos.absTileZ = cameraFollowingEntity.dormant->pos.absTileZ;
+        newCameraPos.absTileZ = cameraFollowingEntity.low->pos.absTileZ;
 
         SetCamera(gameState, &newCameraPos);
 
@@ -948,22 +979,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 // Debug printing
 #if 0
     const Entity player{ cameraFollowingEntity };
-    const TilechunkPosition chunkPos{ GetChunkPosition(tilemap, player.dormant->pos.absTileX,
-                                                       player.dormant->pos.absTileY,
-                                                       player.dormant->pos.absTileZ) };
+    const TilechunkPosition chunkPos{ GetChunkPosition(
+        tilemap, player.low->pos.absTileX, player.low->pos.absTileY, player.low->pos.absTileZ) };
 
-    DEBUG_PLATFORM_PRINT("\n");
-    memory->exports.DEBUGPrintUInt(threadContext, "tileChunkX", chunkPos.chunkX);
-    memory->exports.DEBUGPrintUInt(threadContext, "tileChunkY", chunkPos.chunkY);
-    memory->exports.DEBUGPrintUInt(threadContext, "tileChunkZ", chunkPos.chunkZ);
-    memory->exports.DEBUGPrintUInt(threadContext, "chunkRelativeX", chunkPos.chunkRelativeTileX);
-    memory->exports.DEBUGPrintUInt(threadContext, "chunkRelativeY", chunkPos.chunkRelativeTileY);
+    PRINT("\n");
+    PRINT_UINT("tileChunkX: ", chunkPos.chunkX);
+    PRINT_UINT("tileChunkY: ", chunkPos.chunkY);
+    PRINT_UINT("tileChunkZ: ", chunkPos.chunkZ);
+    PRINT_UINT("chunkRelativeX: ", chunkPos.chunkRelativeTileX);
+    PRINT_UINT("chunkRelativeY: ", chunkPos.chunkRelativeTileY);
 
-    memory->exports.DEBUGPrintUInt(threadContext, "absTileX", player.dormant->pos.absTileX);
-    memory->exports.DEBUGPrintUInt(threadContext, "absTileY", player.dormant->pos.absTileY);
-    memory->exports.DEBUGPrintUInt(threadContext, "absTileZ", player.dormant->pos.absTileZ);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelX", player.dormant->pos.tileOffset_.x);
-    memory->exports.DEBUGPrintFloat(threadContext, "tileRelY", player.dormant->pos.tileOffset_.y);
+    PRINT_UINT("absTileX: ", player.low->pos.absTileX);
+    PRINT_UINT("absTileY: ", player.low->pos.absTileY);
+    PRINT_UINT("absTileZ: ", player.low->pos.absTileZ);
+    PRINT_FLOAT("tileRelX: ", player.low->pos.tileOffset_.x);
+    PRINT_FLOAT("tileRelY: ", player.low->pos.tileOffset_.y);
 #endif
 
     // Background
@@ -1002,9 +1032,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Highlight the tile for the player controlling the camera
             const Entity entity{ GetEntity(gameState, gameState->cameraFollowingEntityIndex,
-                                           EntityResidency::DORMANT) };
+                                           EntityResidency::LOW) };
             if (entity.residence != EntityResidency::NON_EXISTENT) {
-                if (row == entity.dormant->pos.absTileY && column == entity.dormant->pos.absTileX) {
+                if (row == entity.low->pos.absTileY && column == entity.low->pos.absTileX) {
                     green = 0.25f;
                 }
             }
@@ -1052,42 +1082,37 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     // Drawing entities
 
-    for (i32 entityIndex{ 1 }; entityIndex < gameState->entityCount; ++entityIndex) {
-        if (gameState->entityResidencies[entityIndex] == EntityResidency::HIGH) {
-            HighFEntity* highFEntity{ &gameState->highFEntities[entityIndex] };
-            //LowFEntity* lowFEntity{ &gameState->lowFEntities[entityIndex] };
-            DormantEntity* dormantEntity{ &gameState->dormantEntities[entityIndex] };
+    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+        const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+        const LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
 
-            // Real position
-            const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * highFEntity->pos.x),
-                                          screenCenter.y - (metersToPixels * highFEntity->pos.y) };
+        // Real position
+        const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * highEntity->pos.x),
+                                      screenCenter.y - (metersToPixels * highEntity->pos.y) };
 
-            // TODO: fix player graphics positioning
-            const Vec2 playerPosXY{
-                playerGroundPoint.x - (dormantEntity->width * 0.5f * metersToPixels),
-                playerGroundPoint.y - (dormantEntity->height * 0.5f * metersToPixels)
-            };
+        // TODO: fix player graphics positioning
+        const Vec2 playerPosXY{ playerGroundPoint.x - (lowEntity->width * 0.5f * metersToPixels),
+                                playerGroundPoint.y - (lowEntity->height * 0.5f * metersToPixels) };
 
-            const Vec2 maxPos{ playerPosXY.x + (dormantEntity->width * metersToPixels),
-                               playerPosXY.y + (dormantEntity->height * metersToPixels) };
+        const Vec2 maxPos{ playerPosXY.x + (lowEntity->width * metersToPixels),
+                           playerPosXY.y + (lowEntity->height * metersToPixels) };
 
-            constexpr f32 playerR{ 0.5f };
-            constexpr f32 playerG{ 0.1f };
-            constexpr f32 playerB{ 0.5f };
-            if (dormantEntity->type == EntityType::HERO) {
-                // Debug collision box
-                DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
+        constexpr f32 playerR{ 0.5f };
+        constexpr f32 playerG{ 0.1f };
+        constexpr f32 playerB{ 0.5f };
+        if (lowEntity->type == EntityType::HERO) {
+            // Debug collision box
+            DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
 
-                const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highFEntity->facingDir] };
-                DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x,
-                           playerGroundPoint.y, static_cast<i32>(heroBitmaps->align.x),
-                           static_cast<i32>(heroBitmaps->align.y));
-                DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,
-                           static_cast<i32>(heroBitmaps->align.x),
-                           static_cast<i32>(heroBitmaps->align.y));
-            } else {
-                DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
-            }
+            const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highEntity->facingDir] };
+            DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x, playerGroundPoint.y,
+                       static_cast<i32>(heroBitmaps->align.x),
+                       static_cast<i32>(heroBitmaps->align.y));
+            DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,
+                       static_cast<i32>(heroBitmaps->align.x),
+                       static_cast<i32>(heroBitmaps->align.y));
+        } else {
+            DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
         }
     }
 }
