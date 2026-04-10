@@ -1,56 +1,30 @@
 #ifndef HANDMADE_MATH_H
 #define HANDMADE_MATH_H
 
+#include "handmade.h"
+
 #include "handmade_vec2.h"
-#include "handmade_vec3.h"
 
 NODISCARD
-INTERNAL inline f32
-SquareF32(f32 value) {
-
-    const f32 result{ value * value };
-    return result;
-}
+INTERNAL inline f32 SquareF32(f32 value);
 
 struct Rect {
     Vec2 min, max;
 };
 
 NODISCARD
-INTERNAL inline Rect
-RectMinMax(Vec2 min, Vec2 max) {
-    const Rect result{ min, max };
-    return result;
-}
+INTERNAL inline Rect RectMinMax(Vec2 min, Vec2 max);
 
 NODISCARD
-INTERNAL inline Rect
-RectMinDim(Vec2 min, Vec2 dim) {
-    const Rect result{ min, min + dim };
-    return result;
-}
+INTERNAL inline Rect RectMinDim(Vec2 min, Vec2 dim);
 
 NODISCARD
-INTERNAL inline Rect
-RectCenterHalfDim(Vec2 center, Vec2 halfDim) {
-    const Rect result{ center - halfDim, center + halfDim };
-    return result;
-}
+INTERNAL inline Rect RectCenterHalfDim(Vec2 center, Vec2 halfDim);
 
 NODISCARD
-INTERNAL inline Rect
-RectCenterDim(Vec2 center, Vec2 dim) {
-    const Rect result{ RectCenterHalfDim(center, dim * 0.5f) };
-    return result;
-}
+INTERNAL inline Rect RectCenterDim(Vec2 center, Vec2 dim);
 
 NODISCARD
-INTERNAL inline bool32
-IsInsideRectangle(Rect rect, Vec2 test) {
-    // NOTE: non-inclusive at the max corner
-    const bool32 result{ test.x >= rect.min.x && test.y >= rect.min.y && test.x < rect.max.x &&
-                         test.y < rect.max.y };
-    return result;
-}
+INTERNAL inline bool32 IsInsideRectangle(Rect rect, Vec2 test);
 
 #endif // HANDMADE_MATH_H

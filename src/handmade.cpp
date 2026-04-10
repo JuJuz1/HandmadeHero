@@ -1,7 +1,11 @@
 #include "handmade.h"
 
-#include "handmade_math.h"
-#include "handmade_random.h"
+#include "handmade_game.h"
+
+#include "handmade_intrinsics.cpp"
+#include "handmade_math.cpp"
+#include "handmade_memory.cpp"
+#include "handmade_random.cpp"
 #include "handmade_tile.cpp"
 
 // Any global variables need to be initialized after hot reload (so probably every frame)

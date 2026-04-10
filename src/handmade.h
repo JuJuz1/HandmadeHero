@@ -75,9 +75,14 @@ HANDMADE_DEBUG:
 #    define NODISCARD
 #endif
 
-/// Services that the platform layer provides to the game ///
+/// Other includes for the platform and the game ///
 
-GLOBAL constexpr f32 PI32f{ 3.14159265359f };
+// TODO: or just include explicitly?
+// Also make sure templated code still works
+
+#include "handmade_array.h"
+
+/// Other includes for the platform and the game ///
 
 INTERNAL void
 CatStrings(const char* srcA, i64 srcASize, const char* srcB, i64 srcBSize, char* dest,
@@ -111,119 +116,5 @@ StrLength(const char* str) {
 
     return len;
 }
-
-/// Game specific code ///
-
-#include "handmade_intrinsics.h"
-#include "handmade_math.h"
-#include "handmade_tile.h"
-
-struct MemoryArena {
-    u8* base;
-    memory_index size;
-    memory_index used;
-};
-
-INTERNAL void
-InitializeArena(MemoryArena* arena, u8* base, memory_index size) {
-    arena->base = base;
-    arena->size = size;
-    arena->used = 0;
-}
-
-#define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
-#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
-
-NODISCARD
-INTERNAL void*
-PushSize_(MemoryArena* arena, memory_index size) {
-    ASSERT(arena->used + size <= arena->size);
-    void* result{ arena->base + arena->used };
-    arena->used += size;
-
-    return result;
-}
-
-struct World {
-    Tilemap* tilemap;
-};
-
-struct LoadedBitmapInfo {
-    u32* pixels;
-    i32 width;
-    i32 height;
-};
-
-struct HeroBitmaps {
-    LoadedBitmapInfo head;
-    LoadedBitmapInfo torso;
-    Vec2 align;
-};
-
-/// Entities ///
-
-enum class EntityType {
-    NON_EXISTENT = 0,
-    HERO,
-    WALL,
-};
-
-/**
- * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
- */
-struct LowEntity {
-    EntityType type;
-
-    TilemapPosition pos;
-    f32 width, height;
-
-    bool32 collides;
-    i32 dAbsTileZ; // Stairs
-
-    i32 highEntityIndex;
-};
-
-/**
- * High frequency
- */
-struct HighEntity {
-    Vec2 pos; // NOTE: This is now already relative to the camera center
-    u32 absTileZ;
-    Vec2 velocity;
-
-    i32 facingDir;
-
-    i32 lowEntityIndex;
-};
-
-struct Entity {
-    LowEntity* low;
-    HighEntity* high;
-    i32 lowIndex;
-};
-
-/**
- * The game state!
- */
-struct GameState {
-    MemoryArena worldArena;
-    World* world;
-
-    TilemapPosition cameraPos;
-    i32 cameraFollowingEntityIndex; // By default the first player (index 1)
-
-    LowEntity lowEntities[4096];   // Holds all entities
-    HighEntity highEntities_[256]; // Holds the entities marked as high frequency
-    i32 lowEntityCount;
-    i32 highEntityCount;
-
-    // Cursed cast... probably reconsider your use of free will
-    i32 playerIndexFromController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
-
-    LoadedBitmapInfo background;
-    HeroBitmaps heroBitmaps[4];
-
-    bool32 startWithAPlayer;
-};
 
 #endif // HANDMADE_H
