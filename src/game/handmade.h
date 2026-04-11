@@ -14,7 +14,7 @@
     Split into handmade_platform.h which is designed to be C-compatible
 */
 
-#include "handmade_platform.h"
+#include "platform/handmade_platform.h"
 
 // Ensure we are compiling as 64-bit for now...
 // NOTE: is this a good way?

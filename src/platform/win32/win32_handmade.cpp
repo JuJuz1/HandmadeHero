@@ -9,7 +9,7 @@
 
 #include <cstdio>
 
-#include "handmade.h"
+#include "game/handmade.h"
 
 #include "win32_handmade.h"
 

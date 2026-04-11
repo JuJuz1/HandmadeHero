@@ -18,7 +18,7 @@ sdl2=$(sdl2-config --cflags --libs)
 echo WAITING FOR PDB > lock.tmp
 
 # Build game
-clang++ $commonCompilerFlags ../src/handmade.cpp -I ../src -shared -o handmade.so
+clang++ $commonCompilerFlags ../src/game/handmade.cpp -I ../src -shared -o handmade.so
 
 rm lock.tmp
 
