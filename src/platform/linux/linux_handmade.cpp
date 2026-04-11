@@ -21,8 +21,6 @@
 
 #include "game/handmade.h"
 
-#include "game/handmade_array.h"
-
 #include "linux_handmade.h"
 
 // NOTE: MAP_ANONYMOUS is not defined on Mac and some other UNIX systems

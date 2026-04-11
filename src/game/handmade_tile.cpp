@@ -31,7 +31,7 @@ GetTilechunk(Tilemap* tilemap, i32 tileChunkX, i32 tileChunkY, i32 tileChunkZ,
 
     // TODO: better hash function ;D
     const i32 hashValue{ 19 * tileChunkX + 7 * tileChunkY + 3 * tileChunkZ };
-    const i32 hashSlot{ hashValue & (tilemap->tileChunkHash.size - 1) };
+    const i32 hashSlot{ static_cast<i32>(hashValue & (tilemap->tileChunkHash.size - 1)) };
     ASSERT(hashSlot < (tilemap->tileChunkHash.size - 1));
     Tilechunk* chunk{ &tilemap->tileChunkHash[hashSlot] };
 
