@@ -1,12 +1,10 @@
-#ifndef HANDMADE_MATH_H
-#define HANDMADE_MATH_H
+#ifndef HANDMADE_RECT_H
+#define HANDMADE_RECT_H
 
 #include "handmade.h"
 
 #include "handmade_vec2.h"
-
-NODISCARD
-INTERNAL inline f32 SquareF32(f32 value);
+#include "handmade_vec3.h"
 
 struct Rect {
     Vec2 min, max;
@@ -27,4 +25,4 @@ INTERNAL inline Rect RectCenterDim(Vec2 center, Vec2 dim);
 NODISCARD
 INTERNAL inline bool32 IsInsideRectangle(Rect rect, Vec2 test);
 
-#endif // HANDMADE_MATH_H
+#endif // HANDMADE_RECT_H

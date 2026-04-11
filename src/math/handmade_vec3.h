@@ -23,4 +23,22 @@ struct Vec3 {
     inline Vec3& operator/=(f32 scalar);
 };
 
+NODISCARD
+INTERNAL inline Vec3 operator-(Vec3 a);
+
+NODISCARD
+INTERNAL inline Vec3 operator+(Vec3 a, Vec3 b);
+
+NODISCARD
+INTERNAL inline Vec3 operator-(Vec3 a, Vec3 b);
+
+NODISCARD
+INTERNAL inline Vec3 operator*(Vec3 a, f32 scalar);
+
+NODISCARD
+INTERNAL inline Vec3 operator*(f32 scalar, Vec3 a);
+
+NODISCARD
+INTERNAL inline Vec3 operator/(Vec3 a, f32 scalar);
+
 #endif // HANDMADE_VEC3_H

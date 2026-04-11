@@ -3,7 +3,7 @@
 
 #include "handmade.h"
 
-#include "handmade_vec2.h"
+#include "math/handmade_vec2.h"
 
 /*
     A tilemap contains chunks. A chunk contains tiles.

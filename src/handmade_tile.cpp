@@ -3,6 +3,7 @@
 #include "handmade_tile.h"
 
 #include "handmade_memory.h"
+#include "math/handmade_vec3.h"
 
 NODISCARD
 INTERNAL Tilechunk*

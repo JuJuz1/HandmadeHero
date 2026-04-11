@@ -51,6 +51,7 @@ HANDMADE_DEBUG:
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
+#define NOT_BOUND static // The member variable is not bound to the struct, used by Array
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 

@@ -5,7 +5,7 @@
 
 #include "handmade_memory.h"
 #include "handmade_tile.h"
-#include "handmade_vec2.h"
+#include "math/handmade_vec2.h"
 
 /*
     Game specific code
