@@ -8,7 +8,7 @@
     - It declares the services the game can call back into the platform (file I/O, debug, etc.)
     - It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
 
-    This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
+    This allows the game code to be compiled separately (as a DLL) and hotreloaded without
     restarting the platform layer
 
     Split into handmade_platform.h which is designed to be C-compatible
@@ -51,6 +51,7 @@ HANDMADE_DEBUG:
 #define INTERNAL static
 #define GLOBAL static
 #define LOCAL_PERSIST static
+#define NOT_BOUND static // The member variable is not bound to the struct, used by Array
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -74,10 +75,6 @@ HANDMADE_DEBUG:
 #else
 #    define NODISCARD
 #endif
-
-/// Services that the platform layer provides to the game ///
-
-GLOBAL constexpr f32 PI32f{ 3.14159265359f };
 
 INTERNAL void
 CatStrings(const char* srcA, i64 srcASize, const char* srcB, i64 srcBSize, char* dest,
@@ -114,6 +111,7 @@ StrLength(const char* str) {
 
 /// Game specific code ///
 
+#include "handmade_array.h"
 #include "handmade_intrinsics.h"
 #include "handmade_math.h"
 #include "handmade_tile.h"
@@ -212,16 +210,15 @@ struct GameState {
     TilemapPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    LowEntity lowEntities[4096];   // Holds all entities
-    HighEntity highEntities_[256]; // Holds the entities marked as high frequency
+    Array<LowEntity, 4096> lowEntities;   // Holds all entities
+    Array<HighEntity, 256> highEntities_; // Holds the entities marked as high frequency
     i32 lowEntityCount;
     i32 highEntityCount;
 
-    // Cursed cast... probably reconsider your use of free will
-    i32 playerIndexFromController[ARRAY_COUNT((static_cast<Input*>(nullptr))->playerInputs)];
+    Array<i32, ARRAY_COUNT(Input::playerInputs)> playerIndexFromController;
 
     LoadedBitmapInfo background;
-    HeroBitmaps heroBitmaps[4];
+    Array<HeroBitmaps, 4> heroBitmaps;
 
     bool32 startWithAPlayer;
 };

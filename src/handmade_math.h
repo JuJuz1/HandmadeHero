@@ -4,6 +4,8 @@
 #include "handmade_vec2.h"
 #include "handmade_vec3.h"
 
+GLOBAL constexpr f32 PI32f{ 3.14159265359f };
+
 NODISCARD
 INTERNAL inline f32
 SquareF32(f32 value) {
