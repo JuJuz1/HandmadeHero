@@ -19,7 +19,7 @@
 #include <unistd.h>    // File operations
 #include <x86intrin.h> // Cpu intrinsics
 
-#include "handmade/handmade.h"
+#include "game/handmade.h"
 
 #include "linux_handmade.h"
 
