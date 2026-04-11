@@ -1,6 +1,8 @@
 #ifndef HANDMADE_ARRAY_H
 #define HANDMADE_ARRAY_H
 
+#include "handmade.h"
+
 /**
  * A simple array wrapper to make life a bit easier with arrays
  * Simply made so that we have to worry about arrays decaying to pointers a bit less!

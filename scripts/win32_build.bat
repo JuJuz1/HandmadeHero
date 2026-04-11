@@ -63,7 +63,7 @@ echo WAITING FOR PDB > lock.tmp
 
 rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
-cl %commonCompilerFlags% ../src/handmade.cpp /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
+cl %commonCompilerFlags% ../src/handmade.cpp /I ../src /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m

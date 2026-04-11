@@ -1,3 +1,10 @@
+#include "handmade.h"
+
+#include "handmade_tile.h"
+
+#include "handmade_memory.h"
+#include "math/handmade_vec3.h"
+
 NODISCARD
 INTERNAL Tilechunk*
 GetTilechunk(const Tilemap* tileMap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ) {

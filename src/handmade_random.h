@@ -1,6 +1,8 @@
 #ifndef HANDMADE_RANDOM_H
 #define HANDMADE_RANDOM_H
 
+#include "handmade.h"
+
 namespace hm_random {
 
 // https://www.random.org/integers/?mode=advanced

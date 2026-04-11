@@ -6,7 +6,7 @@ My implementation of the code as I followed Casey Muratori's [Handmade Hero](htt
 
 Unity build, game as a service to the platform
 
-Header files mostly contain definitions for structs, everything else lives in .cpp files
+Header files include every dependency and declare all functions and operators. The game build includes every .cpp file it needs (unity build). The order of .cpp file include doesn't matter if we keep the header files self-sustainable (as in including every dependency they need)!
 
 ...
 

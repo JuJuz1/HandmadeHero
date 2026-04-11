@@ -1,69 +1,46 @@
-#ifndef HANDMADE_VEC2_H
-#define HANDMADE_VEC2_H
+#include "handmade_vec2.h"
 
-struct Vec2 {
-    union {
-        struct {
-            f32 x;
-            f32 y;
-        };
-
-        f32 e[2];
-    };
-
-    // NOTE: These could also be outside the struct by taking a reference as the first parameter
-    //inline Vec2& operator+=(Vec2& a, Vec2 b);
-
-    inline f32& operator[](i32 i);
-
-    inline Vec2& operator+=(Vec2 a);
-    inline Vec2& operator-=(Vec2 a);
-    inline Vec2& operator*=(f32 scalar);
-    inline Vec2& operator/=(f32 scalar);
-
-    // Hadamard product
-    inline Vec2& operator*=(Vec2 a);
-};
+#include "handmade_intrinsics.h"
 
 NODISCARD
 INTERNAL inline Vec2
 operator-(Vec2 a) {
-    Vec2 result{ -a.x, -a.y };
+    const Vec2 result{ -a.x, -a.y };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
 operator+(Vec2 a, Vec2 b) {
-    Vec2 result{ a.x + b.x, a.y + b.y };
+    const Vec2 result{ a.x + b.x, a.y + b.y };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
 operator-(Vec2 a, Vec2 b) {
-    Vec2 result{ a.x - b.x, a.y - b.y };
+    const Vec2 result{ a.x - b.x, a.y - b.y };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
 operator*(Vec2 a, f32 scalar) {
-    Vec2 result{ a.x * scalar, a.y * scalar };
+    const Vec2 result{ a.x * scalar, a.y * scalar };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
 operator*(f32 scalar, Vec2 a) {
-    Vec2 result{ a * scalar };
+    const Vec2 result{ a * scalar };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
 operator/(Vec2 a, f32 scalar) {
-    Vec2 result{ a.x / scalar, a.y / scalar };
+    const Vec2 result{ a.x / scalar, a.y / scalar };
     return result;
 }
 
@@ -71,16 +48,16 @@ operator/(Vec2 a, f32 scalar) {
 NODISCARD
 INTERNAL inline Vec2
 operator*(Vec2 a, Vec2 b) {
-    Vec2 result{ a.x * b.x, a.y * b.y };
+    const Vec2 result{ a.x * b.x, a.y * b.y };
     return result;
 }
 
-/// Member functions
+/// Member functions ///
 
 NODISCARD
 inline f32&
 Vec2::operator[](i32 i) {
-    ASSERT(0 <= i && i < *this->e);
+    ASSERT(0 <= i && i < 2);
     f32& result{ this->e[i] };
     return result;
 }
@@ -114,8 +91,6 @@ Vec2::operator*=(Vec2 a) {
     *this = *this * a;
     return *this;
 }
-
-/// Utility functions
 
 NODISCARD
 INTERNAL inline f32
@@ -173,5 +148,3 @@ Reflect(Vec2 v, Vec2 n) {
     const Vec2 result{ v - (2.0f * Dot(v, n) * n) };
     return result;
 }
-
-#endif // HANDMADE_VEC2_H
