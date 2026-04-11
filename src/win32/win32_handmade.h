@@ -47,29 +47,28 @@ struct GameCode {
 };
 
 // NOTE: don't use MAX_PATH in user code as it can be dangerous
-GLOBAL i32 constexpr all_State_File_Name_Count{ MAX_PATH };
+GLOBAL constexpr i32 file_Name_Count{ MAX_PATH };
 
 // Buffers to store the game memory in memory instead of disk
 struct ReplayBuffer {
     HANDLE fileHandle;
     HANDLE memoryMap;
     void* memoryBlock;
-    char replayFilePath[all_State_File_Name_Count];
+    Array<char, file_Name_Count> replayFilePath[file_Name_Count];
 
     bool32 isRecordedAtLeastOnce;
 };
 
-GLOBAL i32 constexpr replay_Buffer_Count{ 4 };
-GLOBAL i32 constexpr replay_Buffer_Not_Recording{ -1 };
-GLOBAL i32 constexpr replay_Buffer_Not_Playing{ -1 };
+GLOBAL constexpr i32 replay_Buffer_Not_Recording{ -1 };
+GLOBAL constexpr i32 replay_Buffer_Not_Playing{ -1 };
 
 // NOTE: not really all state (yet?)
 struct AllState {
     void* gameMemory;
     u64 memorySize;
-    ReplayBuffer replayBuffers[replay_Buffer_Count];
+    Array<ReplayBuffer, 4> replayBuffers;
 
-    char exePath[all_State_File_Name_Count];
+    Array<char, file_Name_Count> exePath;
     char* exeFilename;
 
     i32 selectedIndex; // Modifiable index to switch selected replay buffer

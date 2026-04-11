@@ -320,7 +320,7 @@ EntityToHighFreq(GameState* gameState, i32 lowIndex) {
     if (lowEntity->highEntityIndex) {
         highEntity = &gameState->highEntities_[lowEntity->highEntityIndex];
     } else {
-        if (gameState->highEntityCount < ARRAY_COUNT(gameState->highEntities_)) {
+        if (gameState->highEntityCount < gameState->highEntities_.size) {
             const i32 highIndex{ gameState->highEntityCount++ };
             lowEntity->highEntityIndex = highIndex;
             highEntity = &gameState->highEntities_[highIndex];
@@ -368,8 +368,8 @@ GetHighEntity(GameState* gameState, i32 lowIndex) {
 NODISCARD
 INTERNAL i32
 AddLowEntity(GameState* gameState, EntityType type) {
-    //ASSERT(gameState->highEntityCount < ARRAY_COUNT(gameState->highEntities_));
-    ASSERT(gameState->lowEntityCount < ARRAY_COUNT(gameState->lowEntities));
+    //ASSERT(gameState->highEntityCount < gameState->highEntities_.size);
+    ASSERT(gameState->lowEntityCount < gameState->lowEntities.size);
 
     const i32 entityIndex{ gameState->lowEntityCount++ };
 
@@ -481,6 +481,7 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
         if (lowEntity->highEntityIndex) {
             continue;
         }
+
         if (lowEntity->pos.absTileZ == gameState->cameraPos.absTileZ &&
             lowEntity->pos.absTileX >= minTileX && lowEntity->pos.absTileX <= maxTileX &&
             lowEntity->pos.absTileY >= minTileY && lowEntity->pos.absTileY <= maxTileY) {
@@ -595,7 +596,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Generating tile values
     for (u32 screen{}; screen < screenCount; ++screen) {
-        ASSERT(randomNumIndex < ARRAY_COUNT(hm_random::randomNumbers));
+        ASSERT(randomNumIndex < hm_random::randomNumbers.size);
         u32 randomChoice;
         // Lateral only
         //if (doorUp || doorDown) {

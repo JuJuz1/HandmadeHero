@@ -219,12 +219,12 @@ DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i
 INTERNAL void
 GetExePathAndFilename(AllState* allState) {
     // Needed to check?
-    const ssize_t charactersRead{ readlink("/proc/self/exe", allState->exePath,
-                                           sizeof(allState->exePath) - 1) };
-    allState->exeFilename = allState->exePath;
+    const ssize_t charactersRead{ readlink("/proc/self/exe", allState->exePath.data_,
+                                           allState->exePath.size) };
+    allState->exeFilename = allState->exePath.data_;
 
-    for (char* scan{ allState->exePath }; *scan; ++scan) {
-        if (*scan == '/') {
+    for (char* scan{ allState->exePath.data_ }; *scan; ++scan) {
+        if (*scan == '\\' || *scan == '/') {
             allState->exeFilename = scan + 1;
         }
     }
@@ -232,22 +232,22 @@ GetExePathAndFilename(AllState* allState) {
 
 INTERNAL void
 BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, i32 destCount) {
-    CatStrings(allState->exePath, allState->exeFilename - allState->exePath, filename,
+    CatStrings(allState->exePath.data_, allState->exeFilename - allState->exePath.data_, filename,
                StrLength(filename), dest, destCount);
 }
 
 INTERNAL void
 GetInputFilePath(const AllState* allState, bool32 inputStream, i32 slotIndex, char* dest,
                  i32 destCount) {
-    char temp[32];
-    sprintf(temp, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
-    BuildGamePathFilename(allState, temp, dest, destCount);
+    Array<char, 32> temp;
+    sprintf(temp.data_, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
+    BuildGamePathFilename(allState, temp.data_, dest, destCount);
 }
 
 NODISCARD
 INTERNAL ReplayBuffer*
 GetReplayBuffer(AllState* allState, i32 index) {
-    ASSERT(index < ARRAY_COUNT(allState->replayBuffers));
+    ASSERT(index < allState->replayBuffers.size);
     ReplayBuffer* replayBuffer{ &allState->replayBuffers[index] };
     return replayBuffer;
 }
@@ -258,10 +258,16 @@ BeginRecordInput(AllState* allState, i32 recordingIndex) {
     if (replayBuffer->memoryBlock) {
         allState->recordingIndex = recordingIndex;
 
-        char filePath[all_State_File_Name_Count];
-        GetInputFilePath(allState, true, recordingIndex, filePath, sizeof(filePath));
-        allState->recordingHandle =
-            open(filePath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        Array<char, file_Name_Count> filePath;
+        GetInputFilePath(allState, true, recordingIndex, filePath.data_, filePath.size);
+
+        const i32 fileHandle{ open(filePath.data_, O_WRONLY | O_CREAT | O_TRUNC,
+                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) };
+        if (fileHandle != -1) {
+            allState->playingHandle = fileHandle;
+        } else {
+            printf("BeginRecordInput CreateFileA writing to file failed!\n");
+        }
 
 #if 0
         lseek(State->recordingHandle, State->TotalSize, SEEK_SET);
@@ -291,9 +297,14 @@ BeginInputPlayback(AllState* allState, i32 playingIndex) {
     if (replayBuffer->memoryBlock) {
         allState->playingIndex = playingIndex;
 
-        char filePath[all_State_File_Name_Count];
-        GetInputFilePath(allState, true, playingIndex, filePath, sizeof(filePath));
-        allState->playingHandle = open(filePath, O_RDONLY);
+        Array<char, file_Name_Count> filePath;
+        GetInputFilePath(allState, true, playingIndex, filePath.data_, filePath.size);
+        const i32 fileHandle{ open(filePath.data_, O_RDONLY) };
+        if (fileHandle != -1) {
+            allState->playingHandle = fileHandle;
+        } else {
+            printf("BeginInputPlayback CreateFileA reading file failed!\n");
+        }
 
 #if 0
         lseek(allState->playingHandle, allState->memorySize, SEEK_SET);
@@ -305,10 +316,7 @@ BeginInputPlayback(AllState* allState, i32 playingIndex) {
 
 INTERNAL void
 EndInputPlayback(AllState* allState) {
-    //if (allState->playingHandle != INVALID_HANDLE_VALUE) {
     close(allState->playingHandle);
-    //allState->playingHandle = INVALID_HANDLE_VALUE;
-    //}
 
     allState->playingIndex = replay_Buffer_Not_Playing;
 }
@@ -343,7 +351,7 @@ ClearInputMemory(Input* input) {
 
 INTERNAL void
 HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
-    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ASSERT(0 <= selectedIndex && selectedIndex < allState->replayBuffers.size);
     ClearInputMemory(input);
 
     if (allState->playingIndex == replay_Buffer_Not_Playing) {
@@ -363,7 +371,7 @@ HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
 
 INTERNAL void
 HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bool32 shiftPressed) {
-    ASSERT(0 <= selectedIndex && selectedIndex < ARRAY_COUNT(allState->replayBuffers));
+    ASSERT(0 <= selectedIndex && selectedIndex < allState->replayBuffers.size);
     ClearInputMemory(input);
 
     if (allState->recordingIndex == selectedIndex) {
@@ -623,6 +631,7 @@ LoadGameCode(const char* srcDll, const char* lockFilename) {
 
     // Here is an extra check for the existence of lastWriteTime
     if (gameCode.lastWritetime) {
+        // On Linux we can just overwrite the dll (.so) and it will work
         gameCode.dll = dlopen(srcDll, RTLD_LAZY);
         if (gameCode.dll) {
             gameCode.updateAndRender =
@@ -665,11 +674,11 @@ main() {
     hm_sdl::AllState allState{};
     hm_sdl::GetExePathAndFilename(&allState);
 
-    char srcDllPath[hm_sdl::all_State_File_Name_Count];
-    hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath, sizeof(srcDllPath));
+    Array<char, hm_sdl::file_Name_Count> srcDllPath;
+    hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath.data_, srcDllPath.size);
 
-    char lockFilePath[hm_sdl::all_State_File_Name_Count];
-    hm_sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath, sizeof(lockFilePath));
+    Array<char, hm_sdl::file_Name_Count> lockFilePath;
+    hm_sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath.data_, lockFilePath.size);
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO);
 
@@ -749,14 +758,18 @@ main() {
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
 
-    for (i32 i{}; i < ARRAY_COUNT(allState.replayBuffers); ++i) {
+    for (i32 i{}; i < allState.replayBuffers.size; ++i) {
         hm_sdl::ReplayBuffer* replayBuffer{ &allState.replayBuffers[i] };
 
-        hm_sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath,
-                                 sizeof(replayBuffer->replayFilePath));
-
-        replayBuffer->fileHandle = open(replayBuffer->replayFilePath, O_RDWR | O_CREAT,
-                                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        hm_sdl::GetInputFilePath(&allState, false, i, replayBuffer->replayFilePath.data_,
+                                 replayBuffer->replayFilePath.size);
+        const i32 fileHandle{ open(replayBuffer->replayFilePath.data_, O_RDWR | O_CREAT,
+                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) };
+        if (fileHandle != -1) {
+            replayBuffer->fileHandle = fileHandle;
+        } else {
+            printf("Replaybuffer mapping writing to file failed!\n");
+        }
 
         ftruncate(replayBuffer->fileHandle, static_cast<off_t>(allState.memorySize));
 
@@ -775,16 +788,16 @@ main() {
     u64 lastCounter{ hm_sdl::GetWallClock() };
     u64 lastCycleCount{ _rdtsc() };
 
-    hm_sdl::GameCode game{ hm_sdl::LoadGameCode(srcDllPath, lockFilePath) };
+    hm_sdl::GameCode game{ hm_sdl::LoadGameCode(srcDllPath.data_, lockFilePath.data_) };
     Input gameInput{};
 
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
-        const time_t newDllWriteTime{ hm_sdl::GetLastWriteTime(srcDllPath) };
+        const time_t newDllWriteTime{ hm_sdl::GetLastWriteTime(srcDllPath.data_) };
         if (game.lastWritetime != newDllWriteTime) {
             hm_sdl::UnloadGameCode(&game);
-            game = hm_sdl::LoadGameCode(srcDllPath, lockFilePath);
+            game = hm_sdl::LoadGameCode(srcDllPath.data_, lockFilePath.data_);
         }
 
         // Keyboard input

@@ -65,6 +65,8 @@ typedef struct ThreadContext {
 
 #if HANDMADE_INTERNAL
 
+/// Services that the platform layer provides to the game ///
+
 typedef struct DEBUGFileReadResult {
     void* content;
     u32 contentSize;

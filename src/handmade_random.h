@@ -7,7 +7,7 @@ namespace hm_random {
 
 // https://www.random.org/integers/?mode=advanced
 // Random numbers to generate the tile values from
-GLOBAL constexpr u32 randomNumbers[4096]{
+GLOBAL constexpr Array<u32, 4096> randomNumbers{
     0x47fefa6, 0x5dfc5d9, 0x410a95e, 0x366c0bd, 0x5035026, 0x2128c83, 0x1dd2cf2, 0x26c8bdb,
     0x5a24ab0, 0x205872f, 0x11a5f64, 0x46b5f5a, 0x541a2f4, 0x2f5478d, 0x2e22ff9, 0x4470665,
     0x556ef51, 0x2f62f96, 0x57816ea, 0x4742a4e, 0x0276521, 0x217c5ba, 0x58c50b3, 0x0c2d6c0,

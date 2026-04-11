@@ -34,7 +34,8 @@ Checks: >
   -readability-magic-numbers,
   -readability-uppercase-literal-suffix,
   -readability-use-std-min-max,
-  -readability-function-cognitive-complexity
+  -readability-function-cognitive-complexity,
+  -readability-static-accessed-through-instance
 
 WarningsAsErrors: ''
 HeaderFileExtensions:

@@ -8,7 +8,7 @@
     - It declares the services the game can call back into the platform (file I/O, debug, etc.)
     - It defines shared data structures (GameMemory, Input, etc.) that both sides must agree on
 
-    This allows the game code to be compiled separately (e.g. as a DLL) and reloaded without
+    This allows the game code to be compiled separately (as a DLL) and hotreloaded without
     restarting the platform layer
 
     Split into handmade_platform.h which is designed to be C-compatible
