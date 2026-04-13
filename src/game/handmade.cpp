@@ -7,7 +7,7 @@
 #include "game/handmade_intrinsics.cpp"
 #include "game/handmade_memory.cpp"
 #include "game/handmade_random.cpp"
-#include "game/handmade_tile.cpp"
+#include "game/handmade_world.cpp"
 #include "game/math/handmade_math.cpp"
 
 // Any global variables need to be initialized after hot reload (so probably every frame)
@@ -326,8 +326,8 @@ EntityToHighFreq(GameState* gameState, i32 lowIndex) {
             highEntity = &gameState->highEntities_[highIndex];
 
             // Map the entity to camera space
-            const TilemapDiff diff{ SubtractTilemapPos(gameState->world->tilemap, &lowEntity->pos,
-                                                       &gameState->cameraPos) };
+            const WorldDiff diff{ SubtractWorldPos(gameState->world, &lowEntity->pos,
+                                                   &gameState->cameraPos) };
             highEntity->pos = Vec2{ diff.x, diff.y };
             highEntity->velocity = Vec2{};
             highEntity->absTileZ = lowEntity->pos.absTileZ;
@@ -413,8 +413,8 @@ AddWall(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) {
     lowEntity->pos.absTileX = absTileX;
     lowEntity->pos.absTileY = absTileY;
     lowEntity->pos.absTileZ = absTileZ;
-    lowEntity->height = gameState->world->tilemap->tileSideInMeters;
-    lowEntity->width = gameState->world->tilemap->tileSideInMeters;
+    lowEntity->height = gameState->world->tileSideInMeters;
+    lowEntity->width = gameState->world->tileSideInMeters;
 
     lowEntity->collides = true;
 
@@ -422,14 +422,15 @@ AddWall(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) {
 }
 
 INTERNAL void
-OffsetAndCheckFrequencyByArea(GameState* gameState, Rect cameraBounds,
+OffsetAndCheckFrequencyByArea(GameState* gameState, Rect highFreqBounds,
                               Vec2 entityOffsetFromCamera) {
     i32 movedCount{};
+
     for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount;) {
         HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
         highEntity->pos += entityOffsetFromCamera;
 
-        if (!IsInsideRectangle(cameraBounds, highEntity->pos)) {
+        if (!IsInsideRectangle(highFreqBounds, highEntity->pos)) {
             EntityToLowFreq(gameState, highEntity->lowEntityIndex);
             ++movedCount;
         } else {
@@ -443,9 +444,9 @@ OffsetAndCheckFrequencyByArea(GameState* gameState, Rect cameraBounds,
 }
 
 INTERNAL void
-SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
-    const TilemapDiff diffCameraPos{ SubtractTilemapPos(gameState->world->tilemap, newCameraPos,
-                                                        &gameState->cameraPos) };
+SetCamera(GameState* gameState, const WorldPosition* newCameraPos) {
+    const WorldDiff diffCameraPos{ SubtractWorldPos(gameState->world, newCameraPos,
+                                                    &gameState->cameraPos) };
     const Vec2 entityOffsetFromCamera{ -diffCameraPos.x, -diffCameraPos.y };
     gameState->cameraPos = *newCameraPos;
 
@@ -453,7 +454,7 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
     const i32 tileSpanY{ tiles_Per_Height * 3 };
     const Rect cameraBounds{ RectCenterDim(
         Vec2{}, Vec2{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY) } *
-                    gameState->world->tilemap->tileSideInMeters) };
+                    gameState->world->tileSideInMeters) };
 
     // Add the offset to every high frequency entity when the camera moves
     // TODO: doesn't work with second player, walls work correctly
@@ -554,10 +555,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
-    world->tilemap = PushSize(&gameState->worldArena, Tilemap);
-
-    Tilemap* tilemap{ world->tilemap };
-    InitializeTilemap(tilemap, 1.4f);
+    InitializeWorld(world, 1.4f);
 
     u32 randomNumIndex{};
 
@@ -640,9 +638,6 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                     }
                 }
 
-                SetTileValue(&gameState->worldArena, tilemap, absTileX, absTileY, absTileZ,
-                             tileValue);
-
                 if (tileValue == blocked_Tile_Value) {
                     const i32 entityIndex{ AddWall(gameState, absTileX, absTileY, absTileZ) };
                     ++wallsAdded;
@@ -683,7 +678,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         PRINT_INT("Walls added: ", wallsAdded);
     }
 
-    TilemapPosition cameraPos{};
+    WorldPosition cameraPos{};
     cameraPos.absTileX = screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2);
     cameraPos.absTileY = screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2);
     cameraPos.absTileZ = screenBaseZ;
@@ -833,9 +828,9 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
             const LowEntity* hitLow{ GetLowEntity(gameState, hitEntity.lowIndex) };
 
             // Door check
-            const Tilemap* tilemap{ gameState->world->tilemap };
+            const World* world{ gameState->world };
             entity.low->pos.absTileZ =
-                TilemapPositionModifyZChecked(tilemap, &entity.low->pos, hitLow->dAbsTileZ);
+                WorldPositionModifyZChecked(world, &entity.low->pos, hitLow->dAbsTileZ);
         } else {
             break;
         }
@@ -866,8 +861,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
         }
     }
 
-    entity.low->pos =
-        MapIntoTileSpace(gameState->world->tilemap, gameState->cameraPos, entity.high->pos);
+    entity.low->pos = MapIntoTileSpace(gameState->world, gameState->cameraPos, entity.high->pos);
 }
 
 // NOTE: use extern "C" to avoid name mangling
@@ -888,7 +882,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitializeGameState(threadContext, gameState, memory);
     }
 
-    const Tilemap* tilemap{ gameState->world->tilemap };
+    const World* world{ gameState->world };
 
     const f32 delta{ input->frameDeltaTime };
 
@@ -935,11 +929,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 if (controllerIndex == 0) {
                     if (hm_input::ActionJustPressed(&inputButtons->Z)) {
                         if (hm_input::ActionPressed(&inputButtons->shift)) {
-                            controllingEntity.low->pos.absTileZ = TilemapPositionModifyZChecked(
-                                tilemap, &controllingEntity.low->pos, -1);
+                            controllingEntity.low->pos.absTileZ =
+                                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, -1);
                         } else {
-                            controllingEntity.low->pos.absTileZ = TilemapPositionModifyZChecked(
-                                tilemap, &controllingEntity.low->pos, 1);
+                            controllingEntity.low->pos.absTileZ =
+                                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, 1);
                         }
                     }
                 }
@@ -949,37 +943,37 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
     constexpr i32 tileSideInPixels{ 60 };
-    const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / tilemap->tileSideInMeters };
+    const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / world->tileSideInMeters };
 
     // Camera position
     const Entity cameraFollowingEntity{ GetHighEntity(gameState,
                                                       gameState->cameraFollowingEntityIndex) };
     if (cameraFollowingEntity.high) {
-        TilemapPosition newCameraPos{ gameState->cameraPos };
+        WorldPosition newCameraPos{ gameState->cameraPos };
 
 #if 1
-        if (cameraFollowingEntity.high->pos.x > (9.0f * tilemap->tileSideInMeters)) {
+        if (cameraFollowingEntity.high->pos.x > (9.0f * world->tileSideInMeters)) {
             newCameraPos.absTileX += tiles_Per_Width;
-        } else if (cameraFollowingEntity.high->pos.x < -(9.0f * tilemap->tileSideInMeters)) {
+        } else if (cameraFollowingEntity.high->pos.x < -(9.0f * world->tileSideInMeters)) {
             newCameraPos.absTileX -= tiles_Per_Width;
         }
 
-        if (cameraFollowingEntity.high->pos.y > (5.0f * tilemap->tileSideInMeters)) {
+        if (cameraFollowingEntity.high->pos.y > (5.0f * world->tileSideInMeters)) {
             newCameraPos.absTileY += tiles_Per_Height;
-        } else if (cameraFollowingEntity.high->pos.y < -(5.0f * tilemap->tileSideInMeters)) {
+        } else if (cameraFollowingEntity.high->pos.y < -(5.0f * world->tileSideInMeters)) {
             newCameraPos.absTileY -= tiles_Per_Height;
         }
 #else
         // Scrolling
-        if (cameraFollowingEntity.high->pos.x > (1.0f * tilemap->tileSideInMeters)) {
+        if (cameraFollowingEntity.high->pos.x > (1.0f * world->tileSideInMeters)) {
             newCameraPos.absTileX += 1;
-        } else if (cameraFollowingEntity.high->pos.x < -(1.0f * tilemap->tileSideInMeters)) {
+        } else if (cameraFollowingEntity.high->pos.x < -(1.0f * world->tileSideInMeters)) {
             newCameraPos.absTileX -= 1;
         }
 
-        if (cameraFollowingEntity.high->pos.y > (1.0f * tilemap->tileSideInMeters)) {
+        if (cameraFollowingEntity.high->pos.y > (1.0f * world->tileSideInMeters)) {
             newCameraPos.absTileY += 1;
-        } else if (cameraFollowingEntity.high->pos.y < -(1.0f * tilemap->tileSideInMeters)) {
+        } else if (cameraFollowingEntity.high->pos.y < -(1.0f * world->tileSideInMeters)) {
             newCameraPos.absTileY -= 1;
         }
 #endif
@@ -995,8 +989,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 // Debug printing
 #if 0
     const Entity player{ cameraFollowingEntity };
-    const TilechunkPosition_ chunkPos{ GetChunkPosition(
-        tilemap, player.low->pos.absTileX, player.low->pos.absTileY, player.low->pos.absTileZ) };
+    const WorldChunkPosition_ chunkPos{ GetChunkPosition(
+        world, player.low->pos.absTileX, player.low->pos.absTileY, player.low->pos.absTileZ) };
 
     PRINT("\n");
     PRINT_UINT("tileChunkX: ", chunkPos.chunkX);
@@ -1030,7 +1024,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const u32 column{ gameState->cameraPos.absTileX + relColumn };
             const u32 depth{ gameState->cameraPos.absTileZ };
 
-            const u32 tileID{ GetTileValue(tilemap, column, row, depth) };
+            const u32 tileID{ GetTileValue(world, column, row, depth) };
             if (tileID != blocked_Tile_Value && tileID != 3 && tileID != 4 &&
                 tileID != 5 //&&
                             //!(row == gameState->cameraPos.absTileY &&
