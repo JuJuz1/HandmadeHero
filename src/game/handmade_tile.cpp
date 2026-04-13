@@ -1,64 +1,115 @@
-#include "handmade.h"
-
 #include "handmade_tile.h"
 
 #include "handmade_memory.h"
 #include "math/handmade_vec3.h"
 
-NODISCARD
-INTERNAL Tilechunk*
-GetTilechunk(const Tilemap* tileMap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ) {
-    Tilechunk* tileChunk{};
-    if (tileChunkX < tileMap->tileChunkCountX && tileChunkY < tileMap->tileChunkCountY &&
-        tileChunkZ < tileMap->tileChunkCountZ) {
-        tileChunk =
-            &tileMap
-                 ->tileChunks[(tileMap->tileChunkCountX * tileMap->tileChunkCountY * tileChunkZ) +
-                              (tileMap->tileChunkCountX * tileChunkY) + tileChunkX];
-    }
+INTERNAL void
+InitializeTilemap(Tilemap* tilemap, f32 tileSideInMeters) {
+    // chunk size is chunkSize x chunkSize (really: chunkShifft * chunkShift)
+    tilemap->chunkShift = 4;
+    tilemap->chunkMask = (1 << tilemap->chunkShift) - 1;
+    tilemap->chunkSize = 1 << tilemap->chunkShift;
 
-    return tileChunk;
+    // NOTE: This is now seperated from the rendering (tileSideInPixels)
+    tilemap->tileSideInMeters = tileSideInMeters;
+
+    for (u32 tileChunkIndex{}; tileChunkIndex < tilemap->tileChunkHash.size; ++tileChunkIndex) {
+        tilemap->tileChunkHash[tileChunkIndex].tileChunkX = 0;
+    }
 }
 
 NODISCARD
-INTERNAL TilechunkPosition
-GetChunkPosition(const Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
-    TilechunkPosition result{};
+INTERNAL Tilechunk*
+GetTilechunk(Tilemap* tilemap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ,
+             MemoryArena* arena = nullptr) {
+    ASSERT(tileChunkX >= tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkY >= tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkZ >= tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkX <= (UINT32_MAX - tile_Chunk_Safe_Margin));
+    ASSERT(tileChunkY <= (UINT32_MAX - tile_Chunk_Safe_Margin));
+    ASSERT(tileChunkZ <= (UINT32_MAX - tile_Chunk_Safe_Margin));
+
+    const u32 hashValue{ 19 * tileChunkX + 7 * tileChunkY + 3 * tileChunkZ };
+    const u32 hashSlot{ hashValue & (tilemap->tileChunkHash.size - 1) };
+    ASSERT(hashSlot < (tilemap->tileChunkHash.size - 1));
+    Tilechunk* chunk{ &tilemap->tileChunkHash[hashSlot] };
+
+    do {
+        if (tileChunkX == chunk->tileChunkX && tileChunkY == chunk->tileChunkY &&
+            tileChunkZ == chunk->tileChunkZ) {
+            break;
+        }
+
+        // Already initialized -> add next
+        if (arena && chunk->tileChunkX != 0 && !chunk->nextInHash) {
+            chunk->nextInHash = PushSize(arena, Tilechunk);
+            chunk->tileChunkX = 0;
+            chunk = chunk->nextInHash;
+        }
+
+        // Initialize first
+        if (arena && chunk->tileChunkX == 0) {
+            const u32 tileCount{ tilemap->chunkSize * tilemap->chunkSize };
+
+            chunk->tileChunkX = tileChunkX;
+            chunk->tileChunkY = tileChunkY;
+            chunk->tileChunkZ = tileChunkZ;
+
+            chunk->tiles = PushArray(arena, tileCount, u32);
+            for (u32 tileIndex{}; tileIndex < tileCount; ++tileIndex) {
+                chunk->tiles[tileIndex] = 3;
+            }
+
+            chunk->nextInHash = nullptr;
+
+            break;
+        }
+
+        chunk = chunk->nextInHash;
+    } while (chunk);
+
+    return chunk;
+}
+
+NODISCARD
+INTERNAL TilechunkPosition_
+GetChunkPosition(const Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+    TilechunkPosition_ result{};
 
     // Shift down by chunkShift to get the upper bits for chunk index
-    result.chunkX = absTileX >> tileMap->chunkShift;
-    result.chunkY = absTileY >> tileMap->chunkShift;
+    result.chunkX = absTileX >> tilemap->chunkShift;
+    result.chunkY = absTileY >> tilemap->chunkShift;
     result.chunkZ = absTileZ;
 
     // Get the lower 8 bits for tile relative positions
-    result.chunkRelativeTileX = absTileX & tileMap->chunkMask;
-    result.chunkRelativeTileY = absTileY & tileMap->chunkMask;
+    result.chunkRelativeTileX = absTileX & tilemap->chunkMask;
+    result.chunkRelativeTileY = absTileY & tilemap->chunkMask;
 
     return result;
 }
 
 NODISCARD
 INTERNAL u32
-GetTileValueChecked(const Tilemap* tileMap, const Tilechunk* tileChunk, u32 relX, u32 relY) {
+GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 relX, u32 relY) {
     ASSERT(tileChunk);
-    ASSERT(relX < tileMap->chunkSize && relY < tileMap->chunkSize);
-    const u32 tileValue{ tileChunk->tiles[(tileMap->chunkSize * relY) + relX] };
+    ASSERT(relX < tilemap->chunkSize && relY < tilemap->chunkSize);
+    const u32 tileValue{ tileChunk->tiles[(tilemap->chunkSize * relY) + relX] };
     return tileValue;
 }
 
 NODISCARD
 INTERNAL u32
-GetTileValue(const Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
-    const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
-    const Tilechunk* tileChunk{ GetTilechunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
-                                             chunkPos.chunkZ) };
+GetTileValue(Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+    const TilechunkPosition_ chunkPos{ GetChunkPosition(tilemap, absTileX, absTileY, absTileZ) };
+    Tilechunk* tileChunk{ GetTilechunk(tilemap, chunkPos.chunkX, chunkPos.chunkY,
+                                       chunkPos.chunkZ) };
 
     u32 tileChunkValue{};
     if (tileChunk && tileChunk->tiles) {
-        tileChunkValue = GetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeTileX,
+        tileChunkValue = GetTileValueChecked(tilemap, tileChunk, chunkPos.chunkRelativeTileX,
                                              chunkPos.chunkRelativeTileY);
     } else {
-        // invalid tileMapX or tileMapY i.e. out of bounds
+        // invalid tilemapX or tilemapY i.e. out of bounds
         //tileChunkValue = out_Of_Bounds_Tile_Value;
         //DEBUG_PLATFORM_PRINT("Invalid tileChunkX or tileChunkY");
     }
@@ -67,24 +118,24 @@ GetTileValue(const Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ) {
 }
 
 INTERNAL void
-SetTileValueChecked(const Tilemap* tileMap, const Tilechunk* tileChunk, u32 tileX, u32 tileY,
+SetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 tileX, u32 tileY,
                     u32 value) {
     ASSERT(tileChunk);
-    ASSERT(tileX < tileMap->chunkSize && tileY < tileMap->chunkSize);
-    tileChunk->tiles[(tileMap->chunkSize * tileY) + tileX] = value;
+    ASSERT(tileX < tilemap->chunkSize && tileY < tilemap->chunkSize);
+    tileChunk->tiles[(tilemap->chunkSize * tileY) + tileX] = value;
 }
 
 INTERNAL void
-SetTileValue(MemoryArena* worldArena, Tilemap* tileMap, u32 absTileX, u32 absTileY, u32 absTileZ,
+SetTileValue(MemoryArena* worldArena, Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ,
              u32 value) {
-    const TilechunkPosition chunkPos{ GetChunkPosition(tileMap, absTileX, absTileY, absTileZ) };
-    Tilechunk* tileChunk{ GetTilechunk(tileMap, chunkPos.chunkX, chunkPos.chunkY,
-                                       chunkPos.chunkZ) };
+    const TilechunkPosition_ chunkPos{ GetChunkPosition(tilemap, absTileX, absTileY, absTileZ) };
+    Tilechunk* tileChunk{ GetTilechunk(tilemap, chunkPos.chunkX, chunkPos.chunkY, chunkPos.chunkZ,
+                                       worldArena) };
     ASSERT(tileChunk);
 
     // Create tileChunk tiles if they don't exist
     if (!tileChunk->tiles) {
-        const u32 tileCount{ tileMap->chunkSize * tileMap->chunkSize };
+        const u32 tileCount{ tilemap->chunkSize * tilemap->chunkSize };
         tileChunk->tiles = PushArray(worldArena, tileCount, u32);
 
         for (u32 tileIndex{}; tileIndex < tileCount; ++tileIndex) {
@@ -93,7 +144,7 @@ SetTileValue(MemoryArena* worldArena, Tilemap* tileMap, u32 absTileX, u32 absTil
     }
 
     if (tileChunk) {
-        SetTileValueChecked(tileMap, tileChunk, chunkPos.chunkRelativeTileX,
+        SetTileValueChecked(tilemap, tileChunk, chunkPos.chunkRelativeTileX,
                             chunkPos.chunkRelativeTileY, value);
     }
 }
@@ -107,36 +158,36 @@ IsTileValueEmpty(u32 value) {
 
 NODISCARD
 INTERNAL bool32
-IsTilemapPointEmpty(const Tilemap* tileMap, TilemapPosition pos) {
-    const u32 tileValue{ GetTileValue(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ) };
+IsTilemapPointEmpty(Tilemap* tilemap, TilemapPosition pos) {
+    const u32 tileValue{ GetTileValue(tilemap, pos.absTileX, pos.absTileY, pos.absTileZ) };
     const bool32 empty{ IsTileValueEmpty(tileValue) };
     return empty;
 }
 
 INTERNAL void
-ReCanonicalizeCoordinate(const Tilemap* tileMap, u32* tileIndex, f32* relPos) {
-    const i32 offset{ RoundF32ToI32(*relPos / tileMap->tileSideInMeters) };
-    // NOTE: tileMap is assumed to be toroidal, if you step over the end you start at the
+ReCanonicalizeCoordinate(const Tilemap* tilemap, u32* tileIndex, f32* relPos) {
+    const i32 offset{ RoundF32ToI32(*relPos / tilemap->tileSideInMeters) };
+    // NOTE: tilemap is assumed to be toroidal, if you step over the end you start at the
     // beginning
     *tileIndex += offset;
 
-    *relPos -= static_cast<f32>(offset) * tileMap->tileSideInMeters;
-    // TODO: what to do if: *relPos == tileMap->tilesideinpixels
+    *relPos -= static_cast<f32>(offset) * tilemap->tileSideInMeters;
+    // TODO: what to do if: *relPos == tilemap->tilesideinpixels
     // This can happen because we do the divide and floor and then multiple, the player might
     // end up being on the same tile Relative positions must be within the tile size in pixels
     // TODO: fix the floating point math to not allow the case above of ==
-    ASSERT(*relPos >= -tileMap->tileSideInMeters * 0.5f &&
-           *relPos <= tileMap->tileSideInMeters * 0.5f);
+    ASSERT(*relPos >= -tilemap->tileSideInMeters * 0.5f &&
+           *relPos <= tilemap->tileSideInMeters * 0.5f);
 }
 
 NODISCARD
 INTERNAL TilemapPosition
-MapIntoTileSpace(const Tilemap* tileMap, TilemapPosition pos, Vec2 offset) {
+MapIntoTileSpace(const Tilemap* tilemap, TilemapPosition pos, Vec2 offset) {
     TilemapPosition result{ pos };
     result.tileOffset_ += offset;
 
-    ReCanonicalizeCoordinate(tileMap, &result.absTileX, &result.tileOffset_.x);
-    ReCanonicalizeCoordinate(tileMap, &result.absTileY, &result.tileOffset_.y);
+    ReCanonicalizeCoordinate(tilemap, &result.absTileX, &result.tileOffset_.x);
+    ReCanonicalizeCoordinate(tilemap, &result.absTileY, &result.tileOffset_.y);
 
     return result;
 }
@@ -151,38 +202,39 @@ AreOnSameTiles(const TilemapPosition* pos, const TilemapPosition* newPos) {
 
 NODISCARD
 INTERNAL u32
-TilemapPositionModifyZChecked(const Tilemap* tileMap, const TilemapPosition* pos, i32 offset) {
+TilemapPositionModifyZChecked(const Tilemap* tilemap, const TilemapPosition* pos, i32 offset) {
     // Assert some limit to avoid UB cases in the extremes
     // Probably will never hit this as we most likely always move only 1 up or down
     ASSERT(-10 <= offset && offset <= 10);
 
-    u32 result{ pos->absTileZ };
+    u32 newZ{ pos->absTileZ };
     if (offset >= 0) {
-        if (pos->absTileZ < (tileMap->tileChunkCountZ - offset)) {
-            result += offset;
-        }
+        // NOTE: removed check when moved to hash-based world storage
+        //if (pos->absTileZ < (tilemap->tileChunkCountZ - offset)) {
+        newZ += offset;
+        //}
     } else {
         // Handle negative with a trick
         if (static_cast<u32>((-offset)) <= pos->absTileZ) {
-            result += offset;
+            newZ += offset;
         }
     }
 
-    return result;
+    return newZ;
 }
 
 NODISCARD
 INTERNAL TilemapDiff
 SubtractTilemapPos(const Tilemap* tilemap, const TilemapPosition* a, const TilemapPosition* b) {
-    TilemapDiff result{};
+    TilemapDiff diff{};
 
     const Vec3 dTile{ static_cast<f32>(a->absTileX) - static_cast<f32>(b->absTileX),
                       static_cast<f32>(a->absTileY) - static_cast<f32>(b->absTileY),
                       static_cast<f32>(a->absTileZ) - static_cast<f32>(b->absTileZ) };
 
-    result.x = (tilemap->tileSideInMeters * dTile.x) + a->tileOffset_.x - b->tileOffset_.x;
-    result.y = (tilemap->tileSideInMeters * dTile.y) + a->tileOffset_.y - b->tileOffset_.y;
-    result.z = tilemap->tileSideInMeters * dTile.z;
+    diff.x = (tilemap->tileSideInMeters * dTile.x) + a->tileOffset_.x - b->tileOffset_.x;
+    diff.y = (tilemap->tileSideInMeters * dTile.y) + a->tileOffset_.y - b->tileOffset_.y;
+    diff.z = tilemap->tileSideInMeters * dTile.z;
 
-    return result;
+    return diff;
 }

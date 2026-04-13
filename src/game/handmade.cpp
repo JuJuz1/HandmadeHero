@@ -387,8 +387,7 @@ AddPlayer(GameState* gameState) {
     const i32 entityIndex{ AddLowEntity(gameState, EntityType::HERO) };
     LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
-    lowEntity->pos.absTileX = 3;
-    lowEntity->pos.absTileY = 3;
+    lowEntity->pos = gameState->cameraPos;
     lowEntity->height = 0.5f; // 1.4f;
     lowEntity->width = 0.75f; // entity->dimensions.y * 0.75f;
 
@@ -558,21 +557,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     world->tilemap = PushSize(&gameState->worldArena, Tilemap);
 
     Tilemap* tilemap{ world->tilemap };
-    tilemap->tileChunkCountX = 128;
-    tilemap->tileChunkCountY = 128;
-    tilemap->tileChunkCountZ = 2; // Limited to 2 atm
-
-    // chunk size is chunkSize x chunkSize (really: chunkShift * chunkShift)
-    tilemap->chunkShift = 4;
-    tilemap->chunkMask = (1 << tilemap->chunkShift) - 1;
-    tilemap->chunkSize = 1 << tilemap->chunkShift;
-
-    tilemap->tileChunks = PushArray(
-        &gameState->worldArena,
-        tilemap->tileChunkCountX * tilemap->tileChunkCountY * tilemap->tileChunkCountZ, Tilechunk);
-
-    // NOTE: This is now seperated from the rendering (tileSideInPixels)
-    tilemap->tileSideInMeters = 1.4f;
+    InitializeTilemap(tilemap, 1.4f);
 
     u32 randomNumIndex{};
 
@@ -584,11 +569,16 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     bool32 doorUp{};
     bool32 doorDown{};
 
-    u32 absTileZ{};
-
     // How many screens widths of chunks to generate
     constexpr u32 screenCount{ 2 };
-    u32 screenY{}, screenX{};
+
+    const u32 screenBaseX{ (INT16_MAX / 17) / 2 };
+    const u32 screenBaseY{ (INT16_MAX / 17) / 2 };
+    const u32 screenBaseZ{ (INT16_MAX / 17) / 2 };
+
+    u32 screenX{ screenBaseX }, screenY{ screenBaseY };
+    u32 absTileZ{ screenBaseZ };
+
     constexpr u32 tilesPerHeight{ 9 };
     constexpr u32 tilesPerWidth{ 17 };
 
@@ -611,7 +601,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         // Atm this logic means we can only have 2 layers (z of 0 or 1)
         if (randomChoice == 2) {
             createdZDoor = true;
-            if (absTileZ == 0) {
+            if (absTileZ == screenBaseZ) {
                 doorUp = true;
             } else {
                 doorDown = true;
@@ -676,10 +666,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         }
 
         if (randomChoice == 2) {
-            if (absTileZ == 0) {
-                absTileZ = 1;
+            if (absTileZ == screenBaseZ) {
+                absTileZ += 1;
             } else {
-                absTileZ = 0;
+                absTileZ = screenBaseZ;
             }
         }
         // Advance screens if we didn't make a vertical floor (door)
@@ -695,8 +685,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     }
 
     TilemapPosition cameraPos{};
-    cameraPos.absTileX = 17 / 2;
-    cameraPos.absTileY = 9 / 2;
+    cameraPos.absTileX = screenBaseX * 17 + (17 / 2);
+    cameraPos.absTileY = screenBaseY * 9 + (9 / 2);
+    cameraPos.absTileZ = screenBaseZ;
     SetCamera(gameState, &cameraPos);
 }
 
@@ -1005,7 +996,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 // Debug printing
 #if 0
     const Entity player{ cameraFollowingEntity };
-    const TilechunkPosition chunkPos{ GetChunkPosition(
+    const TilechunkPosition_ chunkPos{ GetChunkPosition(
         tilemap, player.low->pos.absTileX, player.low->pos.absTileY, player.low->pos.absTileZ) };
 
     PRINT("\n");

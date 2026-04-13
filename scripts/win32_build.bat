@@ -71,7 +71,7 @@ if ERRORLEVEL 1 (
 
 del lock.tmp
 
-cl %commonCompilerFlags% /I ../src ../src/platform/win32/win32_handmade.cpp /link %win32Libraries% %commonLinkerFlags%
+cl %commonCompilerFlags% ../src/platform/win32/win32_handmade.cpp /I ../src /link %win32Libraries% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mwin32_handmade.cpp failed[0m[1m
