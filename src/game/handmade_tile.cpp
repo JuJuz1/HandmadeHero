@@ -1,7 +1,7 @@
 #include "handmade_tile.h"
 
-#include "handmade_memory.h"
-#include "math/handmade_vec3.h"
+#include "game/handmade_memory.h"
+#include "game/math/handmade_vec3.h"
 
 INTERNAL void
 InitializeTilemap(Tilemap* tilemap, f32 tileSideInMeters) {

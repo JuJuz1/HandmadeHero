@@ -1,6 +1,6 @@
 #include "handmade_vec2.h"
 
-#include "handmade_intrinsics.h"
+#include "game/handmade_intrinsics.h"
 
 NODISCARD
 INTERNAL inline Vec2

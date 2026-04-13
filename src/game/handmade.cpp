@@ -1,14 +1,14 @@
-#include "handmade.h"
+#include "game/handmade.h"
 
-#include "handmade_game.h"
+#include "game/handmade_game.h"
 
 // Here we just include every .cpp file (basically every file if they are not bundled into one)
 // The order doesn't matter as we seperated .h files to contain every dependency they need
-#include "handmade_intrinsics.cpp"
-#include "handmade_memory.cpp"
-#include "handmade_random.cpp"
-#include "handmade_tile.cpp"
-#include "math/handmade_math.cpp"
+#include "game/handmade_intrinsics.cpp"
+#include "game/handmade_memory.cpp"
+#include "game/handmade_random.cpp"
+#include "game/handmade_tile.cpp"
+#include "game/math/handmade_math.cpp"
 
 // Any global variables need to be initialized after hot reload (so probably every frame)
 GLOBAL ThreadContext* gThreadContext;

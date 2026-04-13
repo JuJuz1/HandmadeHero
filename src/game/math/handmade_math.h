@@ -1,9 +1,7 @@
 #ifndef HANDMADE_MATH_H
 #define HANDMADE_MATH_H
 
-#include "handmade.h"
-
-#include "handmade_vec2.h"
+#include "game/handmade.h"
 
 NODISCARD
 INTERNAL inline f32 SquareF32(f32 value);

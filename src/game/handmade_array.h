@@ -1,7 +1,7 @@
 #ifndef HANDMADE_ARRAY_H
 #define HANDMADE_ARRAY_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
 /**
  * A simple array wrapper to make life a bit easier with arrays

@@ -1,12 +1,12 @@
 #ifndef HANDMADE_GAME_H
 #define HANDMADE_GAME_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
-#include "handmade_array.h"
-#include "handmade_memory.h"
-#include "handmade_tile.h"
-#include "math/handmade_vec2.h"
+#include "game/handmade_array.h"
+#include "game/handmade_memory.h"
+#include "game/handmade_tile.h"
+#include "game/math/handmade_vec2.h"
 
 /*
     Game specific code

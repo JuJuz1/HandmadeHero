@@ -1,7 +1,7 @@
 #ifndef HANDMADE_MEMORY_h
 #define HANDMADE_MEMORY_h
 
-#include "handmade.h"
+#include "game/handmade.h"
 
 struct MemoryArena {
     u8* base;

@@ -1,7 +1,7 @@
 #ifndef HANDMADE_RANDOM_H
 #define HANDMADE_RANDOM_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
 #include "handmade_array.h"
 

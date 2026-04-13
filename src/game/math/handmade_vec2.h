@@ -1,7 +1,7 @@
 #ifndef HANDMADE_VEC2_H
 #define HANDMADE_VEC2_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
 struct Vec2 {
     union {

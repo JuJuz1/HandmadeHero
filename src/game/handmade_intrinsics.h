@@ -1,7 +1,7 @@
 #ifndef HANDMADE_INTRINSICS_H
 #define HANDMADE_INTRINSICS_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
 NODISCARD
 INTERNAL inline i32 TruncateI64toI32(i64 value);

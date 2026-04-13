@@ -1,10 +1,9 @@
 #ifndef HANDMADE_RECT_H
 #define HANDMADE_RECT_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
-#include "handmade_vec2.h"
-#include "handmade_vec3.h"
+#include "game/math/handmade_vec2.h"
 
 struct Rect {
     Vec2 min, max;

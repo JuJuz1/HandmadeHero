@@ -1,9 +1,9 @@
 #ifndef HANDMADE_TILE_H
 #define HANDMADE_TILE_H
 
-#include "handmade.h"
+#include "game/handmade.h"
 
-#include "handmade_array.h"
+#include "game/handmade_array.h"
 #include "math/handmade_vec2.h"
 
 /*
