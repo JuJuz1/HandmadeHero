@@ -14,7 +14,7 @@ InitializeTilemap(Tilemap* tilemap, f32 tileSideInMeters) {
     tilemap->tileSideInMeters = tileSideInMeters;
 
     for (i32 tileChunkIndex{}; tileChunkIndex < tilemap->tileChunkHash.size; ++tileChunkIndex) {
-        tilemap->tileChunkHash[tileChunkIndex].tileChunkX = 0;
+        tilemap->tileChunkHash[tileChunkIndex].tileChunkX = tile_Chunk_Uninitialized;
     }
 }
 
@@ -29,6 +29,7 @@ GetTilechunk(Tilemap* tilemap, i32 tileChunkX, i32 tileChunkY, i32 tileChunkZ,
     ASSERT(tileChunkY < tile_Chunk_Safe_Margin);
     ASSERT(tileChunkZ < tile_Chunk_Safe_Margin);
 
+    // TODO: better hash function ;D
     const i32 hashValue{ 19 * tileChunkX + 7 * tileChunkY + 3 * tileChunkZ };
     const i32 hashSlot{ hashValue & (tilemap->tileChunkHash.size - 1) };
     ASSERT(hashSlot < (tilemap->tileChunkHash.size - 1));
@@ -41,14 +42,14 @@ GetTilechunk(Tilemap* tilemap, i32 tileChunkX, i32 tileChunkY, i32 tileChunkZ,
         }
 
         // Already initialized -> add next
-        if (arena && chunk->tileChunkX != 0 && !chunk->nextInHash) {
+        if (arena && chunk->tileChunkX != tile_Chunk_Uninitialized && !chunk->nextInHash) {
             chunk->nextInHash = PushSize(arena, Tilechunk);
-            chunk->tileChunkX = 0;
             chunk = chunk->nextInHash;
+            chunk->tileChunkX = tile_Chunk_Uninitialized;
         }
 
         // Initialize first
-        if (arena && chunk->tileChunkX == 0) {
+        if (arena && chunk->tileChunkX == tile_Chunk_Uninitialized) {
             const u32 tileCount{ tilemap->chunkSize * tilemap->chunkSize };
 
             chunk->tileChunkX = tileChunkX;
@@ -90,7 +91,7 @@ GetChunkPosition(const Tilemap* tilemap, i32 absTileX, i32 absTileY, i32 absTile
 
 NODISCARD
 INTERNAL u32
-GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 relX, u32 relY) {
+GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, i32 relX, i32 relY) {
     ASSERT(tileChunk);
     ASSERT(relX < tilemap->chunkSize && relY < tilemap->chunkSize);
     const u32 tileValue{ tileChunk->tiles[(tilemap->chunkSize * relY) + relX] };

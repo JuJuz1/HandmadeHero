@@ -76,15 +76,6 @@ HANDMADE_DEBUG:
 #    define NODISCARD
 #endif
 
-/// Other includes for the platform and the game ///
-
-// TODO: or just include explicitly?
-// Also make sure templated code still works
-
-#include "handmade_array.h"
-
-/// Other includes for the platform and the game ///
-
 INTERNAL void
 CatStrings(const char* srcA, i64 srcASize, const char* srcB, i64 srcBSize, char* dest,
            i64 destSize) {

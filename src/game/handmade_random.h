@@ -3,6 +3,8 @@
 
 #include "handmade.h"
 
+#include "handmade_array.h"
+
 namespace hm_random {
 
 // https://www.random.org/integers/?mode=advanced

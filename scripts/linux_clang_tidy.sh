@@ -11,8 +11,8 @@ ROOT="$(pwd)"
 
 # Add files here (platform files in addition to the game)
 SRC_FILES=(
-    "src/handmade.cpp"
-    "src/linux/linux_handmade.cpp"
+    "src/game/handmade.cpp"
+    "src/platform/linux/linux_handmade.cpp"
 )
 
 COMPILER_COMMAND="clang++ -DHANDMADE_LINUX=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 -I src -Wall -Wextra -Wpedantic -std=c++20"

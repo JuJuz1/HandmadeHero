@@ -3,6 +3,7 @@
 
 #include "handmade.h"
 
+#include "handmade_array.h"
 #include "math/handmade_vec2.h"
 
 /*
@@ -18,6 +19,7 @@ GLOBAL constexpr u32 blocked_Tile_Value{ 1 };
 
 // This is the safe margin from the borders of the tilemap (~4 billion)
 GLOBAL constexpr i32 tile_Chunk_Safe_Margin{ INT32_MAX / 64 };
+GLOBAL constexpr i32 tile_Chunk_Uninitialized{ INT32_MAX };
 
 // NOTE: Engine internal
 struct TilechunkPosition_ {
@@ -73,16 +75,16 @@ struct Tilemap {
 INTERNAL void InitializeTilemap(Tilemap* tilemap, f32 tileSideInMeters);
 
 NODISCARD
-INTERNAL Tilechunk* GetTilechunk(Tilemap* tilemap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ,
+INTERNAL Tilechunk* GetTilechunk(Tilemap* tilemap, i32 tileChunkX, i32 tileChunkY, i32 tileChunkZ,
                                  MemoryArena* arena);
 
 NODISCARD
-INTERNAL TilechunkPosition_ GetChunkPosition(const Tilemap* tilemap, u32 absTileX, u32 absTileY,
-                                             u32 absTileZ);
+INTERNAL TilechunkPosition_ GetChunkPosition(const Tilemap* tilemap, i32 absTileX, i32 absTileY,
+                                             i32 absTileZ);
 
 NODISCARD
-INTERNAL u32 GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 relX,
-                                 u32 relY);
+INTERNAL u32 GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, i32 relX,
+                                 i32 relY);
 
 NODISCARD
 INTERNAL u32 GetTileValue(Tilemap* tilemap, i32 absTileX, i32 absTileY, i32 absTileZ);

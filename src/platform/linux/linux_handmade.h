@@ -3,6 +3,8 @@
 
 #if HANDMADE_LINUX
 
+#    include "game/handmade_array.h"
+
 namespace hm_sdl {
 
 struct OffScreenBuffer {

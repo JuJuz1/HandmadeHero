@@ -406,7 +406,7 @@ AddPlayer(GameState* gameState) {
 
 NODISCARD
 INTERNAL i32
-AddWall(GameState* gameState, u32 absTileX, u32 absTileY, u32 absTileZ) {
+AddWall(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) {
     const i32 entityIndex{ AddLowEntity(gameState, EntityType::WALL) };
     LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
@@ -570,15 +570,15 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     bool32 doorDown{};
 
     // How many screens widths of chunks to generate
-    constexpr u32 screenCount{ 2 };
+    constexpr i32 screenCount{ 2 };
 
-    const u32 screenBaseX{};
-    const u32 screenBaseY{};
-    const u32 screenBaseZ{};
+    const i32 screenBaseX{};
+    const i32 screenBaseY{};
+    const i32 screenBaseZ{};
 
-    u32 screenX{ screenBaseX };
-    u32 screenY{ screenBaseY };
-    u32 absTileZ{ screenBaseZ };
+    i32 screenX{ screenBaseX };
+    i32 screenY{ screenBaseY };
+    i32 absTileZ{ screenBaseZ };
 
     i32 wallsAdded{};
 
@@ -610,10 +610,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
             doorTop = true;
         }
 
-        for (u32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
-            for (u32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
-                const u32 absTileX{ (screenX * tiles_Per_Width) + tileX };
-                const u32 absTileY{ (screenY * tiles_Per_Height) + tileY };
+        for (i32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
+            for (i32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
+                const i32 absTileX{ (screenX * tiles_Per_Width) + tileX };
+                const i32 absTileY{ (screenY * tiles_Per_Height) + tileY };
 
                 u32 tileValue{ 2 };
                 if (tileX == 0 && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {

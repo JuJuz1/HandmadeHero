@@ -3,6 +3,7 @@
 
 #include "handmade.h"
 
+#include "handmade_array.h"
 #include "handmade_memory.h"
 #include "handmade_tile.h"
 #include "math/handmade_vec2.h"

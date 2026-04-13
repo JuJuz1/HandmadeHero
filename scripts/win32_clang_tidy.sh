@@ -12,8 +12,8 @@ ROOT="$(pwd -W)"
 
 # Add files here (platform files in addition to the game)
 SRC_FILES=(
-    "src/handmade.cpp"
-    "src/win32/win32_handmade.cpp"
+    "src/game/handmade.cpp"
+    "src/platform/win32/win32_handmade.cpp"
 )
 
 COMPILER_COMMAND="clang-cl -DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 /I src /W4 /std:c++20"

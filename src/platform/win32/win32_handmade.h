@@ -4,6 +4,8 @@
 // Compiler switch
 #if HANDMADE_WIN32
 
+#    include "game/handmade_array.h"
+
 namespace hm_win32 {
 
 struct OffScreenBuffer {
