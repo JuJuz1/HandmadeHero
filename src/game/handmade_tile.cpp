@@ -13,24 +13,24 @@ InitializeTilemap(Tilemap* tilemap, f32 tileSideInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
     tilemap->tileSideInMeters = tileSideInMeters;
 
-    for (u32 tileChunkIndex{}; tileChunkIndex < tilemap->tileChunkHash.size; ++tileChunkIndex) {
+    for (i32 tileChunkIndex{}; tileChunkIndex < tilemap->tileChunkHash.size; ++tileChunkIndex) {
         tilemap->tileChunkHash[tileChunkIndex].tileChunkX = 0;
     }
 }
 
 NODISCARD
 INTERNAL Tilechunk*
-GetTilechunk(Tilemap* tilemap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ,
+GetTilechunk(Tilemap* tilemap, i32 tileChunkX, i32 tileChunkY, i32 tileChunkZ,
              MemoryArena* arena = nullptr) {
-    ASSERT(tileChunkX >= tile_Chunk_Safe_Margin);
-    ASSERT(tileChunkY >= tile_Chunk_Safe_Margin);
-    ASSERT(tileChunkZ >= tile_Chunk_Safe_Margin);
-    ASSERT(tileChunkX <= (UINT32_MAX - tile_Chunk_Safe_Margin));
-    ASSERT(tileChunkY <= (UINT32_MAX - tile_Chunk_Safe_Margin));
-    ASSERT(tileChunkZ <= (UINT32_MAX - tile_Chunk_Safe_Margin));
+    ASSERT(tileChunkX > -tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkY > -tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkZ > -tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkX < tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkY < tile_Chunk_Safe_Margin);
+    ASSERT(tileChunkZ < tile_Chunk_Safe_Margin);
 
-    const u32 hashValue{ 19 * tileChunkX + 7 * tileChunkY + 3 * tileChunkZ };
-    const u32 hashSlot{ hashValue & (tilemap->tileChunkHash.size - 1) };
+    const i32 hashValue{ 19 * tileChunkX + 7 * tileChunkY + 3 * tileChunkZ };
+    const i32 hashSlot{ hashValue & (tilemap->tileChunkHash.size - 1) };
     ASSERT(hashSlot < (tilemap->tileChunkHash.size - 1));
     Tilechunk* chunk{ &tilemap->tileChunkHash[hashSlot] };
 
@@ -73,7 +73,7 @@ GetTilechunk(Tilemap* tilemap, u32 tileChunkX, u32 tileChunkY, u32 tileChunkZ,
 
 NODISCARD
 INTERNAL TilechunkPosition_
-GetChunkPosition(const Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+GetChunkPosition(const Tilemap* tilemap, i32 absTileX, i32 absTileY, i32 absTileZ) {
     TilechunkPosition_ result{};
 
     // Shift down by chunkShift to get the upper bits for chunk index
@@ -99,7 +99,7 @@ GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 relX
 
 NODISCARD
 INTERNAL u32
-GetTileValue(Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ) {
+GetTileValue(Tilemap* tilemap, i32 absTileX, i32 absTileY, i32 absTileZ) {
     const TilechunkPosition_ chunkPos{ GetChunkPosition(tilemap, absTileX, absTileY, absTileZ) };
     Tilechunk* tileChunk{ GetTilechunk(tilemap, chunkPos.chunkX, chunkPos.chunkY,
                                        chunkPos.chunkZ) };
@@ -118,7 +118,7 @@ GetTileValue(Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ) {
 }
 
 INTERNAL void
-SetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 tileX, u32 tileY,
+SetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, i32 tileX, i32 tileY,
                     u32 value) {
     ASSERT(tileChunk);
     ASSERT(tileX < tilemap->chunkSize && tileY < tilemap->chunkSize);
@@ -126,7 +126,7 @@ SetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 tile
 }
 
 INTERNAL void
-SetTileValue(MemoryArena* worldArena, Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ,
+SetTileValue(MemoryArena* worldArena, Tilemap* tilemap, i32 absTileX, i32 absTileY, i32 absTileZ,
              u32 value) {
     const TilechunkPosition_ chunkPos{ GetChunkPosition(tilemap, absTileX, absTileY, absTileZ) };
     Tilechunk* tileChunk{ GetTilechunk(tilemap, chunkPos.chunkX, chunkPos.chunkY, chunkPos.chunkZ,
@@ -165,7 +165,7 @@ IsTilemapPointEmpty(Tilemap* tilemap, TilemapPosition pos) {
 }
 
 INTERNAL void
-ReCanonicalizeCoordinate(const Tilemap* tilemap, u32* tileIndex, f32* relPos) {
+ReCanonicalizeCoordinate(const Tilemap* tilemap, i32* tileIndex, f32* relPos) {
     const i32 offset{ RoundF32ToI32(*relPos / tilemap->tileSideInMeters) };
     // NOTE: tilemap is assumed to be toroidal, if you step over the end you start at the
     // beginning
@@ -201,23 +201,24 @@ AreOnSameTiles(const TilemapPosition* pos, const TilemapPosition* newPos) {
 }
 
 NODISCARD
-INTERNAL u32
+INTERNAL i32
 TilemapPositionModifyZChecked(const Tilemap* tilemap, const TilemapPosition* pos, i32 offset) {
     // Assert some limit to avoid UB cases in the extremes
     // Probably will never hit this as we most likely always move only 1 up or down
     ASSERT(-10 <= offset && offset <= 10);
 
-    u32 newZ{ pos->absTileZ };
+    i32 newZ{ pos->absTileZ };
     if (offset >= 0) {
         // NOTE: removed check when moved to hash-based world storage
         //if (pos->absTileZ < (tilemap->tileChunkCountZ - offset)) {
         newZ += offset;
         //}
     } else {
+        // NOTE: use signed values for tiles so we probably don't need the check
         // Handle negative with a trick
-        if (static_cast<u32>((-offset)) <= pos->absTileZ) {
-            newZ += offset;
-        }
+        //if (static_cast<u32>((-offset)) <= pos->absTileZ) {
+        newZ += offset;
+        //}
     }
 
     return newZ;

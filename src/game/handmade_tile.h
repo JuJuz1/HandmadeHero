@@ -17,18 +17,18 @@
 GLOBAL constexpr u32 blocked_Tile_Value{ 1 };
 
 // This is the safe margin from the borders of the tilemap (~4 billion)
-GLOBAL constexpr u32 tile_Chunk_Safe_Margin{ 256 };
+GLOBAL constexpr i32 tile_Chunk_Safe_Margin{ INT32_MAX / 64 };
 
 // NOTE: Engine internal
 struct TilechunkPosition_ {
     // We use the upper 24 bits for the chunk index and the lower 8 for the x and y position
     // relative to the chunk's tile
-    u32 chunkX;
-    u32 chunkY;
-    u32 chunkZ;
+    i32 chunkX;
+    i32 chunkY;
+    i32 chunkZ;
 
-    u32 chunkRelativeTileX;
-    u32 chunkRelativeTileY;
+    i32 chunkRelativeTileX;
+    i32 chunkRelativeTileY;
 };
 
 struct TilemapDiff {
@@ -40,9 +40,9 @@ struct TilemapDiff {
 struct TilemapPosition {
     // New way of storing the information, we don't need tilemapX and Y
     // This is the "real" tileX and tileY in the whole tilemap
-    u32 absTileX;
-    u32 absTileY;
-    u32 absTileZ;
+    i32 absTileX;
+    i32 absTileY;
+    i32 absTileZ;
 
     // Tile-relative x and y from the center of the tile
     Vec2 tileOffset_;
@@ -51,9 +51,9 @@ struct TilemapPosition {
 struct Tilechunk {
     u32* tiles;
 
-    u32 tileChunkX;
-    u32 tileChunkY;
-    u32 tileChunkZ;
+    i32 tileChunkX;
+    i32 tileChunkY;
+    i32 tileChunkZ;
 
     Tilechunk* nextInHash;
 };
@@ -85,12 +85,12 @@ INTERNAL u32 GetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileCh
                                  u32 relY);
 
 NODISCARD
-INTERNAL u32 GetTileValue(Tilemap* tilemap, u32 absTileX, u32 absTileY, u32 absTileZ);
+INTERNAL u32 GetTileValue(Tilemap* tilemap, i32 absTileX, i32 absTileY, i32 absTileZ);
 
-INTERNAL void SetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, u32 tileX,
-                                  u32 tileY, u32 value);
-INTERNAL void SetTileValue(MemoryArena* worldArena, Tilemap* tilemap, u32 absTileX, u32 absTileY,
-                           u32 absTileZ, u32 value);
+INTERNAL void SetTileValueChecked(const Tilemap* tilemap, const Tilechunk* tileChunk, i32 tileX,
+                                  i32 tileY, u32 value);
+INTERNAL void SetTileValue(MemoryArena* worldArena, Tilemap* tilemap, i32 absTileX, i32 absTileY,
+                           i32 absTileZ, u32 value);
 
 NODISCARD
 INTERNAL bool32 IsTileValueEmpty(u32 value);
@@ -98,7 +98,7 @@ INTERNAL bool32 IsTileValueEmpty(u32 value);
 NODISCARD
 INTERNAL bool32 IsTilemapPointEmpty(const Tilemap* tilemap, TilemapPosition pos);
 
-INTERNAL void ReCanonicalizeCoordinate(const Tilemap* tilemap, u32* tileIndex, f32* relPos);
+INTERNAL void ReCanonicalizeCoordinate(const Tilemap* tilemap, i32* tileIndex, f32* relPos);
 
 NODISCARD
 INTERNAL TilemapPosition MapIntoTileSpace(const Tilemap* tilemap, TilemapPosition pos, Vec2 offset);
@@ -107,7 +107,7 @@ NODISCARD
 INTERNAL bool32 AreOnSameTiles(const TilemapPosition* pos, const TilemapPosition* newPos);
 
 NODISCARD
-INTERNAL u32 TilemapPositionModifyZChecked(const Tilemap* tilemap, const TilemapPosition* pos,
+INTERNAL i32 TilemapPositionModifyZChecked(const Tilemap* tilemap, const TilemapPosition* pos,
                                            i32 offset);
 
 NODISCARD

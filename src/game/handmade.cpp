@@ -449,8 +449,8 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
     const Vec2 entityOffsetFromCamera{ -diffCameraPos.x, -diffCameraPos.y };
     gameState->cameraPos = *newCameraPos;
 
-    const i32 tileSpanX{ 17 * 3 };
-    const i32 tileSpanY{ 9 * 3 };
+    const i32 tileSpanX{ tiles_Per_Width * 3 };
+    const i32 tileSpanY{ tiles_Per_Height * 3 };
     const Rect cameraBounds{ RectCenterDim(
         Vec2{}, Vec2{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY) } *
                     gameState->world->tilemap->tileSideInMeters) };
@@ -459,18 +459,18 @@ SetCamera(GameState* gameState, const TilemapPosition* newCameraPos) {
     // TODO: doesn't work with second player, walls work correctly
     OffsetAndCheckFrequencyByArea(gameState, cameraBounds, entityOffsetFromCamera);
 
-    u32 minTileX{};
+    i32 minTileX{};
     if (newCameraPos->absTileX >= (tileSpanX / 2)) {
         minTileX = newCameraPos->absTileX - (tileSpanX / 2);
     }
 
-    u32 minTileY{};
+    i32 minTileY{};
     if (newCameraPos->absTileY >= (tileSpanY / 2)) {
         minTileY = newCameraPos->absTileY - (tileSpanY / 2);
     }
 
-    const u32 maxTileX{ newCameraPos->absTileX + (tileSpanX / 2) };
-    const u32 maxTileY{ newCameraPos->absTileY + (tileSpanY / 2) };
+    const i32 maxTileX{ newCameraPos->absTileX + (tileSpanX / 2) };
+    const i32 maxTileY{ newCameraPos->absTileY + (tileSpanY / 2) };
 
     i32 movedCount{};
 
@@ -572,15 +572,13 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // How many screens widths of chunks to generate
     constexpr u32 screenCount{ 2 };
 
-    const u32 screenBaseX{ (INT16_MAX / 17) / 2 };
-    const u32 screenBaseY{ (INT16_MAX / 17) / 2 };
-    const u32 screenBaseZ{ (INT16_MAX / 17) / 2 };
+    const u32 screenBaseX{};
+    const u32 screenBaseY{};
+    const u32 screenBaseZ{};
 
-    u32 screenX{ screenBaseX }, screenY{ screenBaseY };
+    u32 screenX{ screenBaseX };
+    u32 screenY{ screenBaseY };
     u32 absTileZ{ screenBaseZ };
-
-    constexpr u32 tilesPerHeight{ 9 };
-    constexpr u32 tilesPerWidth{ 17 };
 
     i32 wallsAdded{};
 
@@ -612,23 +610,24 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
             doorTop = true;
         }
 
-        for (u32 tileY{}; tileY < tilesPerHeight; ++tileY) {
-            for (u32 tileX{}; tileX < tilesPerWidth; ++tileX) {
-                const u32 absTileX{ (screenX * tilesPerWidth) + tileX };
-                const u32 absTileY{ (screenY * tilesPerHeight) + tileY };
+        for (u32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
+            for (u32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
+                const u32 absTileX{ (screenX * tiles_Per_Width) + tileX };
+                const u32 absTileY{ (screenY * tiles_Per_Height) + tileY };
 
                 u32 tileValue{ 2 };
-                if (tileX == 0 && (!doorLeft || (tileY != (tilesPerHeight / 2)))) {
+                if (tileX == 0 && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
                     tileValue = blocked_Tile_Value;
                 }
-                if (tileX == (tilesPerWidth - 1) &&
-                    (!doorRight || (tileY != (tilesPerHeight / 2)))) {
+                if (tileX == (tiles_Per_Width - 1) &&
+                    (!doorRight || (tileY != (tiles_Per_Height / 2)))) {
                     tileValue = blocked_Tile_Value;
                 }
-                if (tileY == 0 && (!doorBottom || (tileX != tilesPerWidth / 2))) {
+                if (tileY == 0 && (!doorBottom || (tileX != tiles_Per_Width / 2))) {
                     tileValue = blocked_Tile_Value;
                 }
-                if (tileY == (tilesPerHeight - 1) && (!doorTop || (tileX != tilesPerWidth / 2))) {
+                if (tileY == (tiles_Per_Height - 1) &&
+                    (!doorTop || (tileX != tiles_Per_Width / 2))) {
                     tileValue = blocked_Tile_Value;
                 }
 
@@ -685,8 +684,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     }
 
     TilemapPosition cameraPos{};
-    cameraPos.absTileX = screenBaseX * 17 + (17 / 2);
-    cameraPos.absTileY = screenBaseY * 9 + (9 / 2);
+    cameraPos.absTileX = screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2);
+    cameraPos.absTileY = screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2);
     cameraPos.absTileZ = screenBaseZ;
     SetCamera(gameState, &cameraPos);
 }
@@ -960,15 +959,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
 #if 1
         if (cameraFollowingEntity.high->pos.x > (9.0f * tilemap->tileSideInMeters)) {
-            newCameraPos.absTileX += 17;
+            newCameraPos.absTileX += tiles_Per_Width;
         } else if (cameraFollowingEntity.high->pos.x < -(9.0f * tilemap->tileSideInMeters)) {
-            newCameraPos.absTileX -= 17;
+            newCameraPos.absTileX -= tiles_Per_Width;
         }
 
         if (cameraFollowingEntity.high->pos.y > (5.0f * tilemap->tileSideInMeters)) {
-            newCameraPos.absTileY += 9;
+            newCameraPos.absTileY += tiles_Per_Height;
         } else if (cameraFollowingEntity.high->pos.y < -(5.0f * tilemap->tileSideInMeters)) {
-            newCameraPos.absTileY -= 9;
+            newCameraPos.absTileY -= tiles_Per_Height;
         }
 #else
         // Scrolling

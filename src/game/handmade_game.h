@@ -11,6 +11,9 @@
     Game specific code
 */
 
+GLOBAL constexpr i32 tiles_Per_Width{ 17 };
+GLOBAL constexpr i32 tiles_Per_Height{ 9 };
+
 struct World {
     Tilemap* tilemap;
 };
