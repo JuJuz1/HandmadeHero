@@ -266,11 +266,11 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 NODISCARD
 INTERNAL LowEntity*
 GetLowEntity(GameState* gameState, i32 lowIndex) {
-    ASSERT(lowIndex > 0 && lowIndex < gameState->lowEntityCount);
+    ASSERT(lowIndex >= 0 && lowIndex < gameState->lowEntityCount);
 
     LowEntity* lowEntity{};
 
-    if (lowIndex > 0 && lowIndex < gameState->lowEntityCount) {
+    if (lowIndex >= 0 && lowIndex < gameState->lowEntityCount) {
         lowEntity = &gameState->lowEntities[lowIndex];
     }
 
@@ -306,37 +306,64 @@ EntityToLowFreq(GameState* gameState, i32 entityIndex) {
 }
 
 /**
+ * Maps the entity to camera space
+ */
+NODISCARD
+INTERNAL Vec2
+GetCameraSpacePos(GameState* gameState, const LowEntity* lowEntity) {
+    const WorldDiff diff{ SubtractWorldPos(gameState->world, &lowEntity->pos,
+                                           &gameState->cameraPos) };
+    const Vec2 result{ diff.x, diff.y };
+    return result;
+}
+
+/**
+ * A lower level call, assumes the entity is not in high frequency
+ *
  * Makes the entity high frequency by mapping it to camera space
  * Doesn't do anything if the entity already is in the high frequency array
  */
+NODISCARD
+INTERNAL HighEntity*
+EntityToHighFreq_(GameState* gameState, LowEntity* lowEntity, i32 lowIndex, Vec2 cameraSpacePos) {
+    HighEntity* highEntity{};
+
+    ASSERT(lowEntity->highEntityIndex == 0);
+
+    // Already is high freq
+    if (lowEntity->highEntityIndex == 0) {
+        if (gameState->highEntityCount < gameState->highEntities_.size) {
+            const i32 highIndex{ gameState->highEntityCount++ };
+            lowEntity->highEntityIndex = highIndex;
+            highEntity = &gameState->highEntities_[highIndex];
+
+            highEntity->pos = cameraSpacePos;
+            highEntity->velocity = Vec2{};
+            highEntity->chunkZ = lowEntity->pos.chunkZ;
+            highEntity->facingDir = 0;
+
+            highEntity->lowEntityIndex = lowIndex;
+
+            lowEntity->highEntityIndex = highIndex;
+        } else {
+            INVALID_CODE_PATH;
+        }
+    }
+
+    return highEntity;
+}
+
 NODISCARD
 INTERNAL HighEntity*
 EntityToHighFreq(GameState* gameState, i32 lowIndex) {
     HighEntity* highEntity{};
 
     LowEntity* lowEntity{ GetLowEntity(gameState, lowIndex) };
-
-    // Already is high freq
     if (lowEntity->highEntityIndex) {
         highEntity = &gameState->highEntities_[lowEntity->highEntityIndex];
     } else {
-        if (gameState->highEntityCount < gameState->highEntities_.size) {
-            const i32 highIndex{ gameState->highEntityCount++ };
-            lowEntity->highEntityIndex = highIndex;
-            highEntity = &gameState->highEntities_[highIndex];
-
-            // Map the entity to camera space
-            const WorldDiff diff{ SubtractWorldPos(gameState->world, &lowEntity->pos,
-                                                   &gameState->cameraPos) };
-            highEntity->pos = Vec2{ diff.x, diff.y };
-            highEntity->velocity = Vec2{};
-            highEntity->chunkZ = lowEntity->pos.chunkZ;
-            highEntity->facingDir = 0;
-
-            highEntity->lowEntityIndex = lowIndex;
-        } else {
-            INVALID_CODE_PATH;
-        }
+        const Vec2 cameraSpacePos{ GetCameraSpacePos(gameState, lowEntity) };
+        highEntity = EntityToHighFreq_(gameState, lowEntity, lowIndex, cameraSpacePos);
     }
 
     return highEntity;
@@ -349,11 +376,11 @@ EntityToHighFreq(GameState* gameState, i32 lowIndex) {
 NODISCARD
 INTERNAL Entity
 GetHighEntity(GameState* gameState, i32 lowIndex) {
-    //ASSERT(lowIndex > 0 && lowIndex < gameState->highEntityCount);
+    //ASSERT(lowIndex >= 0 && lowIndex < gameState->highEntityCount);
 
     Entity entity{};
 
-    if (lowIndex > 0 && lowIndex < gameState->lowEntityCount) {
+    if (lowIndex >= 0 && lowIndex < gameState->lowEntityCount) {
         entity.low = GetLowEntity(gameState, lowIndex);
         entity.high = EntityToHighFreq(gameState, lowIndex);
         entity.lowIndex = lowIndex;
@@ -367,14 +394,20 @@ GetHighEntity(GameState* gameState, i32 lowIndex) {
  */
 NODISCARD
 INTERNAL i32
-AddLowEntity(GameState* gameState, EntityType type) {
-    //ASSERT(gameState->highEntityCount < gameState->highEntities_.size);
+AddLowEntity(GameState* gameState, EntityType type, WorldPosition* pos) {
     ASSERT(gameState->lowEntityCount < gameState->lowEntities.size);
 
     const i32 entityIndex{ gameState->lowEntityCount++ };
+    LowEntity* lowEntity{ &gameState->lowEntities[entityIndex] };
 
-    // Already zero initialized
-    gameState->lowEntities[entityIndex].type = type;
+    // No need for this maybe
+    *lowEntity = LowEntity{};
+    lowEntity->type = type;
+
+    if (pos) {
+        lowEntity->pos = *pos;
+        ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, nullptr, pos);
+    }
 
     return entityIndex;
 }
@@ -384,10 +417,10 @@ INTERNAL i32
 AddPlayer(GameState* gameState) {
     PRINT("New player!\n");
 
-    const i32 entityIndex{ AddLowEntity(gameState, EntityType::HERO) };
+    WorldPosition pos{ gameState->cameraPos };
+    const i32 entityIndex{ AddLowEntity(gameState, EntityType::HERO, &pos) };
     LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
-    lowEntity->pos = gameState->cameraPos;
     lowEntity->height = 0.5f; // 1.4f;
     lowEntity->width = 0.75f; // entity->dimensions.y * 0.75f;
 
@@ -406,19 +439,34 @@ AddPlayer(GameState* gameState) {
 
 NODISCARD
 INTERNAL i32
-AddWall(GameState* gameState, i32 chunkX, i32 chunkY, i32 chunkZ) {
-    const i32 entityIndex{ AddLowEntity(gameState, EntityType::WALL) };
+AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
+    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+
+    const i32 entityIndex{ AddLowEntity(gameState, EntityType::WALL, &pos) };
     LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
 
-    lowEntity->pos.chunkX = chunkX;
-    lowEntity->pos.chunkY = chunkY;
-    lowEntity->pos.chunkZ = chunkZ;
     lowEntity->height = gameState->world->tileSideInMeters;
     lowEntity->width = gameState->world->tileSideInMeters;
-
     lowEntity->collides = true;
 
     return entityIndex;
+}
+
+/**
+ * Debug function
+ */
+NODISCARD
+INTERNAL bool32
+ValidateEntityPairs_(GameState* gameState) {
+    bool32 valid{ true };
+
+    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+        HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+        LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
+        valid = valid && lowEntity->highEntityIndex == highIndex;
+    }
+
+    return valid;
 }
 
 INTERNAL void
@@ -431,6 +479,7 @@ OffsetAndCheckFrequencyByArea(GameState* gameState, Rect highFreqBounds,
         highEntity->pos += entityOffsetFromCamera;
 
         if (!IsInsideRectangle(highFreqBounds, highEntity->pos)) {
+            ASSERT(gameState->lowEntities[highEntity->lowEntityIndex].highEntityIndex == highIndex);
             EntityToLowFreq(gameState, highEntity->lowEntityIndex);
             ++movedCount;
         } else {
@@ -444,14 +493,16 @@ OffsetAndCheckFrequencyByArea(GameState* gameState, Rect highFreqBounds,
 }
 
 INTERNAL void
-SetCamera(GameState* gameState, const WorldPosition* newCameraPos) {
-    const WorldDiff diffCameraPos{ SubtractWorldPos(gameState->world, newCameraPos,
+SetCamera(GameState* gameState, WorldPosition newCameraPos) {
+    ASSERT(ValidateEntityPairs_(gameState));
+
+    const WorldDiff diffCameraPos{ SubtractWorldPos(gameState->world, &newCameraPos,
                                                     &gameState->cameraPos) };
     const Vec2 entityOffsetFromCamera{ -diffCameraPos.x, -diffCameraPos.y };
-    gameState->cameraPos = *newCameraPos;
+    gameState->cameraPos = newCameraPos;
 
-    const i32 tileSpanX{ tiles_Per_Width * 3 };
-    const i32 tileSpanY{ tiles_Per_Height * 3 };
+    constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
+    constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
     const Rect cameraBounds{ RectCenterDim(
         Vec2{}, Vec2{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY) } *
                     gameState->world->tileSideInMeters) };
@@ -460,40 +511,47 @@ SetCamera(GameState* gameState, const WorldPosition* newCameraPos) {
     // TODO: doesn't work with second player, walls work correctly
     OffsetAndCheckFrequencyByArea(gameState, cameraBounds, entityOffsetFromCamera);
 
-    i32 minTileX{};
-    if (newCameraPos->chunkX >= (tileSpanX / 2)) {
-        minTileX = newCameraPos->chunkX - (tileSpanX / 2);
-    }
+    ASSERT(ValidateEntityPairs_(gameState));
 
-    i32 minTileY{};
-    if (newCameraPos->chunkY >= (tileSpanY / 2)) {
-        minTileY = newCameraPos->chunkY - (tileSpanY / 2);
-    }
-
-    const i32 maxTileX{ newCameraPos->chunkX + (tileSpanX / 2) };
-    const i32 maxTileY{ newCameraPos->chunkY + (tileSpanY / 2) };
+    const WorldPosition minChunk{ MapIntoChunkSpace(gameState->world, newCameraPos,
+                                                    cameraBounds.min) };
+    const WorldPosition maxChunk{ MapIntoChunkSpace(gameState->world, newCameraPos,
+                                                    cameraBounds.max) };
 
     i32 movedCount{};
 
-    // Move close entities into high set
-    for (i32 entityIndex{ 1 }; entityIndex < gameState->lowEntityCount; ++entityIndex) {
-        const LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
-        if (lowEntity->highEntityIndex) {
-            continue;
-        }
+    // Check entities by chunk, move to high set if in the chunks close to camera
+    for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
+        for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
+            WorldChunk* chunk{ GetWorldChunk(gameState->world, chunkX, chunkY, newCameraPos.chunkZ,
+                                             nullptr) };
+            if (chunk) {
+                for (WorldEntityBlock* block{ &chunk->firstBlock }; block; block = block->next) {
+                    for (i32 entityIndex{}; entityIndex < block->entityCount; ++entityIndex) {
+                        const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
+                        LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
+                        if (lowEntity->highEntityIndex) {
+                            continue;
+                        }
 
-        if (lowEntity->pos.chunkZ == gameState->cameraPos.chunkZ &&
-            lowEntity->pos.chunkX >= minTileX && lowEntity->pos.chunkX <= maxTileX &&
-            lowEntity->pos.chunkY >= minTileY && lowEntity->pos.chunkY <= maxTileY) {
-            // Unused return
-            EntityToHighFreq(gameState, entityIndex);
-            ++movedCount;
+                        const Vec2 cameraSpacePos{ GetCameraSpacePos(gameState, lowEntity) };
+
+                        if (IsInsideRectangle(cameraBounds, cameraSpacePos)) {
+                            // TODO: Unused return
+                            EntityToHighFreq_(gameState, lowEntity, lowEntityIndex, cameraSpacePos);
+                            ++movedCount;
+                        }
+                    }
+                }
+            }
         }
     }
 
     if (movedCount > 0) {
         PRINT_INT("Entities moved to high: ", movedCount);
     }
+
+    ASSERT(ValidateEntityPairs_(gameState));
 }
 
 INTERNAL void
@@ -504,7 +562,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // NOTE: reserve slot 0 for null entity
     // TODO: consider removing if there is no use case as this has caused a bit of problems with
     // all sorts of stuff
-    const i32 nullEntityIndex{ AddLowEntity(gameState, EntityType::NON_EXISTENT) };
+    const i32 nullEntityIndex{ AddLowEntity(gameState, EntityType::NON_EXISTENT, nullptr) };
     gameState->highEntityCount = 1;
 
     // Changed to false after initializing one player
@@ -567,18 +625,18 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     bool32 doorUp{};
     bool32 doorDown{};
 
-    // How many rooms to create
-    constexpr i32 screenCount{ 50 };
-
     const i32 screenBaseX{};
     const i32 screenBaseY{};
     const i32 screenBaseZ{};
 
     i32 screenX{ screenBaseX };
     i32 screenY{ screenBaseY };
-    i32 chunkZ{ screenBaseZ };
+    i32 absTileZ{ screenBaseZ };
 
     i32 wallsAdded{};
+
+    // How many rooms to create
+    constexpr i32 screenCount{ 50 };
 
     // Generating tile values
     for (u32 screen{}; screen < screenCount; ++screen) {
@@ -597,7 +655,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         // Atm this logic means we can only have 2 layers (z of 0 or 1)
         if (randomChoice == 2) {
             createdZDoor = true;
-            if (chunkZ == screenBaseZ) {
+            if (absTileZ == screenBaseZ) {
                 doorUp = true;
             } else {
                 doorDown = true;
@@ -610,8 +668,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
         for (i32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
             for (i32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
-                const i32 chunkX{ (screenX * tiles_Per_Width) + tileX };
-                const i32 chunkY{ (screenY * tiles_Per_Height) + tileY };
+                const i32 absTileX{ (screenX * tiles_Per_Width) + tileX };
+                const i32 absTileY{ (screenY * tiles_Per_Height) + tileY };
 
                 u32 tileValue{ 2 };
                 if (tileX == 0 && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
@@ -639,7 +697,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                 }
 
                 if (tileValue == blocked_Tile_Value) {
-                    const i32 entityIndex{ AddWall(gameState, chunkX, chunkY, chunkZ) };
+                    const i32 entityIndex{ AddWall(gameState, absTileX, absTileY, absTileZ) };
                     ++wallsAdded;
                 }
             }
@@ -660,10 +718,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         }
 
         if (randomChoice == 2) {
-            if (chunkZ == screenBaseZ) {
-                chunkZ += 1;
+            if (absTileZ == screenBaseZ) {
+                absTileZ += 1;
             } else {
-                chunkZ = screenBaseZ;
+                absTileZ = screenBaseZ;
             }
         }
         // Advance screens if we didn't make a vertical floor (door)
@@ -681,7 +739,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     WorldPosition cameraPos{ ChunkPositionFromTilePosition(
         world, screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2),
         screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2), screenBaseZ) };
-    SetCamera(gameState, &cameraPos);
+    SetCamera(gameState, cameraPos);
 }
 
 struct TestWallResult {
@@ -756,10 +814,9 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
 
         const Vec2 desiredPos{ entity.high->pos + playerDelta };
 
-        for (i32 highEntityIndex{ 1 }; highEntityIndex < gameState->highEntityCount;
-             ++highEntityIndex) {
+        for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
             // FIXME wrong indexing, FIXED I THINK
-            const HighEntity* highEntity{ &gameState->highEntities_[highEntityIndex] };
+            const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
             const Entity testEntity{ GetHighEntity(gameState, highEntity->lowEntityIndex) };
             // Check if collides and don't compare to self!
             if (!entity.low->collides || !testEntity.low->collides ||
@@ -783,7 +840,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ -1, 0 };
                 //hitWall = true;
-                hitHighEntityIndex = highEntityIndex;
+                hitHighEntityIndex = highIndex;
             }
 
             testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
@@ -792,7 +849,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ 1, 0 };
                 //hitWall = true;
-                hitHighEntityIndex = highEntityIndex;
+                hitHighEntityIndex = highIndex;
             }
 
             // y
@@ -802,7 +859,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ 0, -1 };
                 //hitwall = true;
-                hitHighEntityIndex = highEntityIndex;
+                hitHighEntityIndex = highIndex;
             }
 
             testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
@@ -811,7 +868,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
                 tMin = testWallResult.tMin;
                 wallNormal = Vec2{ 0, 1 };
                 //hitwall = true;
-                hitHighEntityIndex = highEntityIndex;
+                hitHighEntityIndex = highIndex;
             }
         }
 
@@ -860,7 +917,14 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
         }
     }
 
-    entity.low->pos = MapIntoWorldSpace(gameState->world, gameState->cameraPos, entity.high->pos);
+    WorldPosition newPos{ MapIntoChunkSpace(gameState->world, gameState->cameraPos,
+                                            entity.high->pos) };
+    // TODO: bundle these together?
+    ChangeEntityLocation(gameState->world, &gameState->worldArena, entity.lowIndex,
+                         &entity.low->pos, &newPos);
+    entity.low->pos = newPos;
+
+    //entity.low->pos = MapIntoChunkSpace(gameState->world, gameState->cameraPos, entity.high->pos);
 }
 
 // NOTE: use extern "C" to avoid name mangling
@@ -984,7 +1048,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         newCameraPos = cameraFollowingEntity.low->pos;
 #endif
 
-        SetCamera(gameState, &newCameraPos);
+        SetCamera(gameState, newCameraPos);
 
         // TODO: map new entities in and old entities out
         // TODO: map tiles and stairs (doors)

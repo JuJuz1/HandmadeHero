@@ -9,7 +9,7 @@ InitializeWorld(World* world, f32 tileSideInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
     world->tileSideInMeters = tileSideInMeters;
 
-    world->chunkSideInMeters = tileSideInMeters * 10.0f;
+    world->chunkSideInMeters = tileSideInMeters * tiles_Per_Chunk;
     world->firstFree = nullptr;
 
     for (i32 tileChunkIndex{}; tileChunkIndex < world->worldChunkHash.size; ++tileChunkIndex) {
@@ -20,7 +20,7 @@ InitializeWorld(World* world, f32 tileSideInMeters) {
 
 NODISCARD
 INTERNAL WorldChunk*
-GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ, MemoryArena* arena = nullptr) {
+GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ, MemoryArena* arena) {
     ASSERT(chunkX > -tile_Chunk_Safe_Margin);
     ASSERT(chunkY > -tile_Chunk_Safe_Margin);
     ASSERT(chunkZ > -tile_Chunk_Safe_Margin);
@@ -31,7 +31,7 @@ GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ, MemoryArena* are
     // TODO: better hash function ;D
     const i32 hashValue{ 19 * chunkX + 7 * chunkY + 3 * chunkZ };
     const i32 hashSlot{ static_cast<i32>(hashValue & (world->worldChunkHash.size - 1)) };
-    ASSERT(hashSlot < (world->worldChunkHash.size - 1));
+    ASSERT(hashSlot < world->worldChunkHash.size);
     WorldChunk* chunk{ &world->worldChunkHash[hashSlot] };
 
     do {
@@ -74,9 +74,9 @@ NODISCARD
 INTERNAL bool32
 IsCanonical(const World* world, f32 relPos) {
     // TODO: fix the floating point math to not allow the case above of ==
-    ASSERT(relPos >= -world->tileSideInMeters * 0.5f && relPos <= world->tileSideInMeters * 0.5f);
-    const bool32 result{ relPos >= -world->tileSideInMeters * 0.5f &&
-                         relPos <= world->tileSideInMeters * 0.5f };
+    ASSERT(relPos >= -world->chunkSideInMeters * 0.5f && relPos <= world->chunkSideInMeters * 0.5f);
+    const bool32 result{ relPos >= -world->chunkSideInMeters * 0.5f &&
+                         relPos <= world->chunkSideInMeters * 0.5f };
     return result;
 }
 
@@ -89,11 +89,11 @@ IsCanonical(const World* world, Vec2 offset) {
 
 INTERNAL void
 ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos) {
-    const i32 offset{ RoundF32ToI32(*relPos / world->tileSideInMeters) };
+    const i32 offset{ RoundF32ToI32(*relPos / world->chunkSideInMeters) };
     // NOTE: Wrapping is not allowed so all coordinates are assumed to be within the safe margins
     *tileIndex += offset;
 
-    *relPos -= static_cast<f32>(offset) * world->tileSideInMeters;
+    *relPos -= static_cast<f32>(offset) * world->chunkSideInMeters;
     // TODO: what to do if: *relPos == world->tilesideinpixels
     // This can happen because we do the divide and floor and then multiple, the player might
     // end up being on the same tile Relative positions must be within the tile size in pixels
@@ -102,7 +102,7 @@ ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos) {
 
 NODISCARD
 INTERNAL WorldPosition
-MapIntoWorldSpace(const World* world, WorldPosition pos, Vec2 offset) {
+MapIntoChunkSpace(const World* world, WorldPosition pos, Vec2 offset) {
     WorldPosition result{ pos };
     result.offset_ += offset;
 
@@ -118,11 +118,12 @@ ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition result{};
 
     result.chunkX = tileX / tiles_Per_Chunk;
-    result.chunkX = tileY / tiles_Per_Chunk;
-    result.chunkX = tileZ / tiles_Per_Chunk;
+    result.chunkY = tileY / tiles_Per_Chunk;
+    result.chunkZ = tileZ / tiles_Per_Chunk;
 
-    result.offset_.x = tileX - (result.chunkX * tiles_Per_Chunk) * world->tileSideInMeters;
-    result.offset_.y = tileY - (result.chunkY * tiles_Per_Chunk) * world->tileSideInMeters;
+    // TODO: Align tiles with chunks accurately to prevent errors
+    result.offset_.x = (tileX - (result.chunkX * tiles_Per_Chunk)) * world->tileSideInMeters;
+    result.offset_.y = (tileY - (result.chunkY * tiles_Per_Chunk)) * world->tileSideInMeters;
     // TODO: Move to 3D Z
 
     return result;
@@ -186,25 +187,28 @@ INTERNAL void
 ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowEntityIndex, WorldPosition* oldPos,
                      WorldPosition* newPos) {
     if (oldPos && AreOnSameChunk(world, oldPos, newPos)) {
-        return;
+        // Leave entity where it is
     } else {
         if (oldPos) {
-            WorldChunk* chunk{ GetWorldChunk(world, oldPos->chunkX, oldPos->chunkY,
-                                             oldPos->chunkZ) };
+            WorldChunk* chunk{ GetWorldChunk(world, oldPos->chunkX, oldPos->chunkY, oldPos->chunkZ,
+                                             nullptr) };
             ASSERT(chunk);
             if (chunk) {
                 // Pull the entity out of its current entity block
                 // Modify blocks to match the new structure if changed
 
                 WorldEntityBlock* firstBlock{ &chunk->firstBlock };
-                ASSERT(firstBlock->entityCount >= 1);
+                bool32 notFound{ true };
 
-                for (WorldEntityBlock* block{ firstBlock }; block; block = block->next) {
+                for (WorldEntityBlock* block{ firstBlock }; block && notFound;
+                     block = block->next) {
                     for (i32 lowIndex{}; lowIndex < block->entityCount; ++lowIndex) {
                         // Found the block
                         if (block->lowEntityIndexes[lowIndex] == lowEntityIndex) {
+                            ASSERT(firstBlock->entityCount > 0);
+
                             // Move the last towards the head
-                            firstBlock->lowEntityIndexes[lowIndex] =
+                            block->lowEntityIndexes[lowIndex] =
                                 firstBlock->lowEntityIndexes[--firstBlock->entityCount];
 
                             // First block would be deleted
@@ -214,11 +218,12 @@ ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowEntityIndex, World
                                     *firstBlock = *firstBlock->next;
 
                                     nextBlock->next = world->firstFree;
-                                    world->firstFree = FreeBlock(nextBlock);
+                                    //world->firstFree = FreeBlock(nextBlock);
+                                    world->firstFree = nextBlock;
                                 }
                             }
 
-                            block = nullptr;
+                            notFound = false;
                             break;
                         }
                     }
@@ -230,6 +235,8 @@ ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowEntityIndex, World
 
         WorldChunk* chunk{ GetWorldChunk(world, newPos->chunkX, newPos->chunkY, newPos->chunkZ,
                                          arena) };
+        ASSERT(chunk);
+
         WorldEntityBlock* block{ &chunk->firstBlock };
         ASSERT(block->entityCount <= block->lowEntityIndexes.size);
         if (block->entityCount == block->lowEntityIndexes.size) {
@@ -243,11 +250,11 @@ ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowEntityIndex, World
 
             *oldBlock = *block;
             block->next = oldBlock;
-            block->next->entityCount = 0;
+            block->entityCount = 0;
         }
 
-        ASSERT(block->entityCount < block->lowEntityIndexes.size);
-
         // Insert into new block
+        ASSERT(block->entityCount < block->lowEntityIndexes.size);
+        block->lowEntityIndexes[block->entityCount++] = lowEntityIndex;
     }
 }

@@ -136,7 +136,7 @@ INTERNAL bool32 IsCanonical(World* world, Vec2 offset);
 INTERNAL void ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos);
 
 NODISCARD
-INTERNAL WorldPosition MapIntoWorldSpace(const World* world, WorldPosition pos, Vec2 offset);
+INTERNAL WorldPosition MapIntoChunkSpace(const World* world, WorldPosition pos, Vec2 offset);
 
 NODISCARD
 INTERNAL WorldPosition ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ);
