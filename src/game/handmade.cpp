@@ -567,7 +567,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[0] };
 
     // NOTE: should come up with a better way of getting the offsets for the correct align
-    // TODO: build script checks if data/original exists
+    // TODO: test linux build script
 
 #if HANDMADE_USE_REAL_ASSETS
     gameState->background = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,

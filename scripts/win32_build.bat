@@ -42,15 +42,27 @@ rem this way we get the maximum flexibility though and we don't boilerplate the 
 rem /wd4201 nonstandard extension used: nameless struct/union
 rem /wd4127 conditional expression is constant NOT USED
 rem TODO: enable /WX back, remove /wd4505 /wd4100 /wd4189
+
+rem search if the preordered data assets exist
+set useRealAssets=0
+
+if EXIST ../data/original (
+    set useRealAssets=1
+    echo Using original assets
+) else (
+    echo Using default assets
+)
+echo.
+
+set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
+
+rem other compile options
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
-set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 -DHANDMADE_USE_REAL_ASSETS=1
 set commonCompilerFlags=%commonCompilerDefines% /MTd /Zi /Zc:__cplusplus /FC /Fm /Od /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
 
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib
 set gameExportedFunctions=/EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
-
-set buildFailed=0
 
 rem delete all .pdb files
 rem replace the game's one with a new timestamped version to enable instantenous updating
@@ -61,9 +73,13 @@ rem sometimes we couldn't set breakpoints in visual studio
 rem as the pdb was not loaded correctly when hot loading
 echo WAITING FOR PDB > lock.tmp
 
+set buildFailed=0
+
 rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
+
 cl %commonCompilerFlags% ../src/game/handmade.cpp /I ../src /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
+
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
@@ -72,6 +88,7 @@ if ERRORLEVEL 1 (
 del lock.tmp
 
 cl %commonCompilerFlags% ../src/platform/win32/win32_handmade.cpp /I ../src /link %win32Libraries% %commonLinkerFlags%
+
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mwin32_handmade.cpp failed[0m[1m

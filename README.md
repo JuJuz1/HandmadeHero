@@ -97,8 +97,4 @@ Run it:
 
 ### Using the original art assets
 
-By default the build uses placeholder assets I have created. If you wish to use them, create a folder inside data called "original". Then add test and test2 folders from the downloaded art zip to data/original. Now make the build use the real assets by adding a define to the build script (both Windows and Linux) defines:
-
-```
--DHANDMADE_USE_REAL_ASSETS=1
-```
+By default the build scripts use placeholder assets I have created. If you wish to use the original art assets obtained by preordering the game, create a folder inside data called "original". Then add test and test2 folders from the downloaded art zip to data/original. The build scripts should automatically detect the existence of data/original and configure HANDMADE_USE_REAL_ASSETS to 1
