@@ -194,6 +194,11 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
 INTERNAL void
 DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
            i32 alignX = 0, i32 alignY = 0) {
+    // TODO: never have this case? use a placeholder instead?
+    if (!bitmap->pixels) {
+        return;
+    }
+
     const Vec2 aligned{ xPos - static_cast<f32>(alignX), yPos - static_cast<f32>(alignY) };
 
     i32 roundedMinX{ RoundF32ToI32(aligned.x) };
@@ -555,6 +560,106 @@ SetCamera(GameState* gameState, WorldPosition newCameraPos) {
 }
 
 INTERNAL void
+LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
+    // Load the original art assets if one has preordered the game
+    // Although with a quick search one can find these on some public repo on Github...
+
+    HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[0] };
+
+    // NOTE: should come up with a better way of getting the offsets for the correct align
+    // TODO: build script checks if data/original exists
+
+#if HANDMADE_USE_REAL_ASSETS
+    gameState->background = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                         "original/test/test_background.bmp");
+
+    gameState->tree =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "original/test2/tree00.bmp");
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_front_head.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_front_cape.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "original/test/test_hero_front_torso.bmp");
+    heroBitmaps->align = Vec2{ 72, 182 };
+    ++heroBitmaps;
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_left_head.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_left_cape.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "original/test/test_hero_left_torso.bmp");
+    heroBitmaps->align = Vec2{ 72, 182 };
+    ++heroBitmaps;
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_back_head.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_back_cape.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "original/test/test_hero_back_torso.bmp");
+    heroBitmaps->align = Vec2{ 72, 182 };
+    ++heroBitmaps;
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_right_head.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "original/test/test_hero_right_cape.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "original/test/test_hero_right_torso.bmp");
+    heroBitmaps->align = Vec2{ 72, 182 };
+
+#else
+
+    gameState->background = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                         "handmade/test/test_background.bmp");
+
+    // TODO: these just fail because we don't have a the bitmaps yet
+    // Doesn't crash the game though
+    gameState->tree =
+        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "handmade/test2/tree00.bmp");
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_head_forward.bmp");
+
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "handmade/test/player_torso_forward.bmp");
+    heroBitmaps->align = Vec2{ 48, 100 };
+    ++heroBitmaps;
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_head_left.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "handmade/test/player_torso_left.bmp");
+    heroBitmaps->align = Vec2{ 46, 104 };
+    ++heroBitmaps;
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_head_backward.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "handmade/test/player_torso_backward.bmp");
+    heroBitmaps->align = Vec2{ 42, 100 };
+    ++heroBitmaps;
+
+    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_head_right.bmp");
+    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                     "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
+                                      "handmade/test/player_torso_right.bmp");
+    heroBitmaps->align = Vec2{ 44, 104 };
+#endif
+}
+
+INTERNAL void
 InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
     // TODO: maybe make platform set this
     memory->isInitialized = true;
@@ -568,44 +673,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // Changed to false after initializing one player
     gameState->startWithAPlayer = true;
 
-    gameState->background =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/test_background.bmp");
-
-    // NOTE: should come up with a better way of doing this rather than looking at the images
-    // Offsets: align x and y
-    // 48 100 forward
-    // 46 104 left
-    // 42 100 backward
-    // 44 104 right
-
-    HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[0] };
-
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_forward.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_forward.bmp");
-    heroBitmaps->align = Vec2{ 48, 100 };
-    ++heroBitmaps;
-
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_left.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_left.bmp");
-    heroBitmaps->align = Vec2{ 46, 104 };
-    ++heroBitmaps;
-
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_backward.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "test/player_torso_backward.bmp");
-    heroBitmaps->align = Vec2{ 42, 100 };
-    ++heroBitmaps;
-
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_head_right.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "test/player_torso_right.bmp");
-    heroBitmaps->align = Vec2{ 44, 104 };
+    LoadArtAssets(threadContext, gameState, memory);
 
     InitializeArena(&gameState->worldArena,
                     static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
@@ -1187,6 +1255,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highEntity->facingDir] };
             DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x, playerGroundPoint.y,
+                       static_cast<i32>(heroBitmaps->align.x),
+                       static_cast<i32>(heroBitmaps->align.y));
+            DrawBitmap(screenBuff, &heroBitmaps->cape, playerGroundPoint.x, playerGroundPoint.y,
                        static_cast<i32>(heroBitmaps->align.x),
                        static_cast<i32>(heroBitmaps->align.y));
             DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,

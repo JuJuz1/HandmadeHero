@@ -23,6 +23,7 @@ struct LoadedBitmapInfo {
 
 struct HeroBitmaps {
     LoadedBitmapInfo head;
+    LoadedBitmapInfo cape;
     LoadedBitmapInfo torso;
     Vec2 align;
 };
@@ -44,8 +45,9 @@ struct GameState {
 
     Array<i32, ARRAY_COUNT(Input::playerInputs)> playerIndexFromController;
 
-    LoadedBitmapInfo background;
     Array<HeroBitmaps, 4> heroBitmaps;
+    LoadedBitmapInfo background;
+    LoadedBitmapInfo tree;
 
     bool32 startWithAPlayer;
 };

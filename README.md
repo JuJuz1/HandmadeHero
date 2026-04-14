@@ -94,3 +94,11 @@ Run it:
 ```
 ./build/linux_handmade
 ```
+
+### Using the original art assets
+
+By default the build uses placeholder assets I have created. If you wish to use them, create a folder inside data called "original". Then add test and test2 folders from the downloaded art zip to data/original. Now make the build use the real assets by adding a define to the build script (both Windows and Linux) defines:
+
+```
+-DHANDMADE_USE_REAL_ASSETS=1
+```

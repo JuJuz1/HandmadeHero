@@ -6,9 +6,10 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
-                "HANDMADE_DEBUG",
+                "HANDMADE_WIN32",
                 "HANDMADE_INTERNAL",
-                "HANDMADE_WIN32"
+                "HANDMADE_DEBUG",
+                "HANDMADE_USE_REAL_ASSETS"
             ],
             "windowsSdkVersion": "10.0.26100.0",
             "compilerPath": "cl.exe",
@@ -28,9 +29,10 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
-                "HANDMADE_DEBUG",
+                "HANDMADE_LINUX",
                 "HANDMADE_INTERNAL",
-                "HANDMADE_LINUX"
+                "HANDMADE_DEBUG",
+                "HANDMADE_USE_REAL_ASSETS"
             ],
             "compilerPath": "/opt/llvm-22.1.0/bin/clang++",
             "cStandard": "c17",

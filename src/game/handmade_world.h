@@ -54,6 +54,7 @@ struct WorldPosition {
 
 enum class EntityType {
     NON_EXISTENT = 0,
+
     HERO,
     WALL,
 };
