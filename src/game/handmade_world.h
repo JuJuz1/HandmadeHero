@@ -21,6 +21,8 @@ GLOBAL constexpr u32 blocked_Tile_Value{ 1 };
 GLOBAL constexpr i32 tile_Chunk_Safe_Margin{ INT32_MAX / 64 };
 GLOBAL constexpr i32 tile_Chunk_Uninitialized{ INT32_MAX };
 
+GLOBAL constexpr i32 tiles_Per_Chunk{ 16 };
+
 // NOTE: Engine internal
 struct WorldChunkPosition_ {
     // We use the upper 24 bits for the chunk index and the lower 8 for the x and y position
@@ -40,14 +42,12 @@ struct WorldDiff {
 };
 
 struct WorldPosition {
-    // New way of storing the information, we don't need worldX and Y
-    // This is the "real" tileX and tileY in the whole world
-    i32 absTileX;
-    i32 absTileY;
-    i32 absTileZ;
+    i32 chunkX;
+    i32 chunkY;
+    i32 chunkZ;
 
-    // Tile-relative x and y from the center of the tile
-    Vec2 tileOffset_;
+    // Tile-relative x and y from the center of the chunk
+    Vec2 offset_;
 };
 
 /// Entities ///
@@ -68,7 +68,7 @@ struct LowEntity {
     f32 width, height;
 
     bool32 collides;
-    i32 dAbsTileZ; // Stairs
+    i32 dChunkZ; // Stairs
 
     i32 highEntityIndex;
 };
@@ -78,7 +78,7 @@ struct LowEntity {
  */
 struct HighEntity {
     Vec2 pos; // NOTE: This is now already relative to the camera center
-    u32 absTileZ;
+    u32 chunkZ;
     Vec2 velocity;
 
     i32 facingDir;
@@ -92,9 +92,9 @@ struct Entity {
     i32 lowIndex;
 };
 
-struct TileEntityBlock {
-    Array<LowEntity, 16> entity;
-    TileEntityBlock* next;
+struct WorldEntityBlock {
+    Array<i32, 16> lowEntityIndexes;
+    WorldEntityBlock* next;
     i32 entityCount;
 };
 
@@ -104,7 +104,7 @@ struct WorldChunk {
     i32 chunkZ;
 
     // Episode 56 tiles to entities
-    TileEntityBlock firstBlock;
+    WorldEntityBlock firstBlock;
 
     WorldChunk* nextInHash;
 };
@@ -112,34 +112,37 @@ struct WorldChunk {
 struct World {
     // TODO: Size must be power of two for now
     Array<WorldChunk, 4096> worldChunkHash;
-
-    i32 chunkShift;
-    i32 chunkMask;
-    i32 chunkSize;
+    WorldEntityBlock* firstFree;
 
     f32 tileSideInMeters;
+    f32 chunkSideInMeters;
 };
 
 INTERNAL void InitializeWorld(World* world, f32 tileSideInMeters);
 
 NODISCARD
-INTERNAL WorldChunk* GetWorldChunk(World* world, i32 tileChunkX, i32 tileChunkY, i32 tileChunkZ,
+INTERNAL WorldChunk* GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ,
                                    MemoryArena* arena);
-
-NODISCARD
-INTERNAL WorldChunkPosition_ GetChunkPosition(const World* world, i32 absTileX, i32 absTileY,
-                                              i32 absTileZ);
 
 NODISCARD
 INTERNAL bool32 IsTileValueEmpty(u32 value);
 
+NODISCARD
+INTERNAL bool32 IsCanonical(World* world, f32 tileRel);
+
+NODISCARD
+INTERNAL bool32 IsCanonical(World* world, Vec2 offset);
+
 INTERNAL void ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos);
 
 NODISCARD
-INTERNAL WorldPosition MapIntoTileSpace(const World* world, WorldPosition pos, Vec2 offset);
+INTERNAL WorldPosition MapIntoWorldSpace(const World* world, WorldPosition pos, Vec2 offset);
 
 NODISCARD
-INTERNAL bool32 AreOnSameTiles(const WorldPosition* pos, const WorldPosition* newPos);
+INTERNAL WorldPosition ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ);
+
+NODISCARD
+INTERNAL bool32 AreOnSameChunk(const World* world, const WorldPosition* A, const WorldPosition* B);
 
 NODISCARD
 INTERNAL i32 WorldPositionModifyZChecked(const World* world, const WorldPosition* pos, i32 offset);
@@ -147,5 +150,10 @@ INTERNAL i32 WorldPositionModifyZChecked(const World* world, const WorldPosition
 NODISCARD
 INTERNAL WorldDiff SubtractWorldPos(const World* world, const WorldPosition* a,
                                     const WorldPosition* b);
+
+INTERNAL WorldEntityBlock* FreeBlock(WorldEntityBlock* block);
+
+INTERNAL void ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex,
+                                   WorldPosition* oldPos, WorldPosition* newPos);
 
 #endif // HANDMADE_WORLD_H
