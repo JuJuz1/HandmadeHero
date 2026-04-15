@@ -668,7 +668,8 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     // TODO: these just fail because we don't have a the bitmaps yet
     // Doesn't crash the game though
-    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/tree00.bmp");
+    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/tree.bmp");
+    gameState->shadow = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/shadow.bmp");
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_forward.bmp");
