@@ -6,7 +6,13 @@
 # This pre-commit hook checks for the keyword "$NOCHECKIN_KEYWORD" in staged files, then aborts the commit
 # if any matches were found, with output of file path, line number and match preview.
 
-# Use the script supplied in scripts/ to apply the hook automatically
+# This is to better developer experience by letting them mark code meant for experimenting
+# with the supplied keyword, and not having to remember/worry about committing it to the repo
+
+# !!! Use the script supplied in scripts/ to apply the hook automatically (cross-platform) !!!
+
+# The script should be executable even when committed from Windows by doing this:
+# git update-index --chmod=+x ./scripts/setup_git_commit_hook.sh
 
 # Original install instructions:
 # To install, copy and rename to <repo>/.git/hooks/pre-commit (merge contents if already exists)
