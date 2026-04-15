@@ -861,6 +861,17 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     AddMonster(gameState, cameraTileX + 2, cameraTileY, cameraTileZ);
 
+    //constexpr i32 familiarCount{ 1 }; // 10
+
+    //for (i32 i{}; i < familiarCount; ++i) {
+    //    const i32 familiarOffsetX{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 7 };
+    //    const i32 familiarOffsetY{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 3 };
+    //    if (familiarOffsetX && familiarOffsetY) {
+    //        AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
+    //                    cameraTileZ);
+    //    }
+    //}
+
     AddFamiliar(gameState, cameraTileX - 2, cameraTileY + 1, cameraTileZ);
 
     // Atm SetCamera has to be called at the end if there is no player at the start
@@ -1091,9 +1102,10 @@ UpdateFamiliar(GameState* gameState, Entity entity, f32 delta) {
         }
     }
 
+    constexpr f32 stopDistSq{ 4.0f }; // Dist of 2.0f
     Vec2 acceleration{};
 
-    if (closestHero.high) {
+    if (closestHero.high && closestHeroDSq > stopDistSq) {
         f32 speed{ 0.5f };
         f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
         acceleration = (closestHero.high->pos - entity.high->pos) * oneOverLength;

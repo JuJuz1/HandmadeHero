@@ -86,10 +86,10 @@ NODISCARD
 INTERNAL bool32 IsTileValueEmpty(u32 value);
 
 NODISCARD
-INTERNAL bool32 IsCanonical(World* world, f32 tileRel);
+INTERNAL bool32 IsCanonical(const World* world, f32 tileRel);
 
 NODISCARD
-INTERNAL bool32 IsCanonical(World* world, Vec2 offset);
+INTERNAL bool32 IsCanonical(const World* world, Vec2 offset);
 
 INTERNAL void ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos);
 

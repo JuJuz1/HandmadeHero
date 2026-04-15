@@ -122,9 +122,13 @@ ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ) {
     result.chunkZ = tileZ / tiles_Per_Chunk;
 
     // TODO: Align tiles with chunks accurately to prevent errors
-    result.offset_.x = (tileX - (result.chunkX * tiles_Per_Chunk)) * world->tileSideInMeters;
-    result.offset_.y = (tileY - (result.chunkY * tiles_Per_Chunk)) * world->tileSideInMeters;
+    result.offset_.x = ((tileX - tiles_Per_Chunk / 2) - (result.chunkX * tiles_Per_Chunk)) *
+                       world->tileSideInMeters;
+    result.offset_.y = ((tileY - tiles_Per_Chunk / 2) - (result.chunkY * tiles_Per_Chunk)) *
+                       world->tileSideInMeters;
     // TODO: Move to 3D Z
+
+    ASSERT(IsCanonical(world, result.offset_));
 
     return result;
 }
