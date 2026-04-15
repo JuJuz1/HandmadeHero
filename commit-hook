@@ -6,12 +6,15 @@
 # This pre-commit hook checks for the keyword "$NOCHECKIN_KEYWORD" in staged files, then aborts the commit
 # if any matches were found, with output of file path, line number and match preview.
 
-# Use the script to copy and rename the file to .git/hooks !
+# Use the script supplied in scripts/ to apply the hook automatically
 
 # Original install instructions:
 # To install, copy and rename to <repo>/.git/hooks/pre-commit (merge contents if already exists)
 # The file name has to be "pre-commit" for Git to use it. It is also compatible with git GUIs.
 # On Unix, mark the file as executable with `chmod +x .git/hooks/pre-commit`.
+
+# IMPORTANT: if modifying this script use --no-verify when committing as this file contains
+# the keyword :)
 
 keyword=${NOCHECKIN_KEYWORD:-nocheckin} # -> nocheckin
 
