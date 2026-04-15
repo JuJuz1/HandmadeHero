@@ -3,6 +3,8 @@
 
 #include "game/handmade.h"
 
+GLOBAL constexpr f32 PI32f{ 3.1415926535f };
+
 NODISCARD
 INTERNAL inline f32 SquareF32(f32 value);
 

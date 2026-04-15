@@ -64,6 +64,8 @@ struct HighEntity {
 
     i32 facingDir;
 
+    f32 tBob;
+
     f32 z;
     f32 dZ;
 

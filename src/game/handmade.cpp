@@ -1120,7 +1120,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitializeGameState(threadContext, gameState, memory);
     }
 
-    const World* world{ gameState->world };
+    World* world{ gameState->world };
 
     const f32 delta{ input->frameDeltaTime };
 
@@ -1233,21 +1233,20 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 // Debug printing
 #if 0
     const Entity player{ cameraFollowingEntity };
-    const WorldChunkPosition_ chunkPos{ GetChunkPosition(
-        world, player.low->pos.chunkX, player.low->pos.chunkY, player.low->pos.chunkZ) };
+    if (player.high) {
+        PRINT("\n");
 
-    PRINT("\n");
-    PRINT_UINT("tileChunkX: ", chunkPos.chunkX);
-    PRINT_UINT("tileChunkY: ", chunkPos.chunkY);
-    PRINT_UINT("tileChunkZ: ", chunkPos.chunkZ);
-    PRINT_UINT("chunkRelativeX: ", chunkPos.chunkRelativeTileX);
-    PRINT_UINT("chunkRelativeY: ", chunkPos.chunkRelativeTileY);
+        PRINT_UINT("chunkX: ", player.low->pos.chunkX);
+        PRINT_UINT("chunkY: ", player.low->pos.chunkY);
+        PRINT_UINT("chunkZ: ", player.low->pos.chunkZ);
 
-    PRINT_UINT("chunkX: ", player.low->pos.chunkX);
-    PRINT_UINT("chunkY: ", player.low->pos.chunkY);
-    PRINT_UINT("chunkZ: ", player.low->pos.chunkZ);
-    PRINT_FLOAT("tileRelX: ", player.low->pos.offset_.x);
-    PRINT_FLOAT("tileRelY: ", player.low->pos.offset_.y);
+        //PRINT_UINT("chunkRelativeX: ", chunkPos.chunkRelativeTileX);
+        //PRINT_UINT("chunkRelativeY: ", chunkPos.chunkRelativeTileY);
+
+        PRINT_FLOAT("tileRelX: ", player.low->pos.offset_.x);
+        PRINT_FLOAT("tileRelY: ", player.low->pos.offset_.y);
+    }
+
 #endif
 
     // Background
@@ -1289,7 +1288,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         switch (lowEntity->type) {
         case EntityType::WALL: {
-            //DrawRectangle(screenBuff, playerTopLeft, maxPos, playerR, playerG, playerB);
             // Tree bitmaps
             PushPiece(&pieceGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
         } break;
@@ -1302,16 +1300,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::MONSTER: {
-            //DrawRectangle(screenBuff, playerTopLeft, maxPos, playerR, playerG, playerB);
             UpdateMonster(gameState, entity, delta);
             PushPiece(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha);
             PushPiece(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
         } break;
         case EntityType::FAMILIAR: {
-            //DrawRectangle(screenBuff, playerTopLeft, maxPos, playerR, playerG, playerB);
             UpdateFamiliar(gameState, entity, delta);
+            // Head bob
+            entity.high->tBob += delta;
+            if (entity.high->tBob > (2.0f * PI32f)) {
+                entity.high->tBob -= (2.0f * PI32f);
+            }
+
             PushPiece(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha);
-            PushPiece(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
+            PushPiece(&pieceGroup, &heroBitmaps->head, Vec2{},
+                      20.0f * Sin(4.0f * entity.high->tBob), heroBitmaps->align);
         } break;
 
         default: {
@@ -1319,7 +1322,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
         }
 
-        f32 gravity{ -9.8f };
+        const f32 gravity{ -9.8f };
         highEntity->z = 0.5f * gravity * SquareF32(delta) + highEntity->dZ * delta + highEntity->z;
         highEntity->dZ = gravity * delta + highEntity->dZ;
         if (highEntity->z < 0.0f) {
@@ -1334,9 +1337,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         constexpr f32 g{ 0.1f };
         constexpr f32 b{ 0.5f };
 
-        Vec2 leftTop{ entityGroundPoint.x - (0.5f * metersToPixels * lowEntity->width),
-                      entityGroundPoint.y - (0.5f * metersToPixels * lowEntity->height) };
-        Vec2 entityWidthHeight{ lowEntity->width, lowEntity->height };
+        const Vec2 leftTop{ entityGroundPoint.x - (0.5f * metersToPixels * lowEntity->width),
+                            entityGroundPoint.y - (0.5f * metersToPixels * lowEntity->height) };
+        const Vec2 entityWidthHeight{ lowEntity->width, lowEntity->height };
 
         // Draw pieces
         for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
