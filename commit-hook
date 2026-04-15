@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# Copied from: https://stackoverflow.com/a/64240810
+# A git commit hook to check that the text content of MARKER
+# doesn't appear anywhere in the source code
+# Exact idea copied from an experienced game developer... IYKYK
+
+# A non-zero exit signals that no commit should be made
+
+# The text that refuses the commit
+# Change it to match your needs; keep it enclosed in single quotes
+MARKER="nocheckin"
+
+# Verify the staged files for the presence of the marker text
+if git diff --cached --name-only | xargs grep -q "$MARKER"; then
+  echo 'Cannot commit because the "no-commit" marker has been found in one of the staged files.' 1>&2
+  # Refuse to commit
+  exit 1
+fi
