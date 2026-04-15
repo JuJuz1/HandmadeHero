@@ -1,19 +1,53 @@
 #!/usr/bin/env bash
 
-# Copied from: https://stackoverflow.com/a/64240810
-# A git commit hook to check that the text content of MARKER
-# doesn't appear anywhere in the source code
-# Exact idea copied from an experienced game developer... IYKYK
+# Copied from:
+# https://gist.github.com/xezrunner/e6dbafcc21fcbc976c93bdee0f371a08#file-pre-commit-nocheckin
 
-# A non-zero exit signals that no commit should be made
+# This pre-commit hook checks for the keyword "$NOCHECKIN_KEYWORD" in staged files, then aborts the commit
+# if any matches were found, with output of file path, line number and match preview.
 
-# The text that refuses the commit
-# Change it to match your needs; keep it enclosed in single quotes
-MARKER="nocheckin"
+# Use the script to copy and rename the file to .git/hooks !
 
-# Verify the staged files for the presence of the marker text
-if git diff --cached --name-only | xargs grep -q "$MARKER"; then
-  echo 'Cannot commit because the "no-commit" marker has been found in one of the staged files.' 1>&2
-  # Refuse to commit
-  exit 1
-fi
+# Original install instructions:
+# To install, copy and rename to <repo>/.git/hooks/pre-commit (merge contents if already exists)
+# The file name has to be "pre-commit" for Git to use it. It is also compatible with git GUIs.
+# On Unix, mark the file as executable with `chmod +x .git/hooks/pre-commit`.
+
+keyword=${NOCHECKIN_KEYWORD:-nocheckin} # -> nocheckin
+
+# Use color only when stderr is attached to a real terminal and supports colors:
+set_grep_color() {
+	if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ]; then
+		grep_color=always
+	else
+		grep_color=never
+	fi
+}
+
+git_grep() {
+	git \
+    -c color.grep.filename=normal   \
+    -c color.grep.linenumber=normal \
+    -c color.grep.separator=normal  \
+    grep --cached --color="$grep_color" -n -I -F -e "$keyword" -- "$1"
+}
+
+find_matches() {
+	git diff --cached --name-only --diff-filter=ACMR |
+	while IFS= read -r path; do
+		git_grep "$path" || :  # '|| :' = Continue on error
+	done
+}
+
+# Search for nocheckins:
+set_grep_color
+matches=$(find_matches)
+
+# Nothing found, continue:
+[ -n "$matches" ] || exit 0
+
+# nocheckin(s) found, block:
+printf 'Commit blocked due to "%s" in staged files:\n\n' "$keyword" >&2
+printf '%s\n' "$matches" >&2
+printf '\nRemove these markers, or commit with --no-verify to bypass.\n' >&2
+exit 1
