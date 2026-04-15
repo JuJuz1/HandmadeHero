@@ -193,16 +193,14 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
 
 INTERNAL void
 DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
-           i32 alignX = 0, i32 alignY = 0) {
+           f32 CAlpha = 1.0f) {
     // TODO: never have this case? use a placeholder instead?
     if (!bitmap->pixels) {
         return;
     }
 
-    const Vec2 aligned{ xPos - static_cast<f32>(alignX), yPos - static_cast<f32>(alignY) };
-
-    i32 roundedMinX{ RoundF32ToI32(aligned.x) };
-    i32 roundedMinY{ RoundF32ToI32(aligned.y) };
+    i32 roundedMinX{ RoundF32ToI32(xPos) };
+    i32 roundedMinY{ RoundF32ToI32(yPos) };
     i32 roundedMaxX{ roundedMinX + bitmap->width };
     i32 roundedMaxY{ roundedMinY + bitmap->height };
 
@@ -237,7 +235,9 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
         u32* dest{ reinterpret_cast<u32*>(destRow) };
         u32* src{ srcRow };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            const f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
+            f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
+            alpha *= CAlpha;
+
             const f32 srcRed{ static_cast<f32>((*src >> 16) & 0xFF) };
             const f32 srcGreen{ static_cast<f32>((*src >> 8) & 0xFF) };
             const f32 srcBlue{ static_cast<f32>((*src >> 0) & 0xFF) };
@@ -280,6 +280,22 @@ GetLowEntity(GameState* gameState, i32 lowIndex) {
     }
 
     return lowEntity;
+}
+
+NODISCARD
+INTERNAL Entity
+EntityFromHighIndex(GameState* gameState, i32 highIndex) {
+    ASSERT(highIndex >= 0 && highIndex < gameState->highEntityCount);
+
+    Entity entity{};
+
+    if (highIndex >= 0 && highIndex < gameState->highEntityCount) {
+        entity.high = &gameState->highEntities_[highIndex];
+        entity.low = GetLowEntity(gameState, entity.high->lowEntityIndex);
+        entity.lowIndex = entity.high->lowEntityIndex;
+    }
+
+    return entity;
 }
 
 /**
@@ -374,15 +390,9 @@ EntityToHighFreq(GameState* gameState, i32 lowIndex) {
     return highEntity;
 }
 
-/**
- * Returns an entity struct containing pointers to high and low entities
- * If entityIndex is out of bounds or 0, returns a zero-initialized entity
- */
 NODISCARD
 INTERNAL Entity
-GetHighEntity(GameState* gameState, i32 lowIndex) {
-    //ASSERT(lowIndex >= 0 && lowIndex < gameState->highEntityCount);
-
+ForceEntityIntoHigh(GameState* gameState, i32 lowIndex) {
     Entity entity{};
 
     if (lowIndex >= 0 && lowIndex < gameState->lowEntityCount) {
@@ -394,11 +404,16 @@ GetHighEntity(GameState* gameState, i32 lowIndex) {
     return entity;
 }
 
+struct AddLowEntityResult {
+    LowEntity* lowEntity;
+    i32 lowIndex;
+};
+
 /**
  * Adds an entity to the low entity array
  */
 NODISCARD
-INTERNAL i32
+INTERNAL AddLowEntityResult
 AddLowEntity(GameState* gameState, EntityType type, WorldPosition* pos) {
     ASSERT(gameState->lowEntityCount < gameState->lowEntities.size);
 
@@ -414,17 +429,19 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition* pos) {
         ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, nullptr, pos);
     }
 
-    return entityIndex;
+    AddLowEntityResult result{ lowEntity, entityIndex };
+
+    return result;
 }
 
 NODISCARD
-INTERNAL i32
+INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
     PRINT("New player!\n");
 
     WorldPosition pos{ gameState->cameraPos };
-    const i32 entityIndex{ AddLowEntity(gameState, EntityType::HERO, &pos) };
-    LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
+    auto entity{ AddLowEntity(gameState, EntityType::HERO, &pos) };
+    auto lowEntity{ entity.lowEntity };
 
     lowEntity->height = 0.5f; // 1.4f;
     lowEntity->width = 0.75f; // entity->dimensions.y * 0.75f;
@@ -436,25 +453,55 @@ AddPlayer(GameState* gameState) {
 
     // Camera to follow first player
     if (!gameState->cameraFollowingEntityIndex) {
-        gameState->cameraFollowingEntityIndex = entityIndex;
+        gameState->cameraFollowingEntityIndex = entity.lowIndex;
     }
 
-    return entityIndex;
+    return entity;
 }
 
 NODISCARD
-INTERNAL i32
+INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
-    const i32 entityIndex{ AddLowEntity(gameState, EntityType::WALL, &pos) };
-    LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
+    auto entity{ AddLowEntity(gameState, EntityType::WALL, &pos) };
+    auto lowEntity{ entity.lowEntity };
 
     lowEntity->height = gameState->world->tileSideInMeters;
     lowEntity->width = gameState->world->tileSideInMeters;
     lowEntity->collides = true;
 
-    return entityIndex;
+    return entity;
+}
+
+NODISCARD
+INTERNAL AddLowEntityResult
+AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
+    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+
+    auto entity{ AddLowEntity(gameState, EntityType::MONSTER, &pos) };
+    auto lowEntity{ entity.lowEntity };
+
+    lowEntity->height = 0.75f;
+    lowEntity->width = 0.6f;
+    lowEntity->collides = true;
+
+    return entity;
+}
+
+NODISCARD
+INTERNAL AddLowEntityResult
+AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
+    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+
+    auto entity{ AddLowEntity(gameState, EntityType::FAMILIAR, &pos) };
+    auto lowEntity{ entity.lowEntity };
+
+    lowEntity->height = 0.5f;
+    lowEntity->width = 1.0f;
+    lowEntity->collides = true;
+
+    return entity;
 }
 
 /**
@@ -569,92 +616,94 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     // NOTE: should come up with a better way of getting the offsets for the correct align
     // TODO: test linux build script
 
+    const auto readFileFunc{ memory->exports.DEBUGReadFile };
+
 #if HANDMADE_USE_REAL_ASSETS
-    gameState->background = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                         "original/test/test_background.bmp");
+    gameState->background =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_background.bmp");
 
-    gameState->tree =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "original/test2/tree00.bmp");
+    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tree00.bmp");
+    gameState->shadow =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_shadow.bmp");
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_front_head.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_front_cape.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "original/test/test_hero_front_torso.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_torso.bmp");
     heroBitmaps->align = Vec2{ 72, 182 };
     ++heroBitmaps;
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_left_head.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_left_cape.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "original/test/test_hero_left_torso.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_torso.bmp");
     heroBitmaps->align = Vec2{ 72, 182 };
     ++heroBitmaps;
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_back_head.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_back_cape.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "original/test/test_hero_back_torso.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_torso.bmp");
     heroBitmaps->align = Vec2{ 72, 182 };
     ++heroBitmaps;
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_right_head.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "original/test/test_hero_right_cape.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "original/test/test_hero_right_torso.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_torso.bmp");
     heroBitmaps->align = Vec2{ 72, 182 };
 
 #else
 
-    gameState->background = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                         "handmade/test/test_background.bmp");
+    gameState->background =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/test_background.bmp");
 
     // TODO: these just fail because we don't have a the bitmaps yet
     // Doesn't crash the game though
-    gameState->tree =
-        DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile, "handmade/test2/tree00.bmp");
+    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/tree00.bmp");
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_head_forward.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_forward.bmp");
 
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "handmade/test/player_torso_forward.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_forward.bmp");
     heroBitmaps->align = Vec2{ 48, 100 };
     ++heroBitmaps;
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_head_left.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "handmade/test/player_torso_left.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_left.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_left.bmp");
     heroBitmaps->align = Vec2{ 46, 104 };
     ++heroBitmaps;
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_head_backward.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "handmade/test/player_torso_backward.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_backward.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_backward.bmp");
     heroBitmaps->align = Vec2{ 42, 100 };
     ++heroBitmaps;
 
-    heroBitmaps->head = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_head_right.bmp");
-    heroBitmaps->cape = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                     "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso = DEBUGLoadBMP(threadContext, memory->exports.DEBUGReadFile,
-                                      "handmade/test/player_torso_right.bmp");
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_right.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_right.bmp");
     heroBitmaps->align = Vec2{ 44, 104 };
 #endif
 }
@@ -667,7 +716,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     // NOTE: reserve slot 0 for null entity
     // TODO: consider removing if there is no use case as this has caused a bit of problems with
     // all sorts of stuff
-    const i32 nullEntityIndex{ AddLowEntity(gameState, EntityType::NON_EXISTENT, nullptr) };
+    const auto nullEntity{ AddLowEntity(gameState, EntityType::NON_EXISTENT, nullptr) };
     gameState->highEntityCount = 1;
 
     // Changed to false after initializing one player
@@ -765,7 +814,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                 }
 
                 if (tileValue == blocked_Tile_Value) {
-                    const i32 entityIndex{ AddWall(gameState, absTileX, absTileY, absTileZ) };
+                    const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
                     ++wallsAdded;
                 }
             }
@@ -804,9 +853,20 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         PRINT_INT("Walls added: ", wallsAdded);
     }
 
-    WorldPosition cameraPos{ ChunkPositionFromTilePosition(
-        world, screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2),
-        screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2), screenBaseZ) };
+    const i32 cameraTileX{ screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2) };
+    const i32 cameraTileY{ screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2) };
+    const i32 cameraTileZ{ screenBaseZ };
+
+    // Add other entities
+
+    AddMonster(gameState, cameraTileX + 2, cameraTileY, cameraTileZ);
+
+    AddFamiliar(gameState, cameraTileX - 2, cameraTileY + 1, cameraTileZ);
+
+    // Atm SetCamera has to be called at the end if there is no player at the start
+    // This is because we don't call SetCamera after this function if there is no player
+    WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
+                                                           cameraTileZ) };
     SetCamera(gameState, cameraPos);
 }
 
@@ -839,10 +899,10 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
 }
 
 INTERNAL void
-MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
-           const InputButtons* inputButtons, Vec2 acceleration, f32 delta) {
+MoveEntity(GameState* gameState, Entity entity, Vec2 acceleration, f32 delta) {
+    // TODO: move player speed away from here!
     constexpr f32 playerSpeed{ 30 };
-    constexpr f32 playerSpeedModifier{ 4 };
+    //constexpr f32 playerSpeedModifier{ 4 };
 
     // Normalize if greater than unit circle length of 1
     const f32 accelerationLengthSq{ LengthSquared(acceleration) };
@@ -851,15 +911,16 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
     }
 
     // Other player faster for debug
-    if (controllerIndex != 0) {
-        acceleration *= 1.5f;
-    }
+    //if (controllerIndex != 0) {
+    //    acceleration *= 1.5f;
+    //}
 
     acceleration *= playerSpeed;
 
-    if (hm_input::ActionPressed(&inputButtons->shift)) {
-        acceleration *= playerSpeedModifier;
-    }
+    // TODO: modify to include inputs for players
+    //if (hm_input::ActionPressed(&inputButtons->shift)) {
+    //    acceleration *= playerSpeedModifier;
+    //}
 
     // TODO: ordinary differential equations
     acceleration += -4.0f * entity.high->velocity;
@@ -874,6 +935,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
     //bool32 hitWall{}; // Used to modify velocity if we hit a wall during the frame
 
     constexpr i32 iterationCount{ 4 };
+
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
         f32 tMin{ 1.0f };
         Vec2 wallNormal{};
@@ -883,9 +945,8 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
         const Vec2 desiredPos{ entity.high->pos + playerDelta };
 
         for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
-            // FIXME wrong indexing, FIXED I THINK
             const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
-            const Entity testEntity{ GetHighEntity(gameState, highEntity->lowEntityIndex) };
+            const Entity testEntity{ ForceEntityIntoHigh(gameState, highEntity->lowEntityIndex) };
             // Check if collides and don't compare to self!
             if (!entity.low->collides || !testEntity.low->collides ||
                 testEntity.high == entity.high) {
@@ -948,7 +1009,7 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
             playerDelta = desiredPos - entity.high->pos;
             playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
 
-            const Entity hitEntity{ GetHighEntity(gameState, hitHighEntityIndex) };
+            const Entity hitEntity{ ForceEntityIntoHigh(gameState, hitHighEntityIndex) };
             const LowEntity* hitLow{ GetLowEntity(gameState, hitEntity.lowIndex) };
 
             // Door check
@@ -992,7 +1053,53 @@ MovePlayer(GameState* gameState, Entity entity, i32 controllerIndex,
                          &entity.low->pos, &newPos);
     entity.low->pos = newPos;
 
-    //entity.low->pos = MapIntoChunkSpace(gameState->world, gameState->cameraPos, entity.high->pos);
+    //entity.low->pos = MapIntoChunkSpace(gameState->world, gameState->cameraPos,
+    //entity.high->pos);
+}
+
+INTERNAL void
+PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
+          Vec2 align, f32 alpha = 1.0f) {
+    ASSERT(group->pieceCount < group->pieces.size);
+    EntityVisiblePiece* piece{ &group->pieces[group->pieceCount++] };
+
+    piece->bitmap = bitmap;
+    piece->offset = offset - align;
+    piece->z = offsetZ;
+    piece->alpha = alpha;
+}
+
+INTERNAL void
+UpdateMonster(GameState* gameState, Entity entity, f32 delta) {}
+
+INTERNAL void
+UpdateFamiliar(GameState* gameState, Entity entity, f32 delta) {
+    Entity closestHero{};
+    const f32 maxDist{ 10.0f };
+    f32 closestHeroDSq{ SquareF32(maxDist) };
+
+    // TODO: naive solution, BAD
+    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+        Entity testEntity{ EntityFromHighIndex(gameState, highIndex) };
+
+        if (testEntity.low->type == EntityType::HERO) {
+            f32 testDSq{ LengthSquared(testEntity.high->pos - entity.high->pos) };
+            if (testDSq < closestHeroDSq) {
+                closestHero = testEntity;
+                closestHeroDSq = testDSq;
+            }
+        }
+    }
+
+    Vec2 acceleration{};
+
+    if (closestHero.high) {
+        f32 speed{ 0.5f };
+        f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
+        acceleration = (closestHero.high->pos - entity.high->pos) * oneOverLength;
+    }
+
+    MoveEntity(gameState, entity, acceleration, delta);
 }
 
 // NOTE: use extern "C" to avoid name mangling
@@ -1027,11 +1134,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     gameState->startWithAPlayer = false;
                 }
 
-                const i32 entityIndex{ AddPlayer(gameState) };
-                gameState->playerIndexFromController[controllerIndex] = entityIndex;
+                const auto player{ AddPlayer(gameState) };
+                gameState->playerIndexFromController[controllerIndex] = player.lowIndex;
             }
         } else {
-            const Entity controllingEntity{ GetHighEntity(gameState, lowIndex) };
+            const Entity controllingEntity{ ForceEntityIntoHigh(gameState, lowIndex) };
             // Need to check the type as we have the null entity...
             if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
                 Vec2 acceleration{};
@@ -1050,8 +1157,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
 
                 // The separation of handling input and moving the player is not yet clear
-                MovePlayer(gameState, controllingEntity, controllerIndex, inputButtons,
-                           acceleration, delta);
+                //MoveEntity(gameState, controllingEntity, controllerIndex, inputButtons,
+                //           acceleration, delta);
+                MoveEntity(gameState, controllingEntity, acceleration, delta);
 
                 // Other actions:
 
@@ -1077,8 +1185,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 metersToPixels{ static_cast<f32>(tileSideInPixels) / world->tileSideInMeters };
 
     // Camera position
-    const Entity cameraFollowingEntity{ GetHighEntity(gameState,
-                                                      gameState->cameraFollowingEntityIndex) };
+    const Entity cameraFollowingEntity{ ForceEntityIntoHigh(
+        gameState, gameState->cameraFollowingEntityIndex) };
     if (cameraFollowingEntity.high) {
         WorldPosition newCameraPos{ gameState->cameraPos };
 
@@ -1144,127 +1252,103 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     // Background
 
-    DrawBitmap(screenBuff, &gameState->background, 0, 0);
-
-    const Vec2 screenCenter{ static_cast<f32>(screenBuff->width) * 0.5f,
-                             static_cast<f32>(screenBuff->height) * 0.5f };
-
 #if 0
-    constexpr i32 relRowCount{ 10 };
-    constexpr i32 relColumnCount{ 20 };
-    // Drawing tiles
-    for (i32 relRow{ -relRowCount }; relRow < relRowCount; ++relRow) {
-        for (i32 relColumn{ -relColumnCount }; relColumn < relColumnCount; ++relColumn) {
-            // Possibly wraps to U32 max
-            const u32 row{ gameState->cameraPos.chunkY + relRow };
-            const u32 column{ gameState->cameraPos.chunkX + relColumn };
-            const u32 depth{ gameState->cameraPos.chunkZ };
-
-            const u32 tileID{ GetTileValue(world, column, row, depth) };
-            if (tileID != blocked_Tile_Value && tileID != 3 && tileID != 4 &&
-                tileID != 5 //&&
-                            //!(row == gameState->cameraPos.chunkY &&
-                            //  column == gameState->cameraPos.chunkX)
-            ) {
-                continue;
-            }
-
-            f32 green{ 1.0f };
-            if (tileID == 0) {
-                green = 0.0f;
-            } else if (tileID == blocked_Tile_Value) {
-                green = 0.5f;
-            }
-
-            // Highlight the tile for the player controlling the camera
-            const Entity entity{ GetEntity(gameState, gameState->cameraFollowingEntityIndex,
-                                           EntityResidency::LOW) };
-            if (entity.residence != EntityResidency::NON_EXISTENT) {
-                if (row == entity.low->pos.chunkY && column == entity.low->pos.chunkX) {
-                    green = 0.25f;
-                }
-            }
-
-            f32 blue{ 1.0f };
-            // On-demand generated
-            if (tileID == 3) {
-                blue = 0.0f;
-            }
-            // Door up
-            if (tileID == 4) {
-                blue = 0.25f;
-            }
-            // Door down
-            if (tileID == 5) {
-                blue = 0.5f;
-            }
-
-            f32 red{ 0.1f };
-            if (depth == 2) {
-                red = 0.2f;
-            }
-
-            const Vec2 tileCen{ screenCenter.x -
-                                    (metersToPixels * gameState->cameraPos.offset_.x) +
-                                    (static_cast<f32>(relColumn * tileSideInPixels)),
-                                screenCenter.y +
-                                    (metersToPixels * gameState->cameraPos.offset_.y) -
-                                    (static_cast<f32>(relRow * tileSideInPixels)) };
-
-            const Vec2 tileSide{ (static_cast<f32>(tileSideInPixels) * 0.5f),
-                                 (static_cast<f32>(tileSideInPixels) * 0.5f) };
-
-            const Vec2 min{ tileCen - tileSide * 0.9f };
-            const Vec2 max{ tileCen + tileSide * 0.9f };
-
-            // Fix a 1 pixel wide vertical black bar that appears sometimes
-            const Vec2 minFlooredX{ static_cast<f32>(FloorF32ToI32(min.x)), min.y };
-            const Vec2 maxCeiledX{ static_cast<f32>(CeilF32ToI32(max.x)), max.y };
-
-            DrawRectangle(screenBuff, minFlooredX, maxCeiledX, red, green, blue);
-        }
-    }
+    DrawBitmap(screenBuff, &gameState->background, 0, 0);
+#else
+    DrawRectangle(screenBuff, Vec2{},
+                  Vec2{ static_cast<f32>(screenBuff->width), static_cast<f32>(screenBuff->height) },
+                  0.5f, 0.5f, 0.5f);
 #endif
 
     // Drawing entities
 
+    const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
+
+    // Every entity has its own one of these
+    EntityVisiblePieceGroup pieceGroup;
+
     for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
-        const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+        pieceGroup.pieceCount = 0;
+
+        HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
         ASSERT(highEntity->lowEntityIndex); // Must have index to low freq if in the high freq
 
-        const LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
+        LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
         ASSERT(lowEntity->highEntityIndex); // Also must be in the high freq
 
-        // Real position
-        const Vec2 playerGroundPoint{ screenCenter.x + (metersToPixels * highEntity->pos.x),
+        Entity entity{ lowEntity, highEntity, highEntity->lowEntityIndex };
+        //UpdateEntity(gameState, entity, dt);
+
+        // TODO: This is wrong, compute after update
+        f32 shadowAlpha{ 1.0f - 0.5f * highEntity->z };
+        if (shadowAlpha < 0) {
+            shadowAlpha = 0.0f;
+        }
+
+        HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highEntity->facingDir] };
+
+        switch (lowEntity->type) {
+        case EntityType::WALL: {
+            //DrawRectangle(screenBuff, playerTopLeft, maxPos, playerR, playerG, playerB);
+            // Tree bitmaps
+            PushPiece(&pieceGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
+        } break;
+
+        case EntityType::HERO: {
+            PushPiece(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha);
+            PushPiece(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+            PushPiece(&pieceGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
+            PushPiece(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
+        } break;
+
+        case EntityType::MONSTER: {
+            //DrawRectangle(screenBuff, playerTopLeft, maxPos, playerR, playerG, playerB);
+            UpdateMonster(gameState, entity, delta);
+            PushPiece(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha);
+            PushPiece(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+        } break;
+        case EntityType::FAMILIAR: {
+            //DrawRectangle(screenBuff, playerTopLeft, maxPos, playerR, playerG, playerB);
+            UpdateFamiliar(gameState, entity, delta);
+            PushPiece(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha);
+            PushPiece(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
+        } break;
+
+        default: {
+            INVALID_CODE_PATH;
+        } break;
+        }
+
+        f32 gravity{ -9.8f };
+        highEntity->z = 0.5f * gravity * SquareF32(delta) + highEntity->dZ * delta + highEntity->z;
+        highEntity->dZ = gravity * delta + highEntity->dZ;
+        if (highEntity->z < 0.0f) {
+            highEntity->z = 0.0f;
+        }
+
+        const Vec2 entityGroundPoint{ screenCenter.x + (metersToPixels * highEntity->pos.x),
                                       screenCenter.y - (metersToPixels * highEntity->pos.y) };
+        const f32 entityZ{ -highEntity->z * metersToPixels };
 
-        // TODO: fix player graphics positioning
-        const Vec2 playerPosXY{ playerGroundPoint.x - (lowEntity->width * 0.5f * metersToPixels),
-                                playerGroundPoint.y - (lowEntity->height * 0.5f * metersToPixels) };
+        constexpr f32 r{ 0.5f };
+        constexpr f32 g{ 0.1f };
+        constexpr f32 b{ 0.5f };
 
-        const Vec2 maxPos{ playerPosXY.x + (lowEntity->width * metersToPixels),
-                           playerPosXY.y + (lowEntity->height * metersToPixels) };
+        Vec2 leftTop{ entityGroundPoint.x - (0.5f * metersToPixels * lowEntity->width),
+                      entityGroundPoint.y - (0.5f * metersToPixels * lowEntity->height) };
+        Vec2 entityWidthHeight{ lowEntity->width, lowEntity->height };
 
-        constexpr f32 playerR{ 0.5f };
-        constexpr f32 playerG{ 0.1f };
-        constexpr f32 playerB{ 0.5f };
-        if (lowEntity->type == EntityType::HERO) {
+        // Draw pieces
+        for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
+            EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
+            DrawBitmap(screenBuff, piece->bitmap, entityGroundPoint.x + piece->offset.x,
+                       entityGroundPoint.y + piece->offset.y + piece->z + entityZ, piece->alpha);
+
             // Debug collision box
-            DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
-
-            const HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highEntity->facingDir] };
-            DrawBitmap(screenBuff, &heroBitmaps->torso, playerGroundPoint.x, playerGroundPoint.y,
-                       static_cast<i32>(heroBitmaps->align.x),
-                       static_cast<i32>(heroBitmaps->align.y));
-            DrawBitmap(screenBuff, &heroBitmaps->cape, playerGroundPoint.x, playerGroundPoint.y,
-                       static_cast<i32>(heroBitmaps->align.x),
-                       static_cast<i32>(heroBitmaps->align.y));
-            DrawBitmap(screenBuff, &heroBitmaps->head, playerGroundPoint.x, playerGroundPoint.y,
-                       static_cast<i32>(heroBitmaps->align.x),
-                       static_cast<i32>(heroBitmaps->align.y));
-        } else {
-            DrawRectangle(screenBuff, playerPosXY, maxPos, playerR, playerG, playerB);
+            //DrawRectangle(screenBuff, leftTop,
+            //              leftTop + entityWidthHeight * metersToPixels // *0.95f
+            //              ,
+            //              r, g, b);
         }
     }
 }

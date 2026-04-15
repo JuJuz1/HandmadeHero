@@ -28,6 +28,66 @@ struct HeroBitmaps {
     Vec2 align;
 };
 
+/// Entities ///
+
+enum class EntityType {
+    NON_EXISTENT = 0,
+
+    WALL,
+    HERO,
+    FAMILIAR,
+    MONSTER,
+};
+
+/**
+ * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
+ */
+struct LowEntity {
+    EntityType type;
+
+    WorldPosition pos;
+    f32 width, height;
+
+    bool32 collides;
+    i32 dChunkZ; // Stairs
+
+    i32 highEntityIndex;
+};
+
+/**
+ * High frequency
+ */
+struct HighEntity {
+    Vec2 pos; // NOTE: This is now already relative to the camera center
+    u32 chunkZ;
+    Vec2 velocity;
+
+    i32 facingDir;
+
+    f32 z;
+    f32 dZ;
+
+    i32 lowEntityIndex;
+};
+
+struct Entity {
+    LowEntity* low;
+    HighEntity* high;
+    i32 lowIndex;
+};
+
+struct EntityVisiblePiece {
+    LoadedBitmapInfo* bitmap;
+    Vec2 offset;
+    f32 z;
+    f32 alpha;
+};
+
+struct EntityVisiblePieceGroup {
+    Array<EntityVisiblePiece, 8> pieces;
+    i32 pieceCount;
+};
+
 /**
  * The game state!
  */
@@ -48,6 +108,7 @@ struct GameState {
     Array<HeroBitmaps, 4> heroBitmaps;
     LoadedBitmapInfo background;
     LoadedBitmapInfo tree;
+    LoadedBitmapInfo shadow;
 
     bool32 startWithAPlayer;
 };

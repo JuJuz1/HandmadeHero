@@ -50,49 +50,6 @@ struct WorldPosition {
     Vec2 offset_;
 };
 
-/// Entities ///
-
-enum class EntityType {
-    NON_EXISTENT = 0,
-
-    HERO,
-    WALL,
-};
-
-/**
- * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
- */
-struct LowEntity {
-    EntityType type;
-
-    WorldPosition pos;
-    f32 width, height;
-
-    bool32 collides;
-    i32 dChunkZ; // Stairs
-
-    i32 highEntityIndex;
-};
-
-/**
- * High frequency
- */
-struct HighEntity {
-    Vec2 pos; // NOTE: This is now already relative to the camera center
-    u32 chunkZ;
-    Vec2 velocity;
-
-    i32 facingDir;
-
-    i32 lowEntityIndex;
-};
-
-struct Entity {
-    LowEntity* low;
-    HighEntity* high;
-    i32 lowIndex;
-};
-
 struct WorldEntityBlock {
     Array<i32, 16> lowEntityIndexes;
     WorldEntityBlock* next;
