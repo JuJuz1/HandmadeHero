@@ -1077,7 +1077,7 @@ PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset,
     EntityVisiblePiece* piece{ &group->pieces[group->pieceCount++] };
 
     piece->bitmap = bitmap;
-    piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, offset.y }) - align;
+    piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
     piece->offsetZ = group->gameState->metersToPixels * offsetZ;
     piece->entityZC = entityZC;
 
@@ -1430,7 +1430,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
             const Vec2 center{ entityGroundPoint.x + piece->offset.x,
                                entityGroundPoint.y + piece->offset.y + piece->offsetZ +
-                                   entityZ * piece->entityZC };
+                                   (entityZ * piece->entityZC) };
             if (piece->bitmap) {
                 DrawBitmap(screenBuff, piece->bitmap, center.x, center.y, piece->a);
             } else {
