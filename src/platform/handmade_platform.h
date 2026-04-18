@@ -76,14 +76,14 @@ typedef struct DEBUGFileReadResult {
 #define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* message)
 typedef DEBUG_PRINT(debug_print);
 
-#define DEBUG_PRINT_INT(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
-typedef DEBUG_PRINT_INT(debug_print_int);
+#define DEBUG_PRINT_I32(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
+typedef DEBUG_PRINT_I32(debug_print_i32);
 
-#define DEBUG_PRINT_UINT(name) void name(ThreadContext* threadContext, const char* valueName, u32 value)
-typedef DEBUG_PRINT_UINT(debug_print_uint);
+#define DEBUG_PRINT_U32(name) void name(ThreadContext* threadContext, const char* valueName, u32 value)
+typedef DEBUG_PRINT_U32(debug_print_u32);
 
-#define DEBUG_PRINT_FLOAT(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
-typedef DEBUG_PRINT_FLOAT(debug_print_float);
+#define DEBUG_PRINT_F32(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
+typedef DEBUG_PRINT_F32(debug_print_f32);
 
 #define DEBUG_FREE_FILE_MEMORY(name) void name(ThreadContext* threadContext, void* memory)
 typedef DEBUG_FREE_FILE_MEMORY(debug_free_file_memory);
@@ -98,9 +98,9 @@ typedef DEBUG_WRITE_FILE(debug_write_file);
 // Exported functions for the game
 typedef struct PlatformExports {
     debug_print* DEBUGPrint;
-    debug_print_int* DEBUGPrintInt;
-    debug_print_uint* DEBUGPrintUInt;
-    debug_print_float* DEBUGPrintFloat;
+    debug_print_i32* DEBUGPrintInt;
+    debug_print_u32* DEBUGPrintUInt;
+    debug_print_f32* DEBUGPrintFloat;
 
     debug_free_file_memory* DEBUGFreeFileMemory;
     debug_read_file* DEBUGReadFile;
@@ -152,7 +152,7 @@ typedef struct InputButtons {
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[9];
+        Button buttons[10];
 
         struct {
             Button up;
@@ -161,6 +161,8 @@ typedef struct InputButtons {
             Button right;
 
             Button shift;
+
+            Button space;
 
             Button Q;
             Button E;

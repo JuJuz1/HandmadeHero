@@ -39,6 +39,13 @@ enum class EntityType {
     MONSTER,
 };
 
+GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };
+
+struct HitPoint {
+    i8 flags;
+    i8 filledAmount;
+};
+
 /**
  * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
  */
@@ -52,6 +59,9 @@ struct LowEntity {
     i32 dChunkZ; // Stairs
 
     i32 highEntityIndex;
+
+    i32 hitPointMax;
+    Array<HitPoint, 16> hitPoints;
 };
 
 /**
@@ -81,13 +91,11 @@ struct Entity {
 struct EntityVisiblePiece {
     LoadedBitmapInfo* bitmap;
     Vec2 offset;
-    f32 z;
-    f32 alpha;
-};
+    f32 offsetZ;
+    f32 entityZC;
 
-struct EntityVisiblePieceGroup {
-    Array<EntityVisiblePiece, 8> pieces;
-    i32 pieceCount;
+    f32 r, g, b, a;
+    Vec2 dimension;
 };
 
 /**
@@ -96,6 +104,7 @@ struct EntityVisiblePieceGroup {
 struct GameState {
     MemoryArena worldArena;
     World* world;
+    f32 metersToPixels; // TODO: should this be here?
 
     WorldPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
@@ -113,6 +122,13 @@ struct GameState {
     LoadedBitmapInfo shadow;
 
     bool32 startWithAPlayer;
+};
+
+// TODO: this should just be a part of the renderer...
+struct EntityVisiblePieceGroup {
+    GameState* gameState;
+    Array<EntityVisiblePiece, 8> pieces;
+    i32 pieceCount;
 };
 
 #endif // HANDMADE_GAME_H

@@ -49,21 +49,21 @@ DEBUG_PRINT(DEBUGPrint) {
 }
 
 INTERNAL
-DEBUG_PRINT_INT(DEBUGPrintInt) {
+DEBUG_PRINT_I32(DEBUGPrintInt) {
     UNUSED_PARAMS(threadContext);
 
     printf("%s%d\n", valueName, value);
 }
 
 INTERNAL
-DEBUG_PRINT_UINT(DEBUGPrintUInt) {
+DEBUG_PRINT_U32(DEBUGPrintUInt) {
     UNUSED_PARAMS(threadContext);
 
     printf("%s%u\n", valueName, value);
 }
 
 INTERNAL
-DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
+DEBUG_PRINT_F32(DEBUGPrintFloat) {
     UNUSED_PARAMS(threadContext);
 
     printf("%s%f\n", valueName, value);
@@ -162,7 +162,7 @@ ToggleFullscreen(SDL_Window* window) {
 
 NODISCARD
 INTERNAL WindowDimension
-GetWindowDimensions(SDL_Window* window) {
+GetWindowdimension(SDL_Window* window) {
     WindowDimension result;
     SDL_GetWindowSize(window, &result.width, &result.height);
 
@@ -463,6 +463,10 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 ProcessInputEvent(&input->playerInputs[1].right, isDown);
             } break;
 
+            case SDLK_SPACE: {
+                ProcessInputEvent(&input->playerInputs.space, isDown);
+            } break;
+
             case SDLK_q: {
                 ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
@@ -573,7 +577,7 @@ ProcessPendingEvents(Input* input, AllState* allState) {
 
                 SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
                 SDL_Renderer* renderer{ SDL_GetRenderer(window) };
-                const auto wndDimension{ GetWindowDimensions(window) };
+                const auto wndDimension{ GetWindowdimension(window) };
                 DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width,
                                     wndDimension.height);
 
@@ -865,7 +869,7 @@ main() {
         const f64 ms{ 1000 * hm_sdl::GetSecondsElapsed(lastCounter, endCounter) };
         const f64 FPS{ 1000 / ms };
 
-        const auto wndDimension{ hm_sdl::GetWindowDimensions(window) };
+        const auto wndDimension{ hm_sdl::GetWindowdimension(window) };
         hm_sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width,
                                     wndDimension.height);
 

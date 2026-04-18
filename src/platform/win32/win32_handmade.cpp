@@ -39,28 +39,28 @@ DEBUG_PRINT(DEBUGPrint) {
 }
 
 INTERNAL
-DEBUG_PRINT_INT(DEBUGPrintInt) {
+DEBUG_PRINT_I32(DEBUGPrintInt) {
     UNUSED_PARAMS(threadContext);
 
-    char buf[32];
+    char buf[64];
     sprintf_s(buf, "%s%d\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
 INTERNAL
-DEBUG_PRINT_UINT(DEBUGPrintUInt) {
+DEBUG_PRINT_U32(DEBUGPrintUInt) {
     UNUSED_PARAMS(threadContext);
 
-    char buf[32];
+    char buf[64];
     sprintf_s(buf, "%s%u\n", valueName, value);
     OutputDebugStringA(buf);
 }
 
 INTERNAL
-DEBUG_PRINT_FLOAT(DEBUGPrintFloat) {
+DEBUG_PRINT_F32(DEBUGPrintFloat) {
     UNUSED_PARAMS(threadContext);
 
-    char buf[32];
+    char buf[64];
     sprintf_s(buf, "%s%f\n", valueName, value);
     OutputDebugStringA(buf);
 }
@@ -174,7 +174,7 @@ ToggleFullscreen(HWND hWnd) {
 
 NODISCARD
 INTERNAL WindowDimension
-GetWindowDimensions(HWND windowHandle) {
+GetWindowdimension(HWND windowHandle) {
     RECT clientRect;
     GetClientRect(windowHandle, &clientRect);
     const i32 w{ clientRect.right - clientRect.left };
@@ -455,7 +455,7 @@ MainWindowCallback(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PAINTSTRUCT paint;
         const HDC deviceContext{ BeginPaint(hWnd, &paint) }; // clang-tidy NOLINT
 
-        auto wndDimension{ GetWindowDimensions(hWnd) };
+        auto wndDimension{ GetWindowdimension(hWnd) };
         DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width, wndDimension.height);
 
         EndPaint(hWnd, &paint);
@@ -743,6 +743,10 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             } break;
             case VK_RIGHT: {
                 ProcessInputMessage(&input->playerInputs[1].right, isDown);
+            } break;
+
+            case VK_SPACE: {
+                ProcessInputMessage(&input->playerInputs->space, isDown);
             } break;
 
             case 'Q': {
@@ -1272,7 +1276,7 @@ WinMain(
         const f64 ms{ 1000 * hm_win32::GetSecondsElapsed(lastCounter, endCounter) };
         const f64 FPS{ 1000 / ms };
 
-        const auto wndDimension{ hm_win32::GetWindowDimensions(windowHandle) };
+        const auto wndDimension{ hm_win32::GetWindowdimension(windowHandle) };
         hm_win32::DisplayBufferWindow(deviceContext, &gScreenBuff, wndDimension.width,
                                       wndDimension.height);
 
