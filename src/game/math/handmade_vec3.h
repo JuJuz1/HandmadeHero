@@ -17,28 +17,28 @@ struct Vec3 {
     NODISCARD
     inline f32& operator[](i32 i);
 
-    inline Vec3& operator+=(Vec3 a);
-    inline Vec3& operator-=(Vec3 a);
+    inline Vec3& operator+=(Vec3 rhs);
+    inline Vec3& operator-=(Vec3 rhs);
     inline Vec3& operator*=(f32 scalar);
     inline Vec3& operator/=(f32 scalar);
 };
 
 NODISCARD
-INTERNAL inline Vec3 operator-(Vec3 a);
+INTERNAL inline Vec3 operator-(Vec3 rhs);
 
 NODISCARD
-INTERNAL inline Vec3 operator+(Vec3 a, Vec3 b);
+INTERNAL inline Vec3 operator+(Vec3 lhs, Vec3 rhs);
 
 NODISCARD
-INTERNAL inline Vec3 operator-(Vec3 a, Vec3 b);
+INTERNAL inline Vec3 operator-(Vec3 lhs, Vec3 rhs);
 
 NODISCARD
-INTERNAL inline Vec3 operator*(Vec3 a, f32 scalar);
+INTERNAL inline Vec3 operator*(Vec3 lhs, f32 scalar);
 
 NODISCARD
-INTERNAL inline Vec3 operator*(f32 scalar, Vec3 a);
+INTERNAL inline Vec3 operator*(f32 scalar, Vec3 rhs);
 
 NODISCARD
-INTERNAL inline Vec3 operator/(Vec3 a, f32 scalar);
+INTERNAL inline Vec3 operator/(Vec3 lhs, f32 scalar);
 
 #endif // HANDMADE_VEC3_H

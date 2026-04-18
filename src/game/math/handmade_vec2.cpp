@@ -4,51 +4,51 @@
 
 NODISCARD
 INTERNAL inline Vec2
-operator-(Vec2 a) {
-    const Vec2 result{ -a.x, -a.y };
+operator-(Vec2 rhs) {
+    const Vec2 result{ -rhs.x, -rhs.y };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
-operator+(Vec2 a, Vec2 b) {
-    const Vec2 result{ a.x + b.x, a.y + b.y };
+operator+(Vec2 lhs, Vec2 rhs) {
+    const Vec2 result{ lhs.x + rhs.x, lhs.y + rhs.y };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
-operator-(Vec2 a, Vec2 b) {
-    const Vec2 result{ a.x - b.x, a.y - b.y };
+operator-(Vec2 lhs, Vec2 rhs) {
+    const Vec2 result{ lhs.x - rhs.x, lhs.y - rhs.y };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
-operator*(Vec2 a, f32 scalar) {
-    const Vec2 result{ a.x * scalar, a.y * scalar };
+operator*(Vec2 lhs, f32 scalar) {
+    const Vec2 result{ lhs.x * scalar, lhs.y * scalar };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
-operator*(f32 scalar, Vec2 a) {
-    const Vec2 result{ a * scalar };
+operator*(f32 scalar, Vec2 rhs) {
+    const Vec2 result{ rhs * scalar };
     return result;
 }
 
 NODISCARD
 INTERNAL inline Vec2
-operator/(Vec2 a, f32 scalar) {
-    const Vec2 result{ a.x / scalar, a.y / scalar };
+operator/(Vec2 lhs, f32 scalar) {
+    const Vec2 result{ lhs.x / scalar, lhs.y / scalar };
     return result;
 }
 
 // Hadamard product
 NODISCARD
 INTERNAL inline Vec2
-operator*(Vec2 a, Vec2 b) {
-    const Vec2 result{ a.x * b.x, a.y * b.y };
+operator*(Vec2 lhs, Vec2 rhs) {
+    const Vec2 result{ lhs.x * rhs.x, lhs.y * rhs.y };
     return result;
 }
 
@@ -63,14 +63,14 @@ Vec2::operator[](i32 i) {
 }
 
 inline Vec2&
-Vec2::operator+=(Vec2 a) {
-    *this = *this + a;
+Vec2::operator+=(Vec2 rhs) {
+    *this = *this + rhs;
     return *this;
 }
 
 inline Vec2&
-Vec2::operator-=(Vec2 a) {
-    *this = *this - a;
+Vec2::operator-=(Vec2 rhs) {
+    *this = *this - rhs;
     return *this;
 }
 
@@ -87,51 +87,51 @@ Vec2::operator/=(f32 scalar) {
 }
 
 inline Vec2&
-Vec2::operator*=(Vec2 a) {
-    *this = *this * a;
+Vec2::operator*=(Vec2 rhs) {
+    *this = *this * rhs;
     return *this;
 }
 
 NODISCARD
 INTERNAL inline f32
-Dot(Vec2 a, Vec2 b) {
-    const f32 result{ (a.x * b.x) + (a.y * b.y) };
+Dot(Vec2 lhs, Vec2 rhs) {
+    const f32 result{ (lhs.x * rhs.x) + (lhs.y * rhs.y) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline f32
-Length(Vec2 a) {
-    const f32 result{ Sqrt(Dot(a, a)) };
+Length(Vec2 v) {
+    const f32 result{ Sqrt(Dot(v, v)) };
     return result;
 }
 
 // This is cheaper to compute than Length, so use if we really don't need the actual length
 NODISCARD
 INTERNAL inline f32
-LengthSquared(Vec2 a) {
-    const f32 result{ Dot(a, a) };
+LengthSquared(Vec2 v) {
+    const f32 result{ Dot(v, v) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline bool32
-IsNormalized(Vec2 a) {
+IsNormalized(Vec2 v) {
     constexpr f32 eps{ 0.001f };
-    const bool32 result{ AbsF32(LengthSquared(a) - 1.0f) < eps };
+    const bool32 result{ AbsF32(LengthSquared(v) - 1.0f) < eps };
     return result;
 }
 
 // Doubt this will be hardly ever used
 NODISCARD
 INTERNAL inline Vec2
-Normalize(Vec2 a) {
-    if (IsNormalized(a)) {
-        return a;
+Normalize(Vec2 v) {
+    if (IsNormalized(v)) {
+        return v;
     }
 
-    Vec2 result{ a };
-    const f32 lengthSq{ LengthSquared(a) };
+    Vec2 result{ v };
+    const f32 lengthSq{ LengthSquared(v) };
     if (lengthSq > 0.0f) {
         result /= Sqrt(lengthSq);
     }

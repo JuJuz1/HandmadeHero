@@ -30,10 +30,10 @@ NODISCARD
 INTERNAL inline Vec4 operator-(Vec4 rhs);
 
 NODISCARD
-INTERNAL inline Vec4 operator+(Vec4 lhs, Vec4 b);
+INTERNAL inline Vec4 operator+(Vec4 lhs, Vec4 rhs);
 
 NODISCARD
-INTERNAL inline Vec4 operator-(Vec4 lhs, Vec4 b);
+INTERNAL inline Vec4 operator-(Vec4 lhs, Vec4 rhs);
 
 NODISCARD
 INTERNAL inline Vec4 operator*(Vec4 lhs, f32 scalar);

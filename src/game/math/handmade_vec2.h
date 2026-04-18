@@ -29,41 +29,41 @@ struct Vec2 {
 };
 
 NODISCARD
-INTERNAL inline Vec2 operator-(Vec2 a);
+INTERNAL inline Vec2 operator-(Vec2 rhs);
 
 NODISCARD
-INTERNAL inline Vec2 operator+(Vec2 a, Vec2 b);
+INTERNAL inline Vec2 operator+(Vec2 lhs, Vec2 rhs);
 
 NODISCARD
-INTERNAL inline Vec2 operator-(Vec2 a, Vec2 b);
+INTERNAL inline Vec2 operator-(Vec2 lhs, Vec2 rhs);
 
 NODISCARD
-INTERNAL inline Vec2 operator*(Vec2 a, f32 scalar);
+INTERNAL inline Vec2 operator*(Vec2 lhs, f32 scalar);
 
 NODISCARD
-INTERNAL inline Vec2 operator*(f32 scalar, Vec2 a);
+INTERNAL inline Vec2 operator*(f32 scalar, Vec2 rhs);
 
 NODISCARD
-INTERNAL inline Vec2 operator/(Vec2 a, f32 scalar);
+INTERNAL inline Vec2 operator/(Vec2 lhs, f32 scalar);
 
 // Hadamard product
 NODISCARD
-INTERNAL inline Vec2 operator*(Vec2 a, Vec2 b);
+INTERNAL inline Vec2 operator*(Vec2 lhs, Vec2 rhs);
 
 NODISCARD
-INTERNAL inline f32 Dot(Vec2 a, Vec2 b);
+INTERNAL inline f32 Dot(Vec2 lhs, Vec2 rhs);
 
 NODISCARD
-INTERNAL inline f32 Length(Vec2 a);
+INTERNAL inline f32 Length(Vec2 v);
 
 NODISCARD
-INTERNAL inline f32 LengthSquared(Vec2 a);
+INTERNAL inline f32 LengthSquared(Vec2 v);
 
 NODISCARD
-INTERNAL inline bool32 IsNormalized(Vec2 a);
+INTERNAL inline bool32 IsNormalized(Vec2 v);
 
 NODISCARD
-INTERNAL inline Vec2 Normalize(Vec2 a);
+INTERNAL inline Vec2 Normalize(Vec2 v);
 
 NODISCARD
 INTERNAL inline Vec2 Reflect(Vec2 v, Vec2 n);
