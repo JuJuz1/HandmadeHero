@@ -44,6 +44,21 @@ operator/(Vec2 lhs, f32 scalar) {
     return result;
 }
 
+// NOTE: exact floating point, not the safest!
+NODISCARD
+INTERNAL inline bool32
+operator==(Vec2 lhs, Vec2 rhs) {
+    const bool32 result{ lhs.x == rhs.x && lhs.y == rhs.y };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline bool32
+operator!=(Vec2 lhs, Vec2 rhs) {
+    const bool32 result{ !(lhs == rhs) };
+    return result;
+}
+
 // Hadamard product
 NODISCARD
 INTERNAL inline Vec2

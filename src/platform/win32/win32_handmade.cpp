@@ -731,18 +731,31 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 ProcessInputMessage(&input->playerInputs->right, isDown);
             } break;
 
-            // TODO: remove these, only for debugging the second player
+                // TODO: remove these, only for debugging the second player
+                //case VK_UP: {
+                //    ProcessInputMessage(&input->playerInputs[1].up, isDown);
+                //} break;
+                //case VK_DOWN: {
+                //    ProcessInputMessage(&input->playerInputs[1].down, isDown);
+                //} break;
+                //case VK_LEFT: {
+                //    ProcessInputMessage(&input->playerInputs[1].left, isDown);
+                //} break;
+                //case VK_RIGHT: {
+                //    ProcessInputMessage(&input->playerInputs[1].right, isDown);
+                //} break;
+
             case VK_UP: {
-                ProcessInputMessage(&input->playerInputs[1].up, isDown);
+                ProcessInputMessage(&input->playerInputs->actionUp, isDown);
             } break;
             case VK_DOWN: {
-                ProcessInputMessage(&input->playerInputs[1].down, isDown);
+                ProcessInputMessage(&input->playerInputs->actionDown, isDown);
             } break;
             case VK_LEFT: {
-                ProcessInputMessage(&input->playerInputs[1].left, isDown);
+                ProcessInputMessage(&input->playerInputs->actionLeft, isDown);
             } break;
             case VK_RIGHT: {
-                ProcessInputMessage(&input->playerInputs[1].right, isDown);
+                ProcessInputMessage(&input->playerInputs->actionRight, isDown);
             } break;
 
             case VK_SPACE: {
@@ -1159,7 +1172,7 @@ WinMain(
         //gameInput.playerInputs[1].left = gameInput.playerInputs[0].left;
         //gameInput.playerInputs[1].right = gameInput.playerInputs[0].right;
         // To be able to join the game
-        gameInput.playerInputs[1].enter = gameInput.playerInputs[0].enter;
+        //gameInput.playerInputs[1].enter = gameInput.playerInputs[0].enter;
 
         // Mouse input
 

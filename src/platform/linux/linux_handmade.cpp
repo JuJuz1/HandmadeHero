@@ -450,17 +450,30 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
+                //case SDLK_UP: {
+                //    ProcessInputEvent(&input->playerInputs[1].up, isDown);
+                //} break;
+                //case SDLK_DOWN: {
+                //    ProcessInputEvent(&input->playerInputs[1].down, isDown);
+                //} break;
+                //case SDLK_LEFT: {
+                //    ProcessInputEvent(&input->playerInputs[1].left, isDown);
+                //} break;
+                //case SDLK_RIGHT: {
+                //    ProcessInputEvent(&input->playerInputs[1].right, isDown);
+                //} break;
+
             case SDLK_UP: {
-                ProcessInputEvent(&input->playerInputs[1].up, isDown);
+                ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
             case SDLK_DOWN: {
-                ProcessInputEvent(&input->playerInputs[1].down, isDown);
+                ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
             case SDLK_LEFT: {
-                ProcessInputEvent(&input->playerInputs[1].left, isDown);
+                ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
             case SDLK_RIGHT: {
-                ProcessInputEvent(&input->playerInputs[1].right, isDown);
+                ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
             case SDLK_SPACE: {

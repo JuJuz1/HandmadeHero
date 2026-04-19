@@ -265,7 +265,7 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 }
 
 /**
- * If entityIndex is out of bounds, returns a 0 pointer
+ * If entityIndex is out of bounds, returns a nullpointer
  */
 NODISCARD
 INTERNAL LowEntity*
@@ -423,14 +423,36 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition* pos) {
     *lowEntity = LowEntity{};
     lowEntity->type = type;
 
-    if (pos) {
-        lowEntity->pos = *pos;
-        ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, nullptr, pos);
-    }
+    ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, nullptr,
+                         pos);
 
     AddLowEntityResult result{ lowEntity, entityIndex };
 
     return result;
+}
+
+INTERNAL void
+InitHitpoints(LowEntity* lowEntity, i32 hitPointCount) {
+    ASSERT(hitPointCount < lowEntity->hitPoints.size);
+    lowEntity->hitPointMax = hitPointCount;
+
+    for (i32 i{}; i < lowEntity->hitPointMax; ++i) {
+        HitPoint* hitPoint{ &lowEntity->hitPoints[i] };
+        //hitPoint->flags = 0;
+        hitPoint->filledAmount = hit_Point_Sub_Count;
+    }
+}
+
+NODISCARD
+INTERNAL AddLowEntityResult
+AddSword(GameState* gameState) {
+    auto entity{ AddLowEntity(gameState, EntityType::SWORD, nullptr) };
+    auto lowEntity{ entity.lowEntity };
+
+    lowEntity->height = 0.75f;
+    lowEntity->width = 0.3f;
+
+    return entity;
 }
 
 NODISCARD
@@ -447,10 +469,10 @@ AddPlayer(GameState* gameState) {
 
     lowEntity->collides = true;
 
-    lowEntity->hitPointMax = 3;
-    lowEntity->hitPoints[2].filledAmount = hit_Point_Sub_Count;
-    lowEntity->hitPoints[0] = lowEntity->hitPoints[2];
-    lowEntity->hitPoints[1] = lowEntity->hitPoints[2];
+    InitHitpoints(lowEntity, 3);
+
+    auto sword{ AddSword(gameState) };
+    lowEntity->swordIndex = sword.lowIndex;
 
     // Not needed for now
     //EntityToHighFreq(gameState, entityIndex);
@@ -489,6 +511,8 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     lowEntity->height = 0.75f;
     lowEntity->width = 0.6f;
     lowEntity->collides = true;
+
+    InitHitpoints(lowEntity, 3);
 
     return entity;
 }
@@ -630,6 +654,8 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     gameState->shadow =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_shadow.bmp");
 
+    gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock03.bmp");
+
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_head.bmp");
     heroBitmaps->cape =
@@ -674,6 +700,8 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     // Doesn't crash the game though
     gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/tree.bmp");
     gameState->shadow = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/shadow.bmp");
+
+    //gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/sword.bmp");
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_forward.bmp");
@@ -1065,7 +1093,7 @@ MoveEntity(GameState* gameState, Entity entity, Vec2 acceleration, f32 delta) {
     WorldPosition newPos{ MapIntoChunkSpace(gameState->world, gameState->cameraPos,
                                             entity.high->pos) };
     // TODO: bundle these together?
-    ChangeEntityLocation(gameState->world, &gameState->worldArena, entity.lowIndex,
+    ChangeEntityLocation(gameState->world, &gameState->worldArena, entity.lowIndex, entity.low,
                          &entity.low->pos, &newPos);
     entity.low->pos = newPos;
 }
@@ -1146,6 +1174,28 @@ UpdateFamiliar(GameState* gameState, Entity entity, f32 delta) {
     MoveEntity(gameState, entity, acceleration, delta);
 }
 
+INTERNAL void
+DrawHitpoints(LowEntity* lowEntity, EntityVisiblePieceGroup* group) {
+    if (lowEntity->hitPointMax >= 1) {
+        constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
+        constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
+        Vec2 hitPointPos{ -0.5f * (lowEntity->hitPointMax - 1) * spacingX, -0.25f };
+        const Vec2 dPos{ spacingX, 0.0f };
+
+        for (i32 i{}; i < lowEntity->hitPointMax; ++i) {
+            HitPoint* hitPoint{ &lowEntity->hitPoints[i] };
+            Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
+            if (hitPoint->filledAmount == 0) {
+                color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
+            }
+
+            // TODO: Height
+            PushRect(group, hitPointPos, 0, hitPointdimension, color, 0.0f);
+            hitPointPos += dPos;
+        }
+    }
+}
+
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
@@ -1185,19 +1235,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Entity controllingEntity{ ForceEntityIntoHigh(gameState, lowIndex) };
             // Need to check the type as we have the null entity...
             if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
-                Vec2 acceleration{};
+                Vec2 entityAcceleration{};
 
                 if (hm_input::ActionPressed(&inputButtons->up)) {
-                    acceleration.y = 1.0f;
+                    entityAcceleration.y = 1.0f;
                 }
                 if (hm_input::ActionPressed(&inputButtons->down)) {
-                    acceleration.y = -1.0f;
+                    entityAcceleration.y = -1.0f;
                 }
                 if (hm_input::ActionPressed(&inputButtons->left)) {
-                    acceleration.x = -1.0f;
+                    entityAcceleration.x = -1.0f;
                 }
                 if (hm_input::ActionPressed(&inputButtons->right)) {
-                    acceleration.x = 1.0f;
+                    entityAcceleration.x = 1.0f;
                 }
                 // Jump
                 if (hm_input::ActionJustPressed(&inputButtons->space)) {
@@ -1206,10 +1256,34 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     }
                 }
 
+                Vec2 swordAcceleration{};
+                if (hm_input::ActionJustPressed(&inputButtons->actionUp)) {
+                    swordAcceleration.y = 1.0f;
+                }
+                if (hm_input::ActionJustPressed(&inputButtons->actionDown)) {
+                    swordAcceleration.y = -1.0f;
+                }
+                if (hm_input::ActionJustPressed(&inputButtons->actionLeft)) {
+                    swordAcceleration.x = -1.0f;
+                }
+                if (hm_input::ActionJustPressed(&inputButtons->actionRight)) {
+                    swordAcceleration.x = 1.0f;
+                }
+
                 // The separation of handling input and moving the player is not yet clear
                 //MoveEntity(gameState, controllingEntity, controllerIndex, inputButtons,
                 //           acceleration, delta);
-                MoveEntity(gameState, controllingEntity, acceleration, delta);
+                MoveEntity(gameState, controllingEntity, entityAcceleration, delta);
+
+                if (swordAcceleration != Vec2::ZERO) {
+                    const i32 swordIndex{ controllingEntity.low->swordIndex };
+                    auto sword{ GetLowEntity(gameState, swordIndex) };
+                    if (sword && !IsValidWorldPos(sword->pos)) {
+                        WorldPosition swordPos{ controllingEntity.low->pos };
+                        ChangeEntityLocation(gameState->world, &gameState->worldArena, swordIndex,
+                                             sword, nullptr, &swordPos);
+                    }
+                }
 
                 // Other actions:
 
@@ -1327,7 +1401,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         ASSERT(lowEntity->highEntityIndex); // Also must be in the high freq
 
         Entity entity{ lowEntity, highEntity, highEntity->lowEntityIndex };
-        //UpdateEntity(gameState, entity, dt);
 
         // TODO: This is wrong, compute after update
         f32 shadowAlpha{ 1.0f - 0.5f * highEntity->z };
@@ -1350,25 +1423,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             PushBitmap(&pieceGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
             PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
 
-            // Hitpoints
-            if (lowEntity->hitPointMax >= 1) {
-                constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
-                constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
-                Vec2 hitPointPos{ -0.5f * (lowEntity->hitPointMax - 1) * spacingX, -0.25f };
-                const Vec2 dPos{ spacingX, 0.0f };
-
-                for (i32 i{}; i < lowEntity->hitPointMax; ++i) {
-                    HitPoint* hitPoint{ &lowEntity->hitPoints[i] };
-                    Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
-                    if (hitPoint->filledAmount == 0) {
-                        color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
-                    }
-
-                    // TODO: Height
-                    PushRect(&pieceGroup, hitPointPos, 0, hitPointdimension, color, 0.0f);
-                    hitPointPos += dPos;
-                }
-            }
+            DrawHitpoints(lowEntity, &pieceGroup);
         } break;
 
         case EntityType::MONSTER: {
@@ -1376,25 +1431,31 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
             PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+
+            DrawHitpoints(lowEntity, &pieceGroup);
         } break;
         case EntityType::FAMILIAR: {
             UpdateFamiliar(gameState, entity, delta);
             // Head bob
-            entity.high->tBob += delta;
+            constexpr f32 bobSpeed{ 3.5f };
+            entity.high->tBob += delta * bobSpeed;
             if (entity.high->tBob > (2.0f * PI32f)) {
                 entity.high->tBob -= (2.0f * PI32f);
             }
 
-            constexpr f32 bobSpeed{ 3.5f };
-            const f32 bobSin{ Sin(bobSpeed * entity.high->tBob) };
+            const f32 bobSin{ Sin(entity.high->tBob) };
             const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.25f * bobSin) };
-
-            const f32 bobStrength{ 0.4f }; // How big the bobbing is
+            const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align,
                        newShadowAlpha, 0.0f);
             PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, bobStrength * bobSin,
                        heroBitmaps->align);
+        } break;
+        case EntityType::SWORD: {
+            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
+                       0.0f);
+            PushBitmap(&pieceGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
         } break;
 
         default: {
@@ -1441,7 +1502,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Debug collision box
             //DrawRectangle(screenBuff, leftTop,
-            //              leftTop + entityWidthHeight * metersToPixels // *0.95f
+            //              leftTop + entityWidthHeight * gameState->metersToPixels // *0.95f
             //              ,
             //              r, g, b);
         }

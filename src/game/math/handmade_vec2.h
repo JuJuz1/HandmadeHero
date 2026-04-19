@@ -26,7 +26,19 @@ struct Vec2 {
 
     // Hadamard product
     inline Vec2& operator*=(Vec2 a);
+
+    NOT_BOUND const Vec2 LEFT;
+    NOT_BOUND const Vec2 RIGHT;
+    NOT_BOUND const Vec2 UP;
+    NOT_BOUND const Vec2 DOWN;
+    NOT_BOUND const Vec2 ZERO;
 };
+
+inline constexpr Vec2 Vec2::LEFT{ -1.0f, 0.0f };
+inline constexpr Vec2 Vec2::RIGHT{ 1.0f, 0.0f };
+inline constexpr Vec2 Vec2::UP{ 0.0f, 1.0f };
+inline constexpr Vec2 Vec2::DOWN{ 0.0f, -1.0f };
+inline constexpr Vec2 Vec2::ZERO{};
 
 NODISCARD
 INTERNAL inline Vec2 operator-(Vec2 rhs);
@@ -45,6 +57,12 @@ INTERNAL inline Vec2 operator*(f32 scalar, Vec2 rhs);
 
 NODISCARD
 INTERNAL inline Vec2 operator/(Vec2 lhs, f32 scalar);
+
+NODISCARD
+INTERNAL inline bool32 operator==(Vec2 lhs, Vec2 rhs);
+
+NODISCARD
+INTERNAL inline bool32 operator!=(Vec2 lhs, Vec2 rhs);
 
 // Hadamard product
 NODISCARD

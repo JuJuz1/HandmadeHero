@@ -4,6 +4,21 @@
 #include "game/handmade_memory.h"
 #include "game/math/handmade_vec3.h"
 
+NODISCARD
+INTERNAL WorldPosition
+NullWorldPos() {
+    WorldPosition pos{};
+    pos.chunkX = tile_Chunk_Uninitialized;
+    return pos;
+}
+
+NODISCARD
+INTERNAL bool32
+IsValidWorldPos(WorldPosition pos) {
+    const bool32 result{ pos.chunkX != tile_Chunk_Uninitialized };
+    return result;
+}
+
 INTERNAL void
 InitializeWorld(World* world, f32 tileSideInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
@@ -188,8 +203,13 @@ INTERNAL WorldEntityBlock*
 FreeBlock(WorldEntityBlock* block) {}
 
 INTERNAL void
-ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowEntityIndex, WorldPosition* oldPos,
-                     WorldPosition* newPos) {
+ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, WorldPosition* oldPos,
+                        WorldPosition* newPos) {
+    // TODO: should this move entity to high set if it is in camera bounds
+
+    ASSERT(!oldPos || IsValidWorldPos(*oldPos));
+    ASSERT(!newPos || IsValidWorldPos(*newPos));
+
     if (oldPos && AreOnSameChunk(world, oldPos, newPos)) {
         // Leave entity where it is
     } else {
@@ -237,28 +257,41 @@ ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowEntityIndex, World
             }
         }
 
-        WorldChunk* chunk{ GetWorldChunk(world, newPos->chunkX, newPos->chunkY, newPos->chunkZ,
-                                         arena) };
-        ASSERT(chunk);
+        if (newPos) {
+            WorldChunk* chunk{ GetWorldChunk(world, newPos->chunkX, newPos->chunkY, newPos->chunkZ,
+                                             arena) };
+            ASSERT(chunk);
 
-        WorldEntityBlock* block{ &chunk->firstBlock };
-        ASSERT(block->entityCount <= block->lowEntityIndexes.size);
-        if (block->entityCount == block->lowEntityIndexes.size) {
-            // Out of room, make a new one
-            WorldEntityBlock* oldBlock{ world->firstFree };
-            if (oldBlock) {
-                world->firstFree = oldBlock->next;
-            } else {
-                oldBlock = PushSize(arena, WorldEntityBlock);
+            WorldEntityBlock* block{ &chunk->firstBlock };
+            ASSERT(block->entityCount <= block->lowEntityIndexes.size);
+            if (block->entityCount == block->lowEntityIndexes.size) {
+                // Out of room, make a new one
+                WorldEntityBlock* oldBlock{ world->firstFree };
+                if (oldBlock) {
+                    world->firstFree = oldBlock->next;
+                } else {
+                    oldBlock = PushSize(arena, WorldEntityBlock);
+                }
+
+                *oldBlock = *block;
+                block->next = oldBlock;
+                block->entityCount = 0;
             }
 
-            *oldBlock = *block;
-            block->next = oldBlock;
-            block->entityCount = 0;
+            // Insert into new block
+            ASSERT(block->entityCount < block->lowEntityIndexes.size);
+            block->lowEntityIndexes[block->entityCount++] = lowEntityIndex;
         }
+    }
+}
 
-        // Insert into new block
-        ASSERT(block->entityCount < block->lowEntityIndexes.size);
-        block->lowEntityIndexes[block->entityCount++] = lowEntityIndex;
+INTERNAL void
+ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex, LowEntity* lowEntity,
+                     WorldPosition* oldPos, WorldPosition* newPos) {
+    ChangeEntityLocationRaw(world, arena, lowIndex, oldPos, newPos);
+    if (newPos) {
+        lowEntity->pos = *newPos;
+    } else {
+        lowEntity->pos = NullWorldPos();
     }
 }

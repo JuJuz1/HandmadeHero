@@ -76,6 +76,77 @@ struct World {
     f32 chunkSideInMeters;
 };
 
+/// Entities ///
+
+enum class EntityType {
+    NON_EXISTENT = 0,
+
+    WALL,
+    HERO,
+    FAMILIAR,
+    MONSTER,
+
+    SWORD,
+};
+
+GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };
+
+struct HitPoint {
+    i8 flags;
+    i8 filledAmount;
+};
+
+/**
+ * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
+ */
+struct LowEntity {
+    EntityType type;
+
+    WorldPosition pos;
+    f32 width, height;
+
+    bool32 collides;
+    i32 dChunkZ; // Stairs
+
+    i32 highEntityIndex;
+
+    i32 hitPointMax;
+    Array<HitPoint, 16> hitPoints;
+
+    i32 swordIndex;
+    f32 distanceRemaining; // How far the sword will go
+};
+
+/**
+ * High frequency
+ */
+struct HighEntity {
+    Vec2 pos; // NOTE: This is now already relative to the camera center
+    u32 chunkZ;
+    Vec2 velocity;
+
+    i32 facingDir;
+
+    f32 tBob;
+
+    f32 z;
+    f32 dZ;
+
+    i32 lowEntityIndex;
+};
+
+struct Entity {
+    LowEntity* low;
+    HighEntity* high;
+    i32 lowIndex;
+};
+
+NODISCARD
+INTERNAL WorldPosition NullWorldPos();
+
+NODISCARD
+INTERNAL bool32 IsValidWorldPos(WorldPosition pos);
+
 INTERNAL void InitializeWorld(World* world, f32 tileSideInMeters);
 
 NODISCARD
@@ -111,7 +182,11 @@ INTERNAL WorldDiff SubtractWorldPos(const World* world, const WorldPosition* a,
 
 INTERNAL WorldEntityBlock* FreeBlock(WorldEntityBlock* block);
 
+INTERNAL void ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowIndex,
+                                      WorldPosition* oldPos, WorldPosition* newPos);
+
 INTERNAL void ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex,
-                                   WorldPosition* oldPos, WorldPosition* newPos);
+                                   LowEntity* lowEntity, WorldPosition* oldPos,
+                                   WorldPosition* newPos);
 
 #endif // HANDMADE_WORLD_H
