@@ -464,7 +464,7 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             } break;
 
             case SDLK_SPACE: {
-                ProcessInputEvent(&input->playerInputs.space, isDown);
+                ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
             case SDLK_q: {
