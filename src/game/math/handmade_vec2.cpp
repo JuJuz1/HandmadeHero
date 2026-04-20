@@ -117,7 +117,7 @@ Dot(Vec2 lhs, Vec2 rhs) {
 NODISCARD
 INTERNAL inline f32
 Length(Vec2 v) {
-    const f32 result{ Sqrt(Dot(v, v)) };
+    const f32 result{ Sqrt(LengthSquared(v)) };
     return result;
 }
 

@@ -447,7 +447,7 @@ NODISCARD
 INTERNAL AddLowEntityResult
 AddSword(GameState* gameState) {
     auto entity{ AddLowEntity(gameState, EntityType::SWORD, nullptr) };
-    auto lowEntity{ entity.lowEntity };
+    auto* lowEntity{ entity.lowEntity };
 
     lowEntity->height = 0.75f;
     lowEntity->width = 0.3f;
@@ -462,7 +462,7 @@ AddPlayer(GameState* gameState) {
 
     WorldPosition pos{ gameState->cameraPos };
     auto entity{ AddLowEntity(gameState, EntityType::HERO, &pos) };
-    auto lowEntity{ entity.lowEntity };
+    auto* lowEntity{ entity.lowEntity };
 
     lowEntity->height = 0.5f; // 1.4f;
     lowEntity->width = 0.75f; // entity->dimension.y * 0.75f;
@@ -491,7 +491,7 @@ AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
     auto entity{ AddLowEntity(gameState, EntityType::WALL, &pos) };
-    auto lowEntity{ entity.lowEntity };
+    auto* lowEntity{ entity.lowEntity };
 
     lowEntity->height = gameState->world->tileSideInMeters;
     lowEntity->width = gameState->world->tileSideInMeters;
@@ -506,7 +506,7 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
     auto entity{ AddLowEntity(gameState, EntityType::MONSTER, &pos) };
-    auto lowEntity{ entity.lowEntity };
+    auto* lowEntity{ entity.lowEntity };
 
     lowEntity->height = 0.75f;
     lowEntity->width = 0.6f;
@@ -523,7 +523,7 @@ AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
     auto entity{ AddLowEntity(gameState, EntityType::FAMILIAR, &pos) };
-    auto lowEntity{ entity.lowEntity };
+    auto* lowEntity{ entity.lowEntity };
 
     lowEntity->height = 0.5f;
     lowEntity->width = 1.0f;
@@ -555,15 +555,17 @@ OffsetAndCheckFrequencyByArea(GameState* gameState, Rect highFreqBounds,
     i32 movedCount{};
 
     for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount;) {
-        HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+        auto highEntity{ &gameState->highEntities_[highIndex] };
+        auto* lowEntity{ &gameState->lowEntities[highEntity->lowEntityIndex] };
+
         highEntity->pos += entityOffsetFromCamera;
 
-        if (!IsInsideRectangle(highFreqBounds, highEntity->pos)) {
+        if (IsValidWorldPos(lowEntity->pos) && IsInsideRectangle(highFreqBounds, highEntity->pos)) {
+            ++highIndex;
+        } else {
             ASSERT(gameState->lowEntities[highEntity->lowEntityIndex].highEntityIndex == highIndex);
             EntityToLowFreq(gameState, highEntity->lowEntityIndex);
             ++movedCount;
-        } else {
-            ++highIndex;
         }
     }
 
@@ -942,16 +944,34 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
     return result;
 }
 
-INTERNAL void
-MoveEntity(GameState* gameState, Entity entity, Vec2 acceleration, f32 delta) {
-    // TODO: move player speed away from here!
-    constexpr f32 playerSpeed{ 30 };
-    //constexpr f32 playerSpeedModifier{ 4 };
+struct MoveSpec {
+    f32 speed;
+    f32 drag;
+    bool32 unitMaxAccelVector;
+};
 
-    // Normalize if greater than unit circle length of 1
-    const f32 accelerationLengthSq{ LengthSquared(acceleration) };
-    if (accelerationLengthSq > 1.0f) {
-        acceleration *= (1.0f / Sqrt(accelerationLengthSq));
+NODISCARD
+INTERNAL MoveSpec
+DefaultMoveSpec() {
+    MoveSpec result{};
+    result.speed = 1.0f;
+    result.drag = 0.0f;
+    result.unitMaxAccelVector = false;
+
+    return result;
+}
+
+INTERNAL void
+MoveEntity(GameState* gameState, Entity entity, MoveSpec moveSpec, Vec2 acceleration, f32 delta) {
+    // TODO: move player speed away from here!
+    //constexpr f32 speedModifier{ 4 };
+
+    if (moveSpec.unitMaxAccelVector) {
+        // Normalize if greater than unit circle length of 1
+        const f32 accelerationLengthSq{ LengthSquared(acceleration) };
+        if (accelerationLengthSq > 1.0f) {
+            acceleration *= (1.0f / Sqrt(accelerationLengthSq));
+        }
     }
 
     // Other player faster for debug
@@ -959,15 +979,15 @@ MoveEntity(GameState* gameState, Entity entity, Vec2 acceleration, f32 delta) {
     //    acceleration *= 1.5f;
     //}
 
-    acceleration *= playerSpeed;
+    acceleration *= moveSpec.speed;
 
     // TODO: modify to include inputs for players
     //if (hm_input::ActionPressed(&inputButtons->shift)) {
-    //    acceleration *= playerSpeedModifier;
+    //    acceleration *= speedModifier;
     //}
 
     // TODO: ordinary differential equations
-    acceleration += -4.0f * entity.high->velocity;
+    acceleration += -moveSpec.drag * entity.high->velocity;
     // v' = at + v
     entity.high->velocity += acceleration * delta;
 
@@ -988,60 +1008,62 @@ MoveEntity(GameState* gameState, Entity entity, Vec2 acceleration, f32 delta) {
 
         const Vec2 desiredPos{ entity.high->pos + playerDelta };
 
-        for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
-            const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
-            const Entity testEntity{ ForceEntityIntoHigh(gameState, highEntity->lowEntityIndex) };
-            // Check if collides and don't compare to self!
-            if (!entity.low->collides || !testEntity.low->collides ||
-                testEntity.high == entity.high) {
-                continue;
-            }
+        if (entity.low->collides) {
+            for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+                const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
+                const Entity testEntity{ ForceEntityIntoHigh(gameState,
+                                                             highEntity->lowEntityIndex) };
+                // Check if testEntity collides and don't compare to self!
+                if (!testEntity.low->collides || testEntity.high == entity.high) {
+                    continue;
+                }
 
-            const f32 diameterWidth{ testEntity.low->width + entity.low->width };
-            const f32 diameterHeight{ testEntity.low->height + entity.low->height };
-            const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
-            const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
+                const f32 diameterWidth{ testEntity.low->width + entity.low->width };
+                const f32 diameterHeight{ testEntity.low->height + entity.low->height };
+                const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
+                const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
 
-            const Vec2 relPos{ entity.high->pos - testEntity.high->pos };
+                const Vec2 relPos{ entity.high->pos - testEntity.high->pos };
 
-            // Test all four walls
+                // Test all four walls
 
-            // x
-            testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
-                                      tMin, minCorner.y, maxCorner.y);
-            if (testWallResult.hit) {
-                tMin = testWallResult.tMin;
-                wallNormal = Vec2{ -1, 0 };
-                //hitWall = true;
-                hitHighEntityIndex = highIndex;
-            }
+                // x
+                testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ -1, 0 };
+                    //hitWall = true;
+                    hitHighEntityIndex = highIndex;
+                }
 
-            testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
-                                      tMin, minCorner.y, maxCorner.y);
-            if (testWallResult.hit) {
-                tMin = testWallResult.tMin;
-                wallNormal = Vec2{ 1, 0 };
-                //hitWall = true;
-                hitHighEntityIndex = highIndex;
-            }
+                testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ 1, 0 };
+                    //hitWall = true;
+                    hitHighEntityIndex = highIndex;
+                }
 
-            // y
-            testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
-                                      tMin, minCorner.x, maxCorner.x);
-            if (testWallResult.hit) {
-                tMin = testWallResult.tMin;
-                wallNormal = Vec2{ 0, -1 };
-                //hitwall = true;
-                hitHighEntityIndex = highIndex;
-            }
+                // y
+                testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ 0, -1 };
+                    //hitwall = true;
+                    hitHighEntityIndex = highIndex;
+                }
 
-            testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
-                                      tMin, minCorner.x, maxCorner.x);
-            if (testWallResult.hit) {
-                tMin = testWallResult.tMin;
-                wallNormal = Vec2{ 0, 1 };
-                //hitwall = true;
-                hitHighEntityIndex = highIndex;
+                testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ 0, 1 };
+                    //hitwall = true;
+                    hitHighEntityIndex = highIndex;
+                }
             }
         }
 
@@ -1074,7 +1096,7 @@ MoveEntity(GameState* gameState, Entity entity, Vec2 acceleration, f32 delta) {
 
     // Facing direction checks
     const Vec2 velocity{ entity.high->velocity };
-    if (velocity.x == 0.0f && velocity.y == 0.0f) {
+    if (velocity == Vec2::ZERO) {
         // Keep previous
     } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
         if (velocity.x > 0) {
@@ -1171,7 +1193,28 @@ UpdateFamiliar(GameState* gameState, Entity entity, f32 delta) {
         //PRINT("\n");
     }
 
-    MoveEntity(gameState, entity, acceleration, delta);
+    MoveSpec moveSpec{ DefaultMoveSpec() };
+    moveSpec.speed = 50.0f;
+    moveSpec.drag = 8.0f;
+
+    MoveEntity(gameState, entity, moveSpec, acceleration, delta);
+}
+
+INTERNAL void
+UpdateSword(GameState* gameState, Entity entity, f32 delta) {
+    MoveSpec moveSpec{ DefaultMoveSpec() };
+    // This doesn't do affect the sword at all!
+    moveSpec.speed = 0.0f;
+
+    const Vec2 oldPos{ entity.high->pos };
+    MoveEntity(gameState, entity, moveSpec, Vec2{}, delta);
+
+    const f32 traveled{ Length(entity.high->pos - oldPos) };
+    entity.low->distanceRemaining -= traveled;
+    if (entity.low->distanceRemaining < 0.0f) {
+        ChangeEntityLocation(gameState->world, &gameState->worldArena, entity.lowIndex, entity.low,
+                             &entity.low->pos, nullptr);
+    }
 }
 
 INTERNAL void
@@ -1235,19 +1278,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Entity controllingEntity{ ForceEntityIntoHigh(gameState, lowIndex) };
             // Need to check the type as we have the null entity...
             if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
-                Vec2 entityAcceleration{};
+                Vec2 entityDir{};
 
                 if (hm_input::ActionPressed(&inputButtons->up)) {
-                    entityAcceleration.y = 1.0f;
+                    entityDir.y = 1.0f;
                 }
                 if (hm_input::ActionPressed(&inputButtons->down)) {
-                    entityAcceleration.y = -1.0f;
+                    entityDir.y = -1.0f;
                 }
                 if (hm_input::ActionPressed(&inputButtons->left)) {
-                    entityAcceleration.x = -1.0f;
+                    entityDir.x = -1.0f;
                 }
                 if (hm_input::ActionPressed(&inputButtons->right)) {
-                    entityAcceleration.x = 1.0f;
+                    entityDir.x = 1.0f;
                 }
                 // Jump
                 if (hm_input::ActionJustPressed(&inputButtons->space)) {
@@ -1256,36 +1299,46 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     }
                 }
 
-                Vec2 swordAcceleration{};
+                Vec2 swordDir{};
                 if (hm_input::ActionJustPressed(&inputButtons->actionUp)) {
-                    swordAcceleration.y = 1.0f;
+                    swordDir.y = 1.0f;
                 }
                 if (hm_input::ActionJustPressed(&inputButtons->actionDown)) {
-                    swordAcceleration.y = -1.0f;
+                    swordDir.y = -1.0f;
                 }
                 if (hm_input::ActionJustPressed(&inputButtons->actionLeft)) {
-                    swordAcceleration.x = -1.0f;
+                    swordDir.x = -1.0f;
                 }
                 if (hm_input::ActionJustPressed(&inputButtons->actionRight)) {
-                    swordAcceleration.x = 1.0f;
+                    swordDir.x = 1.0f;
                 }
 
                 // The separation of handling input and moving the player is not yet clear
                 //MoveEntity(gameState, controllingEntity, controllerIndex, inputButtons,
                 //           acceleration, delta);
-                MoveEntity(gameState, controllingEntity, entityAcceleration, delta);
+                MoveSpec moveSpec{ DefaultMoveSpec() };
+                moveSpec.speed = 30.0f;
+                moveSpec.drag = 4.0f;
+                moveSpec.unitMaxAccelVector = true;
+                MoveEntity(gameState, controllingEntity, moveSpec, entityDir, delta);
 
-                if (swordAcceleration != Vec2::ZERO) {
+                /// Other actions ///
+
+                // Sword
+                if (swordDir != Vec2::ZERO) {
                     const i32 swordIndex{ controllingEntity.low->swordIndex };
-                    auto sword{ GetLowEntity(gameState, swordIndex) };
-                    if (sword && !IsValidWorldPos(sword->pos)) {
+                    auto lowSword{ GetLowEntity(gameState, swordIndex) };
+                    if (lowSword && !IsValidWorldPos(lowSword->pos)) {
+                        PRINT("Used sword!\n");
                         WorldPosition swordPos{ controllingEntity.low->pos };
                         ChangeEntityLocation(gameState->world, &gameState->worldArena, swordIndex,
-                                             sword, nullptr, &swordPos);
+                                             lowSword, nullptr, &swordPos);
+
+                        auto sword{ ForceEntityIntoHigh(gameState, swordIndex) };
+                        sword.low->distanceRemaining = 6.0f;
+                        sword.high->velocity = swordDir * 8.0f;
                     }
                 }
-
-                // Other actions:
 
                 // Only the first player can do certain operations
                 // Switching z index
@@ -1436,6 +1489,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
         case EntityType::FAMILIAR: {
             UpdateFamiliar(gameState, entity, delta);
+
             // Head bob
             constexpr f32 bobSpeed{ 3.5f };
             entity.high->tBob += delta * bobSpeed;
@@ -1444,7 +1498,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             const f32 bobSin{ Sin(entity.high->tBob) };
-            const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.25f * bobSin) };
+            const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.15f * bobSin) };
             const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align,
@@ -1453,6 +1507,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                        heroBitmaps->align);
         } break;
         case EntityType::SWORD: {
+            UpdateSword(gameState, entity, delta);
+
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
             PushBitmap(&pieceGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
@@ -1484,6 +1540,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             entityGroundPoint.x - (0.5f * gameState->metersToPixels * lowEntity->width),
             entityGroundPoint.y - (0.5f * gameState->metersToPixels * lowEntity->height)
         };
+
         const Vec2 entityWidthHeight{ lowEntity->width, lowEntity->height };
 
         // Draw pieces

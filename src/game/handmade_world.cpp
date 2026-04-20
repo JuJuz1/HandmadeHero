@@ -210,7 +210,7 @@ ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, Wo
     ASSERT(!oldPos || IsValidWorldPos(*oldPos));
     ASSERT(!newPos || IsValidWorldPos(*newPos));
 
-    if (oldPos && AreOnSameChunk(world, oldPos, newPos)) {
+    if (oldPos && newPos && AreOnSameChunk(world, oldPos, newPos)) {
         // Leave entity where it is
     } else {
         if (oldPos) {
