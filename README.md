@@ -2,6 +2,17 @@
 
 My implementation of the code as I followed Casey Muratori's [Handmade Hero](https://guide.handmadehero.org/) playlist
 
+## Episode 62 showcase:
+
+![Episode 62](misc/showcase_episode62.gif)
+
+Most of the work has been going to the entity and world chunk system. Moving entities between low and high priority sets for sparse world storage
+
+Some gameplay elements:
+- Simple sword attack (rock bitmap as a placeholder)
+- Familiar entity following the hero
+- Monster with hitpoints and collision (no damage yet)
+
 ## General architecture
 
 Unity build, game as a service to the platform

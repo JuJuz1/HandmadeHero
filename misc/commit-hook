@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+# Copied from:
+# https://gist.github.com/xezrunner/e6dbafcc21fcbc976c93bdee0f371a08#file-pre-commit-nocheckin
+
+# This pre-commit hook checks for the keyword "$NOCHECKIN_KEYWORD" in staged files, then aborts the commit
+# if any matches were found, with output of file path, line number and match preview.
+
+# This is to better developer experience by letting them mark code meant for experimenting
+# with the supplied keyword, and not having to remember/worry about committing it to the repo
+
+# !!! Use the script supplied in scripts/ to apply the hook automatically (cross-platform) !!!
+
+# The script should be executable even when committed from Windows by doing this:
+# git update-index --chmod=+x ./scripts/setup_git_commit_hook.sh
+
+# Original install instructions:
+# To install, copy and rename to <repo>/.git/hooks/pre-commit (merge contents if already exists)
+# The file name has to be "pre-commit" for Git to use it. It is also compatible with git GUIs.
+# On Unix, mark the file as executable with `chmod +x .git/hooks/pre-commit`.
+
+# IMPORTANT: if modifying this script use --no-verify when committing as this file contains
+# the keyword :)
+
+keyword=${NOCHECKIN_KEYWORD:-nocheckin} # -> nocheckin
+
+# Use color only when stderr is attached to a real terminal and supports colors:
+set_grep_color() {
+	if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ]; then
+		grep_color=always
+	else
+		grep_color=never
+	fi
+}
+
+git_grep() {
+	git \
+    -c color.grep.filename=normal   \
+    -c color.grep.linenumber=normal \
+    -c color.grep.separator=normal  \
+    grep --cached --color="$grep_color" -n -I -F -e "$keyword" -- "$1"
+}
+
+find_matches() {
+	git diff --cached --name-only --diff-filter=ACMR |
+	while IFS= read -r path; do
+		git_grep "$path" || :  # '|| :' = Continue on error
+	done
+}
+
+# Search for nocheckins:
+set_grep_color
+matches=$(find_matches)
+
+# Nothing found, continue:
+[ -n "$matches" ] || exit 0
+
+# nocheckin(s) found, block:
+printf 'Commit blocked due to "%s" in staged files:\n\n' "$keyword" >&2
+printf '%s\n' "$matches" >&2
+printf '\nRemove these markers, or commit with --no-verify to bypass.\n' >&2
+exit 1
