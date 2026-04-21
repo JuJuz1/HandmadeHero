@@ -421,7 +421,7 @@ ProcessPendingEvents(Input* input, AllState* allState) {
         // Keyboard input
         case SDL_KEYUP:
         case SDL_KEYDOWN: {
-            const SDL_Keycode keyCode{ event.key.keysym.sym };
+            const SDL_Scancode scancode{ event.key.keysym.scancode };
             const bool32 isDown{ event.key.state == SDL_PRESSED };
 
             const u8* kbState{ SDL_GetKeyboardState(0) };
@@ -436,73 +436,73 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 continue;
             }
 
-            switch (keyCode) {
-            case SDLK_w: {
+            switch (scancode) {
+            case SDL_SCANCODE_W: {
                 ProcessInputEvent(&input->playerInputs->up, isDown);
             } break;
-            case SDLK_s: {
+            case SDL_SCANCODE_S: {
                 ProcessInputEvent(&input->playerInputs->down, isDown);
             } break;
-            case SDLK_a: {
+            case SDL_SCANCODE_A: {
                 ProcessInputEvent(&input->playerInputs->left, isDown);
             } break;
-            case SDLK_d: {
+            case SDL_SCANCODE_D: {
                 ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
-                //case SDLK_UP: {
+                //case SDL_SCANCODE_UP: {
                 //    ProcessInputEvent(&input->playerInputs[1].up, isDown);
                 //} break;
-                //case SDLK_DOWN: {
+                //case SDL_SCANCODE_DOWN: {
                 //    ProcessInputEvent(&input->playerInputs[1].down, isDown);
                 //} break;
-                //case SDLK_LEFT: {
+                //case SDL_SCANCODE_LEFT: {
                 //    ProcessInputEvent(&input->playerInputs[1].left, isDown);
                 //} break;
-                //case SDLK_RIGHT: {
+                //case SDL_SCANCODE_RIGHT: {
                 //    ProcessInputEvent(&input->playerInputs[1].right, isDown);
                 //} break;
 
-            case SDLK_UP: {
+            case SDL_SCANCODE_UP: {
                 ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
-            case SDLK_DOWN: {
+            case SDL_SCANCODE_DOWN: {
                 ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
-            case SDLK_LEFT: {
+            case SDL_SCANCODE_LEFT: {
                 ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
-            case SDLK_RIGHT: {
+            case SDL_SCANCODE_RIGHT: {
                 ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
-            case SDLK_SPACE: {
+            case SDL_SCANCODE_SPACE: {
                 ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
-            case SDLK_q: {
+            case SDL_SCANCODE_Q: {
                 ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
-            case SDLK_e: {
+            case SDL_SCANCODE_E: {
                 ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
-            case SDLK_LSHIFT:
-            case SDLK_RSHIFT: {
+            case SDL_SCANCODE_LSHIFT:
+            case SDL_SCANCODE_RSHIFT: {
                 ProcessInputEvent(&input->playerInputs->shift, isDown);
             } break;
-            case SDLK_RETURN: {
+            case SDL_SCANCODE_RETURN: {
                 ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;
 
-            case SDLK_F4: {
+            case SDL_SCANCODE_F4: {
                 if (isDown) {
                     if (altPressed) {
                         gIsGameRunning = false;
                     }
                 }
             } break;
-            case SDLK_F11: {
+            case SDL_SCANCODE_F11: {
                 if (isDown) {
                     SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
                     if (window) {
@@ -512,7 +512,7 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             } break;
 
 #if HANDMADE_INTERNAL
-            case SDLK_l: {
+            case SDL_SCANCODE_L: {
                 if (isDown) {
                     if (shiftPressed) {
                         if (allState->isReplayLooping) {
@@ -527,27 +527,27 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                     }
                 }
             } break;
-            case SDLK_1: {
+            case SDL_SCANCODE_1: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 0, shiftPressed);
                 }
             } break;
-            case SDLK_2: {
+            case SDL_SCANCODE_2: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 1, shiftPressed);
                 }
             } break;
-            case SDLK_3: {
+            case SDL_SCANCODE_3: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 2, shiftPressed);
                 }
             } break;
-            case SDLK_4: {
+            case SDL_SCANCODE_4: {
                 if (isDown) {
                     HandleSwitchReplayBuffer(allState, input, 3, shiftPressed);
                 }
             } break;
-            case SDLK_p: {
+            case SDL_SCANCODE_P: {
                 if (isDown) {
                     if (gIsGamePaused) {
                         printf("P: Game unpaused!\n");
@@ -559,14 +559,14 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 }
             } break;
 
-            case SDLK_z: {
+            case SDL_SCANCODE_Z: {
                 ProcessInputEvent(&input->playerInputs->Z, isDown);
             } break;
 #endif
 
             default: {
                 if (isDown) {
-                    printf("keyCode %u NOT HANDLED\n", keyCode);
+                    printf("scancode %u NOT HANDLED\n", scancode);
                 }
             } break;
             }
