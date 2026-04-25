@@ -4,6 +4,7 @@
 #include "game/handmade.h"
 
 #include "game/handmade_array.h"
+#include "game/handmade_entity.h"
 #include "game/handmade_memory.h"
 #include "game/handmade_world.h"
 #include "game/math/handmade_vec2.h"
@@ -49,8 +50,7 @@ struct GameState {
     WorldPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    Array<LowEntity, 4096> lowEntities;   // Holds all entities
-    Array<HighEntity, 256> highEntities_; // Holds the entities marked as high frequency
+    Array<LowEntity, 4096> lowEntities; // Holds all entities
     i32 lowEntityCount;
     i32 highEntityCount;
 
@@ -72,5 +72,21 @@ struct EntityVisiblePieceGroup {
     Array<EntityVisiblePiece, 8> pieces;
     i32 pieceCount;
 };
+
+/// Here we can put functions which many other files need to call ///
+
+NODISCARD
+INTERNAL LowEntity*
+GetLowEntity(GameState* gameState, i32 lowIndex) {
+    ASSERT(lowIndex >= 0 && lowIndex < gameState->lowEntityCount);
+
+    LowEntity* lowEntity{};
+
+    if (lowIndex >= 0 && lowIndex < gameState->lowEntityCount) {
+        lowEntity = &gameState->lowEntities[lowIndex];
+    }
+
+    return lowEntity;
+}
 
 #endif // HANDMADE_GAME_H

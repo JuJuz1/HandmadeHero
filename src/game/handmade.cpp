@@ -2,14 +2,6 @@
 
 #include "game/handmade_game.h"
 
-// Here we just include every .cpp file (basically every file if they are not bundled into one)
-// The order doesn't matter as we seperated .h files to contain every dependency they need
-#include "game/handmade_intrinsics.cpp"
-#include "game/handmade_memory.cpp"
-#include "game/handmade_random.cpp"
-#include "game/handmade_world.cpp"
-#include "game/math/handmade_math.cpp"
-
 // Any global variables need to be initialized after hot reload (so probably every frame)
 GLOBAL ThreadContext* gThreadContext;
 GLOBAL GameMemory* gMemory;
@@ -21,6 +13,15 @@ GLOBAL GameMemory* gMemory;
 #define PRINT_U32(message, value) (*gMemory->exports.DEBUGPrintUInt)(gThreadContext, message, value)
 #define PRINT_F32(message, value)                                                                  \
     (*gMemory->exports.DEBUGPrintFloat)(gThreadContext, message, value)
+
+// Here we just include every .cpp file (basically every file if they are not bundled into one)
+// The order doesn't matter as we seperated .h files to contain every dependency they need
+#include "game/handmade_intrinsics.cpp"
+#include "game/handmade_memory.cpp"
+#include "game/handmade_random.cpp"
+#include "game/handmade_sim_region.cpp"
+#include "game/handmade_world.cpp"
+#include "game/math/handmade_math.cpp"
 
 namespace hm_input {
 
@@ -265,142 +266,14 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
 }
 
 /**
- * If entityIndex is out of bounds, returns a nullpointer
- */
-NODISCARD
-INTERNAL LowEntity*
-GetLowEntity(GameState* gameState, i32 lowIndex) {
-    ASSERT(lowIndex >= 0 && lowIndex < gameState->lowEntityCount);
-
-    LowEntity* lowEntity{};
-
-    if (lowIndex >= 0 && lowIndex < gameState->lowEntityCount) {
-        lowEntity = &gameState->lowEntities[lowIndex];
-    }
-
-    return lowEntity;
-}
-
-NODISCARD
-INTERNAL Entity
-EntityFromHighIndex(GameState* gameState, i32 highIndex) {
-    ASSERT(highIndex >= 0 && highIndex < gameState->highEntityCount);
-
-    Entity entity{};
-
-    if (highIndex >= 0 && highIndex < gameState->highEntityCount) {
-        entity.high = &gameState->highEntities_[highIndex];
-        entity.low = GetLowEntity(gameState, entity.high->lowEntityIndex);
-        entity.lowIndex = entity.high->lowEntityIndex;
-    }
-
-    return entity;
-}
-
-/**
- * Makes the entity low frequency
- * Decrements gameState->highEntityCount
- */
-INTERNAL void
-EntityToLowFreq(GameState* gameState, i32 entityIndex) {
-    ASSERT(entityIndex);
-    LowEntity* lowEntity{ GetLowEntity(gameState, entityIndex) };
-    const i32 highIndex{ lowEntity->highEntityIndex };
-    ASSERT(highIndex);                      // TODO: Null entity??
-    ASSERT(gameState->highEntityCount > 1); // Null entity...?
-
-    if (highIndex) {
-        const i32 lastHighIndex{ gameState->highEntityCount - 1 };
-        // If not last one -> fill the gap
-        if (highIndex != lastHighIndex) {
-            const HighEntity* lastHighEntity{ &gameState->highEntities_[lastHighIndex] };
-            HighEntity* removedEntity{ &gameState->highEntities_[highIndex] };
-
-            *removedEntity = *lastHighEntity;
-            gameState->lowEntities[lastHighEntity->lowEntityIndex].highEntityIndex = highIndex;
-        }
-    }
-
-    lowEntity->highEntityIndex = 0;
-    --gameState->highEntityCount;
-}
-
-/**
  * Maps the entity to camera space
  */
-NODISCARD
-INTERNAL Vec2
+NODISCARD INTERNAL Vec2
 GetCameraSpacePos(GameState* gameState, const LowEntity* lowEntity) {
     const WorldDiff diff{ SubtractWorldPos(gameState->world, &lowEntity->pos,
                                            &gameState->cameraPos) };
     const Vec2 result{ diff.x, diff.y };
     return result;
-}
-
-/**
- * A lower level call, assumes the entity is not in high frequency
- *
- * Makes the entity high frequency by mapping it to camera space
- * Doesn't do anything if the entity already is in the high frequency array
- */
-NODISCARD
-INTERNAL HighEntity*
-EntityToHighFreq_(GameState* gameState, LowEntity* lowEntity, i32 lowIndex, Vec2 cameraSpacePos) {
-    HighEntity* highEntity{};
-
-    ASSERT(lowEntity->highEntityIndex == 0);
-
-    // Already is high freq
-    if (lowEntity->highEntityIndex == 0) {
-        if (gameState->highEntityCount < gameState->highEntities_.size) {
-            const i32 highIndex{ gameState->highEntityCount++ };
-            lowEntity->highEntityIndex = highIndex;
-            highEntity = &gameState->highEntities_[highIndex];
-
-            highEntity->pos = cameraSpacePos;
-            highEntity->velocity = Vec2{};
-            highEntity->chunkZ = lowEntity->pos.chunkZ;
-            highEntity->facingDir = 0;
-
-            highEntity->lowEntityIndex = lowIndex;
-
-            lowEntity->highEntityIndex = highIndex;
-        } else {
-            INVALID_CODE_PATH;
-        }
-    }
-
-    return highEntity;
-}
-
-NODISCARD
-INTERNAL HighEntity*
-EntityToHighFreq(GameState* gameState, i32 lowIndex) {
-    HighEntity* highEntity{};
-
-    LowEntity* lowEntity{ GetLowEntity(gameState, lowIndex) };
-    if (lowEntity->highEntityIndex) {
-        highEntity = &gameState->highEntities_[lowEntity->highEntityIndex];
-    } else {
-        const Vec2 cameraSpacePos{ GetCameraSpacePos(gameState, lowEntity) };
-        highEntity = EntityToHighFreq_(gameState, lowEntity, lowIndex, cameraSpacePos);
-    }
-
-    return highEntity;
-}
-
-NODISCARD
-INTERNAL Entity
-ForceEntityIntoHigh(GameState* gameState, i32 lowIndex) {
-    Entity entity{};
-
-    if (lowIndex >= 0 && lowIndex < gameState->lowEntityCount) {
-        entity.low = GetLowEntity(gameState, lowIndex);
-        entity.high = EntityToHighFreq(gameState, lowIndex);
-        entity.lowIndex = lowIndex;
-    }
-
-    return entity;
 }
 
 struct AddLowEntityResult {
@@ -421,7 +294,7 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition* pos) {
 
     // No need for this maybe
     *lowEntity = LowEntity{};
-    lowEntity->type = type;
+    lowEntity->sim.type = type;
 
     ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, nullptr,
                          pos);
@@ -433,11 +306,11 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition* pos) {
 
 INTERNAL void
 InitHitpoints(LowEntity* lowEntity, i32 hitPointCount) {
-    ASSERT(hitPointCount < lowEntity->hitPoints.size);
-    lowEntity->hitPointMax = hitPointCount;
+    ASSERT(hitPointCount < lowEntity->sim.hitPoints.size);
+    lowEntity->sim.hitPointMax = hitPointCount;
 
-    for (i32 i{}; i < lowEntity->hitPointMax; ++i) {
-        HitPoint* hitPoint{ &lowEntity->hitPoints[i] };
+    for (i32 i{}; i < lowEntity->sim.hitPointMax; ++i) {
+        HitPoint* hitPoint{ &lowEntity->sim.hitPoints[i] };
         //hitPoint->flags = 0;
         hitPoint->filledAmount = hit_Point_Sub_Count;
     }
@@ -449,8 +322,8 @@ AddSword(GameState* gameState) {
     auto entity{ AddLowEntity(gameState, EntityType::SWORD, nullptr) };
     auto* lowEntity{ entity.lowEntity };
 
-    lowEntity->height = 0.75f;
-    lowEntity->width = 0.3f;
+    lowEntity->sim.height = 0.75f;
+    lowEntity->sim.width = 0.3f;
 
     return entity;
 }
@@ -464,15 +337,15 @@ AddPlayer(GameState* gameState) {
     auto entity{ AddLowEntity(gameState, EntityType::HERO, &pos) };
     auto* lowEntity{ entity.lowEntity };
 
-    lowEntity->height = 0.5f; // 1.4f;
-    lowEntity->width = 0.75f; // entity->dimension.y * 0.75f;
+    lowEntity->sim.height = 0.5f; // 1.4f;
+    lowEntity->sim.width = 0.75f; // entity->dimension.y * 0.75f;
 
-    lowEntity->collides = true;
+    lowEntity->sim.collides = true;
 
     InitHitpoints(lowEntity, 3);
 
     auto sword{ AddSword(gameState) };
-    lowEntity->swordIndex = sword.lowIndex;
+    lowEntity->sim.sword.index = sword.lowIndex;
 
     // Not needed for now
     //EntityToHighFreq(gameState, entityIndex);
@@ -493,9 +366,9 @@ AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto entity{ AddLowEntity(gameState, EntityType::WALL, &pos) };
     auto* lowEntity{ entity.lowEntity };
 
-    lowEntity->height = gameState->world->tileSideInMeters;
-    lowEntity->width = gameState->world->tileSideInMeters;
-    lowEntity->collides = true;
+    lowEntity->sim.height = gameState->world->tileSideInMeters;
+    lowEntity->sim.width = gameState->world->tileSideInMeters;
+    lowEntity->sim.collides = true;
 
     return entity;
 }
@@ -508,9 +381,9 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto entity{ AddLowEntity(gameState, EntityType::MONSTER, &pos) };
     auto* lowEntity{ entity.lowEntity };
 
-    lowEntity->height = 0.75f;
-    lowEntity->width = 0.6f;
-    lowEntity->collides = true;
+    lowEntity->sim.height = 0.75f;
+    lowEntity->sim.width = 0.6f;
+    lowEntity->sim.collides = true;
 
     InitHitpoints(lowEntity, 3);
 
@@ -525,115 +398,11 @@ AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto entity{ AddLowEntity(gameState, EntityType::FAMILIAR, &pos) };
     auto* lowEntity{ entity.lowEntity };
 
-    lowEntity->height = 0.5f;
-    lowEntity->width = 1.0f;
-    lowEntity->collides = true;
+    lowEntity->sim.height = 0.5f;
+    lowEntity->sim.width = 1.0f;
+    lowEntity->sim.collides = true;
 
     return entity;
-}
-
-/**
- * Debug function
- */
-NODISCARD
-INTERNAL bool32
-ValidateEntityPairs_(GameState* gameState) {
-    bool32 valid{ true };
-
-    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
-        HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
-        LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
-        valid = valid && lowEntity->highEntityIndex == highIndex;
-    }
-
-    return valid;
-}
-
-INTERNAL void
-OffsetAndCheckFrequencyByArea(GameState* gameState, Rect highFreqBounds,
-                              Vec2 entityOffsetFromCamera) {
-    i32 movedCount{};
-
-    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount;) {
-        auto highEntity{ &gameState->highEntities_[highIndex] };
-        auto* lowEntity{ &gameState->lowEntities[highEntity->lowEntityIndex] };
-
-        highEntity->pos += entityOffsetFromCamera;
-
-        if (IsValidWorldPos(lowEntity->pos) && IsInsideRectangle(highFreqBounds, highEntity->pos)) {
-            ++highIndex;
-        } else {
-            ASSERT(gameState->lowEntities[highEntity->lowEntityIndex].highEntityIndex == highIndex);
-            EntityToLowFreq(gameState, highEntity->lowEntityIndex);
-            ++movedCount;
-        }
-    }
-
-    if (movedCount > 0) {
-        PRINT_I32("Entities moved to low: ", movedCount);
-    }
-}
-
-INTERNAL void
-SetCamera(GameState* gameState, WorldPosition newCameraPos) {
-    ASSERT(ValidateEntityPairs_(gameState));
-
-    const WorldDiff diffCameraPos{ SubtractWorldPos(gameState->world, &newCameraPos,
-                                                    &gameState->cameraPos) };
-    const Vec2 entityOffsetFromCamera{ -diffCameraPos.x, -diffCameraPos.y };
-    gameState->cameraPos = newCameraPos;
-
-    constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
-    constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
-    const Rect cameraBounds{ RectCenterDim(
-        Vec2{}, Vec2{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY) } *
-                    gameState->world->tileSideInMeters) };
-
-    // Add the offset to every high frequency entity when the camera moves
-    // TODO: doesn't work with second player, walls work correctly
-    OffsetAndCheckFrequencyByArea(gameState, cameraBounds, entityOffsetFromCamera);
-
-    ASSERT(ValidateEntityPairs_(gameState));
-
-    const WorldPosition minChunk{ MapIntoChunkSpace(gameState->world, newCameraPos,
-                                                    cameraBounds.min) };
-    const WorldPosition maxChunk{ MapIntoChunkSpace(gameState->world, newCameraPos,
-                                                    cameraBounds.max) };
-
-    i32 movedCount{};
-
-    // Check entities by chunk, move to high set if in the chunks close to camera
-    for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
-        for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
-            WorldChunk* chunk{ GetWorldChunk(gameState->world, chunkX, chunkY, newCameraPos.chunkZ,
-                                             nullptr) };
-            if (chunk) {
-                for (WorldEntityBlock* block{ &chunk->firstBlock }; block; block = block->next) {
-                    for (i32 entityIndex{}; entityIndex < block->entityCount; ++entityIndex) {
-                        const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
-                        LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
-                        if (lowEntity->highEntityIndex) {
-                            continue;
-                        }
-
-                        const Vec2 cameraSpacePos{ GetCameraSpacePos(gameState, lowEntity) };
-
-                        if (IsInsideRectangle(cameraBounds, cameraSpacePos)) {
-                            // TODO: Unused return
-                            EntityToHighFreq_(gameState, lowEntity, lowEntityIndex, cameraSpacePos);
-                            ++movedCount;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (movedCount > 0) {
-        PRINT_I32("Entities moved to high: ", movedCount);
-    }
-
-    ASSERT(ValidateEntityPairs_(gameState));
 }
 
 INTERNAL void
@@ -911,9 +680,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Atm SetCamera has to be called at the end if there is no player at the start
     // This is because we don't call SetCamera after this function if there is no player
-    WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
-                                                           cameraTileZ) };
-    SetCamera(gameState, cameraPos);
+    //WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
+    //                                                       cameraTileZ) };
+    //SetCamera(gameState, cameraPos);
 }
 
 struct TestWallResult {
@@ -962,165 +731,6 @@ DefaultMoveSpec() {
 }
 
 INTERNAL void
-MoveEntity(GameState* gameState, Entity entity, MoveSpec moveSpec, Vec2 acceleration, f32 delta) {
-    // TODO: move player speed away from here!
-    //constexpr f32 speedModifier{ 4 };
-
-    if (moveSpec.unitMaxAccelVector) {
-        // Normalize if greater than unit circle length of 1
-        const f32 accelerationLengthSq{ LengthSquared(acceleration) };
-        if (accelerationLengthSq > 1.0f) {
-            acceleration *= (1.0f / Sqrt(accelerationLengthSq));
-        }
-    }
-
-    // Other player faster for debug
-    //if (controllerIndex != 0) {
-    //    acceleration *= 1.5f;
-    //}
-
-    acceleration *= moveSpec.speed;
-
-    // TODO: modify to include inputs for players
-    //if (hm_input::ActionPressed(&inputButtons->shift)) {
-    //    acceleration *= speedModifier;
-    //}
-
-    // TODO: ordinary differential equations
-    acceleration += -moveSpec.drag * entity.high->velocity;
-    // v' = at + v
-    entity.high->velocity += acceleration * delta;
-
-    // p' = 0.5 * at^2 + vt + p
-    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity.high->velocity * delta) };
-
-    // Collision checks
-
-    //bool32 hitWall{}; // Used to modify velocity if we hit a wall during the frame
-
-    constexpr i32 iterationCount{ 4 };
-
-    for (i32 iteration{}; iteration < iterationCount; ++iteration) {
-        f32 tMin{ 1.0f };
-        Vec2 wallNormal{};
-        TestWallResult testWallResult{};
-        i32 hitHighEntityIndex{};
-
-        const Vec2 desiredPos{ entity.high->pos + playerDelta };
-
-        if (entity.low->collides) {
-            for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
-                const HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
-                const Entity testEntity{ ForceEntityIntoHigh(gameState,
-                                                             highEntity->lowEntityIndex) };
-                // Check if testEntity collides and don't compare to self!
-                if (!testEntity.low->collides || testEntity.high == entity.high) {
-                    continue;
-                }
-
-                const f32 diameterWidth{ testEntity.low->width + entity.low->width };
-                const f32 diameterHeight{ testEntity.low->height + entity.low->height };
-                const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
-                const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
-
-                const Vec2 relPos{ entity.high->pos - testEntity.high->pos };
-
-                // Test all four walls
-
-                // x
-                testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ -1, 0 };
-                    //hitWall = true;
-                    hitHighEntityIndex = highIndex;
-                }
-
-                testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ 1, 0 };
-                    //hitWall = true;
-                    hitHighEntityIndex = highIndex;
-                }
-
-                // y
-                testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ 0, -1 };
-                    //hitwall = true;
-                    hitHighEntityIndex = highIndex;
-                }
-
-                testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ 0, 1 };
-                    //hitwall = true;
-                    hitHighEntityIndex = highIndex;
-                }
-            }
-        }
-
-        //PRINT_F32("tMin: ", tMin);
-
-        entity.high->pos += playerDelta * tMin;
-        if (hitHighEntityIndex) {
-            entity.high->velocity -= 1.0f * Dot(entity.high->velocity, wallNormal) * wallNormal;
-            playerDelta = desiredPos - entity.high->pos;
-            playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
-
-            const Entity hitEntity{ ForceEntityIntoHigh(gameState, hitHighEntityIndex) };
-            const LowEntity* hitLow{ GetLowEntity(gameState, hitEntity.lowIndex) };
-
-            // Door check
-            const World* world{ gameState->world };
-            entity.low->pos.chunkZ =
-                WorldPositionModifyZChecked(world, &entity.low->pos, hitLow->dChunkZ);
-        } else {
-            break;
-        }
-    }
-
-    // Delta independent friction using exponential decay: e^(-kt)
-    //if (hitWall) {
-    //    constexpr f32 frictionModifier{ 2.0f };
-    //    const f32 friction{ ExpF32(-frictionModifier * delta) };
-    //    entity->velocity *= friction;
-    //}
-
-    // Facing direction checks
-    const Vec2 velocity{ entity.high->velocity };
-    if (velocity == Vec2::ZERO) {
-        // Keep previous
-    } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
-        if (velocity.x > 0) {
-            entity.high->facingDir = 3;
-        } else {
-            entity.high->facingDir = 1;
-        }
-    } else {
-        if (velocity.y > 0) {
-            entity.high->facingDir = 2;
-        } else {
-            entity.high->facingDir = 0;
-        }
-    }
-
-    WorldPosition newPos{ MapIntoChunkSpace(gameState->world, gameState->cameraPos,
-                                            entity.high->pos) };
-    // TODO: bundle these together?
-    ChangeEntityLocation(gameState->world, &gameState->worldArena, entity.lowIndex, entity.low,
-                         &entity.low->pos, &newPos);
-    entity.low->pos = newPos;
-}
-
-INTERNAL void
 PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
           Vec2 align, Vec2 dimension, Vec4 color, f32 entityZC = 1.0f) {
     ASSERT(group->pieceCount < group->pieces.size);
@@ -1153,10 +763,10 @@ PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dimensio
 }
 
 INTERNAL void
-UpdateMonster(GameState* gameState, Entity entity, f32 delta) {}
+UpdateMonster(GameState* gameState, SimEntity* entity, f32 delta) {}
 
 INTERNAL void
-UpdateFamiliar(GameState* gameState, Entity entity, f32 delta) {
+UpdateFamiliar(GameState* gameState, SimEntity* entity, f32 delta) {
     Entity closestHero{};
     constexpr f32 maxDist{ 10.0f };
     f32 closestHeroDSq{ SquareF32(maxDist) };
@@ -1219,14 +829,14 @@ UpdateSword(GameState* gameState, Entity entity, f32 delta) {
 
 INTERNAL void
 DrawHitpoints(LowEntity* lowEntity, EntityVisiblePieceGroup* group) {
-    if (lowEntity->hitPointMax >= 1) {
+    if (lowEntity->sim.hitPointMax >= 1) {
         constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
         constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
-        Vec2 hitPointPos{ -0.5f * (lowEntity->hitPointMax - 1) * spacingX, -0.25f };
+        Vec2 hitPointPos{ -0.5f * (lowEntity->sim.hitPointMax - 1) * spacingX, -0.25f };
         const Vec2 dPos{ spacingX, 0.0f };
 
-        for (i32 i{}; i < lowEntity->hitPointMax; ++i) {
-            HitPoint* hitPoint{ &lowEntity->hitPoints[i] };
+        for (i32 i{}; i < lowEntity->sim.hitPointMax; ++i) {
+            HitPoint* hitPoint{ &lowEntity->sim.hitPoints[i] };
             Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
             if (hitPoint->filledAmount == 0) {
                 color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
@@ -1361,51 +971,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr i32 tileSideInPixels{ 60 };
     gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
 
-    // Camera position
-    const Entity cameraFollowingEntity{ ForceEntityIntoHigh(
-        gameState, gameState->cameraFollowingEntityIndex) };
-    if (cameraFollowingEntity.high) {
-        WorldPosition newCameraPos{ gameState->cameraPos };
+    // Simulate regions
 
-#if 1
-        if (cameraFollowingEntity.high->pos.x > (9.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkX += tiles_Per_Width;
-        } else if (cameraFollowingEntity.high->pos.x < -(9.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkX -= tiles_Per_Width;
-        }
+    constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
+    constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
+    const Rect cameraBounds{ RectCenterDim(
+        Vec2{}, Vec2{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY) } *
+                    gameState->world->tileSideInMeters) };
 
-        if (cameraFollowingEntity.high->pos.y > (5.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkY += tiles_Per_Height;
-        } else if (cameraFollowingEntity.high->pos.y < -(5.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkY -= tiles_Per_Height;
-        }
-#else
-        // Tile snap scrolling
-        if (cameraFollowingEntity.high->pos.x > (1.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkX += 1;
-        } else if (cameraFollowingEntity.high->pos.x < -(1.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkX -= 1;
-        }
-
-        if (cameraFollowingEntity.high->pos.y > (1.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkY += 1;
-        } else if (cameraFollowingEntity.high->pos.y < -(1.0f * world->tileSideInMeters)) {
-            newCameraPos.chunkY -= 1;
-        }
-#endif
-
-        newCameraPos.chunkZ = cameraFollowingEntity.low->pos.chunkZ;
-
-#if 1
-        // Fully smooth scrolling
-        newCameraPos = cameraFollowingEntity.low->pos;
-#endif
-
-        SetCamera(gameState, newCameraPos);
-
-        // TODO: map new entities in and old entities out
-        // TODO: map tiles and stairs (doors)
-    }
+    auto* simRegion{ BeginSimulation(gameState, &gameState->worldArena, gameState->world,
+                                     gameState->cameraPos, cameraBounds) };
 
 // Debug printing
 #if 0
@@ -1444,26 +1019,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     EntityVisiblePieceGroup pieceGroup;
     pieceGroup.gameState = gameState;
 
-    for (i32 highIndex{ 1 }; highIndex < gameState->highEntityCount; ++highIndex) {
+    auto* entity{ simRegion->entities };
+    for (i32 i{}; i < simRegion->entityCount; ++i) {
         pieceGroup.pieceCount = 0;
 
-        HighEntity* highEntity{ &gameState->highEntities_[highIndex] };
-        ASSERT(highEntity->lowEntityIndex); // Must have index to low freq if in the high freq
-
-        LowEntity* lowEntity{ GetLowEntity(gameState, highEntity->lowEntityIndex) };
-        ASSERT(lowEntity->highEntityIndex); // Also must be in the high freq
-
-        Entity entity{ lowEntity, highEntity, highEntity->lowEntityIndex };
+        LowEntity* storedEntity{ GetLowEntity(gameState, entity->storageIndex) };
 
         // TODO: This is wrong, compute after update
-        f32 shadowAlpha{ 1.0f - 0.5f * highEntity->z };
+        f32 shadowAlpha{ 1.0f - 0.5f * entity->z };
         if (shadowAlpha < 0) {
             shadowAlpha = 0.0f;
         }
 
-        HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[highEntity->facingDir] };
+        HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[storedEntity->facingDir] };
 
-        switch (lowEntity->type) {
+        switch (storedEntity->type) {
         case EntityType::WALL: {
             // Tree bitmaps
             PushBitmap(&pieceGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
@@ -1476,7 +1046,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             PushBitmap(&pieceGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
             PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
 
-            DrawHitpoints(lowEntity, &pieceGroup);
+            DrawHitpoints(storedEntity, &pieceGroup);
         } break;
 
         case EntityType::MONSTER: {
@@ -1485,19 +1055,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                        0.0f);
             PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
 
-            DrawHitpoints(lowEntity, &pieceGroup);
+            DrawHitpoints(storedEntity, &pieceGroup);
         } break;
         case EntityType::FAMILIAR: {
             UpdateFamiliar(gameState, entity, delta);
 
             // Head bob
             constexpr f32 bobSpeed{ 3.5f };
-            entity.high->tBob += delta * bobSpeed;
-            if (entity.high->tBob > (2.0f * PI32f)) {
-                entity.high->tBob -= (2.0f * PI32f);
+            storedEntity->tBob += delta * bobSpeed;
+            if (storedEntity->tBob > (2.0f * PI32f)) {
+                storedEntity->tBob -= (2.0f * PI32f);
             }
 
-            const f32 bobSin{ Sin(entity.high->tBob) };
+            const f32 bobSin{ Sin(storedEntity->tBob) };
             const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.15f * bobSin) };
             const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
@@ -1520,28 +1090,27 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
 
         const f32 gravity{ -9.8f };
-        highEntity->z = 0.5f * gravity * SquareF32(delta) + highEntity->dZ * delta + highEntity->z;
-        highEntity->dZ = gravity * delta + highEntity->dZ;
-        if (highEntity->z < 0.0f) {
-            highEntity->z = 0.0f;
+        entity->z = 0.5f * gravity * SquareF32(delta) + entity->dZ * delta + entity->z;
+        entity->dZ = gravity * delta + entity->dZ;
+        if (entity->z < 0.0f) {
+            entity->z = 0.0f;
         }
 
-        const Vec2 entityGroundPoint{
-            screenCenter.x + (gameState->metersToPixels * highEntity->pos.x),
-            screenCenter.y - (gameState->metersToPixels * highEntity->pos.y)
-        };
-        const f32 entityZ{ -highEntity->z * gameState->metersToPixels };
+        const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels * entity->pos.x),
+                                      screenCenter.y -
+                                          (gameState->metersToPixels * entity->pos.y) };
+        const f32 entityZ{ -entity->z * gameState->metersToPixels };
 
         constexpr f32 r{ 0.5f };
         constexpr f32 g{ 0.1f };
         constexpr f32 b{ 0.5f };
 
         const Vec2 leftTop{
-            entityGroundPoint.x - (0.5f * gameState->metersToPixels * lowEntity->width),
-            entityGroundPoint.y - (0.5f * gameState->metersToPixels * lowEntity->height)
+            entityGroundPoint.x - (0.5f * gameState->metersToPixels * storedEntity->width),
+            entityGroundPoint.y - (0.5f * gameState->metersToPixels * storedEntity->height)
         };
 
-        const Vec2 entityWidthHeight{ lowEntity->width, lowEntity->height };
+        const Vec2 entityWidthHeight{ storedEntity->width, storedEntity->height };
 
         // Draw pieces
         for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
@@ -1564,6 +1133,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             //              r, g, b);
         }
     }
+
+    EndSimulation(simRegion, gameState);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

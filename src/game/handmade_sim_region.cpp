@@ -1,0 +1,361 @@
+#include "handmade_sim_region.h"
+
+NODISCARD
+INTERNAL SimEntityHash*
+GetEntityHashFromIndex(SimulationRegion* simRegion, i32 index) {
+    ASSERT(index);
+
+    SimEntityHash* entityHash{};
+    if (index) {
+        i32 hashValue{ index };
+        for (i32 offset{}; offset < simRegion->hash.size; ++offset) {
+            // TODO: or just use % for clearer result...
+            auto* entry{ &simRegion->hash[(hashValue + offset) & (simRegion->hash.size - 1)] };
+            // Found or add a new one
+            if (entry->index == index || entry->index == 0) {
+                entityHash = entry;
+                break;
+            }
+        }
+    }
+
+    return entityHash;
+}
+
+INTERNAL void
+MapStorageIndexToEntity(SimulationRegion* simRegion, SimEntity* entity, i32 lowIndex) {
+    ASSERT(lowIndex);
+
+    SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, lowIndex) };
+    ASSERT(entry->index == 0 || entry->index == lowIndex);
+
+    entry->index = lowIndex;
+    entry->ptr = entity;
+}
+
+NODISCARD
+INTERNAL SimEntity*
+GetEntityByIndex(SimulationRegion* simRegion, i32 lowIndex) {
+    ASSERT(lowIndex);
+
+    SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, lowIndex) };
+    SimEntity* result{ entry->ptr };
+    return result;
+}
+
+INTERNAL void
+StoreEntityReference(EntityReference* ref) {
+    if (ref->ptr) {
+        ref->index = ref->ptr->storageIndex;
+    }
+}
+
+INTERNAL void
+LoadEntityReference(GameState* gameState, SimulationRegion* simRegion, EntityReference* ref) {
+    if (ref->index) {
+        SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, ref->index) };
+        if (!entry->ptr) {
+            auto* lowEntity{ GetLowEntity(gameState, ref->index) };
+            entry->ptr = AddEntityToSimulationRegion(gameState, simRegion, lowEntity, ref->index);
+            entry->index = ref->index;
+        }
+
+        ref->ptr = entry->ptr;
+    }
+}
+
+NODISCARD
+INTERNAL Vec2
+GetSimSpacePos(SimulationRegion* region, LowEntity* stored) {
+    const auto diff{ SubtractWorldPos(region->world, &stored->pos, &region->origin) };
+    const Vec2 result{ diff.x, diff.y };
+
+    return result;
+}
+
+NODISCARD
+INTERNAL SimEntity*
+AddEntityToSimulationRegion(GameState* gameState, SimulationRegion* simRegion, LowEntity* src,
+                            i32 lowIndex) {
+    SimEntity* entity{};
+
+    if (simRegion->entityCount < simRegion->maxEntityCount) {
+        entity = &simRegion->entities[simRegion->entityCount++];
+        MapStorageIndexToEntity(simRegion, entity, lowIndex);
+
+        if (src) {
+            // TODO: this should not be a copy!
+            *entity = src->sim;
+            LoadEntityReference(gameState, simRegion, &entity->sword);
+        }
+
+        entity->storageIndex = lowIndex;
+    } else {
+        INVALID_CODE_PATH;
+    }
+
+    return entity;
+}
+
+NODISCARD
+INTERNAL SimEntity*
+AddEntityToSimulationRegion(GameState* gameState, SimulationRegion* simRegion, LowEntity* src,
+                            i32 lowIndex, Vec2 simPos) {
+    SimEntity* dest{ AddEntityToSimulationRegion(gameState, simRegion, src, lowIndex) };
+
+    if (dest) {
+        if (simRegion) {
+            dest->pos = simPos;
+        } else {
+            dest->pos = GetSimSpacePos(simRegion, src);
+        }
+    }
+
+    return dest;
+}
+
+INTERNAL SimulationRegion*
+BeginSimulation(GameState* gameState, MemoryArena* arena, World* world, WorldPosition origin,
+                Rect bounds) {
+    SimulationRegion* simRegion{ PushSize(arena, SimulationRegion) };
+    simRegion->maxEntityCount = simRegion->hash.size; // 4096
+    simRegion->entityCount = 0;
+    simRegion->entities = PushArray(arena, simRegion->maxEntityCount, SimEntity);
+
+    simRegion->world = world;
+    simRegion->origin = origin;
+    simRegion->bounds = bounds;
+
+    const WorldPosition minChunk{ MapIntoChunkSpace(world, origin, bounds.min) };
+    const WorldPosition maxChunk{ MapIntoChunkSpace(world, origin, bounds.max) };
+
+    i32 movedCount{};
+
+    // Check entities by chunk, move to high set if in the chunks close to camera
+    for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
+        for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
+            WorldChunk* chunk{ GetWorldChunk(world, chunkX, chunkY, simRegion->origin.chunkZ,
+                                             nullptr) };
+            if (chunk) {
+                for (WorldEntityBlock* block{ &chunk->firstBlock }; block; block = block->next) {
+                    for (i32 entityIndex{}; entityIndex < block->entityCount; ++entityIndex) {
+                        const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
+                        LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
+
+                        const Vec2 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
+                        if (IsInsideRectangle(bounds, simSpacePos)) {
+                            AddEntityToSimulationRegion(gameState, simRegion, lowEntity,
+                                                        lowEntityIndex, simSpacePos);
+                            ++movedCount;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (movedCount > 0) {
+        PRINT_I32("Entities moved to sim: ", movedCount);
+    }
+}
+
+INTERNAL void
+EndSimulation(SimulationRegion* simRegion, GameState* gameState) {
+    World* world{ gameState->world };
+    i32 movedCount{};
+
+    SimEntity* entity{ simRegion->entities };
+    for (i32 i{}; i < simRegion->entityCount; ++i, ++entity) {
+        auto* stored{ GetLowEntity(gameState, entity->storageIndex) };
+        stored->sim = *entity;
+        StoreEntityReference(&stored->sim.sword);
+
+        auto newPos{ MapIntoChunkSpace(world, simRegion->origin, entity->pos) };
+        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored,
+                             &stored->pos, &newPos);
+        ++movedCount;
+
+        // Camera position
+        if (entity->storageIndex == gameState->cameraFollowingEntityIndex) {
+            WorldPosition newCameraPos{ gameState->cameraPos };
+#if 1
+            if (entity->pos.x > (9.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkX += tiles_Per_Width;
+            } else if (entity->pos.x < -(9.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkX -= tiles_Per_Width;
+            }
+
+            if (entity->pos.y > (5.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkY += tiles_Per_Height;
+            } else if (entity->pos.y < -(5.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkY -= tiles_Per_Height;
+            }
+#else
+            // Tile snap scrolling
+            if (cameraFollowingentity->pos.x > (1.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkX += 1;
+            } else if (cameraFollowingentity->pos.x < -(1.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkX -= 1;
+            }
+
+            if (cameraFollowingentity->pos.y > (1.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkY += 1;
+            } else if (cameraFollowingentity->pos.y < -(1.0f * world->tileSideInMeters)) {
+                newCameraPos.chunkY -= 1;
+            }
+#endif
+            newCameraPos.chunkZ = stored->pos.chunkZ;
+#if 1
+            // Fully smooth scrolling
+            newCameraPos = stored->pos;
+#endif
+        }
+    }
+
+    if (movedCount > 0) {
+        PRINT_I32("Entities moved to back to low: ", movedCount);
+    }
+}
+
+INTERNAL void
+MoveEntity(SimulationRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
+           f32 delta) {
+    // TODO: move player speed away from here!
+    //constexpr f32 speedModifier{ 4 };
+
+    if (moveSpec.unitMaxAccelVector) {
+        // Normalize if greater than unit circle length of 1
+        const f32 accelerationLengthSq{ LengthSquared(acceleration) };
+        if (accelerationLengthSq > 1.0f) {
+            acceleration *= (1.0f / Sqrt(accelerationLengthSq));
+        }
+    }
+
+    // Other player faster for debug
+    //if (controllerIndex != 0) {
+    //    acceleration *= 1.5f;
+    //}
+
+    acceleration *= moveSpec.speed;
+
+    // TODO: modify to include inputs for players
+    //if (hm_input::ActionPressed(&inputButtons->shift)) {
+    //    acceleration *= speedModifier;
+    //}
+
+    // TODO: ordinary differential equations
+    acceleration += -moveSpec.drag * entity->velocity;
+    // v' = at + v
+    entity->velocity += acceleration * delta;
+
+    // p' = 0.5 * at^2 + vt + p
+    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
+
+    // Collision checks
+
+    //bool32 hitWall{}; // Used to modify velocity if we hit a wall during the frame
+
+    constexpr i32 iterationCount{ 4 };
+
+    for (i32 iteration{}; iteration < iterationCount; ++iteration) {
+        f32 tMin{ 1.0f };
+        Vec2 wallNormal{};
+        TestWallResult testWallResult{};
+        i32 hitHighEntityIndex{};
+
+        const Vec2 desiredPos{ entity->pos + playerDelta };
+
+        if (entity->collides) {
+            for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
+                const SimEntity* testEntity{ &simRegion->entities[highIndex] };
+                // Check if testEntity collides and don't compare to self!
+                if (!testEntity->collides || testEntity == entity) {
+                    continue;
+                }
+
+                const f32 diameterWidth{ entity->width + entity->width };
+                const f32 diameterHeight{ entity->height + entity->height };
+                const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
+                const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
+
+                const Vec2 relPos{ entity->pos - testEntity->pos };
+
+                // Test all four walls
+
+                // x
+                testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ -1, 0 };
+                    //hitWall = true;
+                    hitHighEntityIndex = highIndex;
+                }
+
+                testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ 1, 0 };
+                    //hitWall = true;
+                    hitHighEntityIndex = highIndex;
+                }
+
+                // y
+                testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ 0, -1 };
+                    //hitwall = true;
+                    hitHighEntityIndex = highIndex;
+                }
+
+                testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                if (testWallResult.hit) {
+                    tMin = testWallResult.tMin;
+                    wallNormal = Vec2{ 0, 1 };
+                    //hitwall = true;
+                    hitHighEntityIndex = highIndex;
+                }
+            }
+        }
+
+        //PRINT_F32("tMin: ", tMin);
+
+        entity->pos += playerDelta * tMin;
+        if (hitHighEntityIndex) {
+            entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
+            playerDelta = desiredPos - entity->pos;
+            playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
+        } else {
+            break;
+        }
+    }
+
+    // Delta independent friction using exponential decay: e^(-kt)
+    //if (hitWall) {
+    //    constexpr f32 frictionModifier{ 2.0f };
+    //    const f32 friction{ ExpF32(-frictionModifier * delta) };
+    //    entity->velocity *= friction;
+    //}
+
+    // Facing direction checks
+    const Vec2 velocity{ entity->velocity };
+    if (velocity == Vec2::ZERO) {
+        // Keep previous
+    } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
+        if (velocity.x > 0) {
+            entity->facingDir = 3;
+        } else {
+            entity->facingDir = 1;
+        }
+    } else {
+        if (velocity.y > 0) {
+            entity->facingDir = 2;
+        } else {
+            entity->facingDir = 0;
+        }
+    }
+}
