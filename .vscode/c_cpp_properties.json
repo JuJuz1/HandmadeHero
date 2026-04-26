@@ -38,6 +38,22 @@
             "cStandard": "c17",
             "cppStandard": "c++20",
             "intelliSenseMode": "linux-clang-x64"
+        },
+        {
+            "name": "macOS",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "HANDMADE_MACOS",
+                "HANDMADE_INTERNAL",
+                "HANDMADE_DEBUG",
+                "HANDMADE_USE_REAL_ASSETS"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "macos-clang-x64"
         }
     ],
     "version": 4

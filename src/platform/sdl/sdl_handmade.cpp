@@ -4,8 +4,9 @@
 
     A heavily modified version of the SDL Handmade Linux platform layer using SDL 2
 
-    IMPORTANT: can likely work on Mac without having to change too much stuff!
-    Probably only need to change some of the system calls and flags
+    Works on Linux and macOS
+
+    Has been tested to work on macOS Sequoia 15.2 compiled with Apple clang 16.0
 */
 
 #include <SDL2/SDL.h>
@@ -21,7 +22,7 @@
 
 #include "game/handmade.h"
 
-#include "linux_handmade.h"
+#include "sdl_handmade.h"
 
 // NOTE: MAP_ANONYMOUS is not defined on Mac and some other UNIX systems
 // On the vast majority of those systems, one can use MAP_ANON instead
@@ -692,7 +693,12 @@ main() {
     hm_sdl::GetExePathAndFilename(&allState);
 
     Array<char, hm_sdl::file_Name_Count> srcDllPath;
+    // This is pretty much the only difference between Linux and macOS
+    #if HANDMADE_LINUX
     hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath.data_, srcDllPath.size);
+    #elif HANDMADE_MACOS
+    hm_sdl::BuildGamePathFilename(&allState, "handmade.dylib", srcDllPath.data_, srcDllPath.size);
+    #endif
 
     Array<char, hm_sdl::file_Name_Count> lockFilePath;
     hm_sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath.data_, lockFilePath.size);
