@@ -106,6 +106,38 @@ Run it:
 ./build/linux_handmade
 ```
 
+### Mac
+
+Uses the same platform file as Linux (sdl_handmade.h and sdl_handmade.cpp)
+
+Clang++ [see above for Linux requirements](#Requirements). This is easy to install by just doing clang++ in the terminal which prompts the installation of dev tools
+
+```
+clang++
+```
+
+SDL 2, the easiest way is to install [brew](https://brew.sh) and do
+
+```
+brew install sdl2
+```
+
+- Clone the repository if you already haven't
+- Navigate to the project root
+- run [scripts/macos_build.sh](scripts/macos_build.sh) FROM THE ROOT
+
+```
+./scripts/macos_build.sh
+```
+
+which puts the executable into the created build folder
+
+Run it:
+
+```
+./build/macos_handmade
+```
+
 ### Using the original art assets
 
 By default the build scripts use placeholder assets I have created. If you wish to use the original art assets obtained by preordering the game, create a folder inside data called "original". Then add test and test2 folders from the downloaded art zip to data/original. The build scripts should automatically detect the existence of data/original and configure HANDMADE_USE_REAL_ASSETS to 1

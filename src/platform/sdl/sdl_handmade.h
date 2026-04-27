@@ -1,7 +1,7 @@
-#ifndef LINUX_HANDMADE_H
-#define LINUX_HANDMADE_H
+#ifndef SDL_HANDMADE_H
+#define SDL_HANDMADE_H
 
-#if HANDMADE_LINUX
+#if defined(HANDMADE_LINUX) || defined(HANDMADE_MACOS)
 
 #    include "game/handmade_array.h"
 
@@ -65,5 +65,5 @@ struct AllState {
 
 } //namespace hm_sdl
 
-#endif // HANDMADE_LINUX
-#endif // LINUX_HANDMADE_H
+#endif // HANDMADE_LINUX || HANDMADE_MACOS
+#endif // SDL_HANDMADE_H
