@@ -696,12 +696,14 @@ main() {
     hm_sdl::GetExePathAndFilename(&allState);
 
     Array<char, hm_sdl::file_Name_Count> srcDllPath;
-    // This is pretty much the only difference between Linux and macOS
-    #if HANDMADE_LINUX
+
+// This is pretty much the only difference atm between building for Linux vs. macOS
+#if HANDMADE_LINUX
     hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath.data_, srcDllPath.size);
-    #elif HANDMADE_MACOS
+#elif HANDMADE_MACOS
     hm_sdl::BuildGamePathFilename(&allState, "handmade.dylib", srcDllPath.data_, srcDllPath.size);
-    #endif
+//#else Notify somehow?
+#endif
 
     Array<char, hm_sdl::file_Name_Count> lockFilePath;
     hm_sdl::BuildGamePathFilename(&allState, "lock.tmp", lockFilePath.data_, lockFilePath.size);
