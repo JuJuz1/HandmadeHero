@@ -31,6 +31,6 @@ clang++ $commonCompilerFlags ../src/game/handmade.cpp -I ../src -shared -o handm
 rm lock.tmp
 
 # Build platform
-clang++ $commonCompilerFlags ../src/platform/sdl/sdl_handmade.cpp -I ../src -o sdl_handmade $sdl2
+clang++ $commonCompilerFlags ../src/platform/sdl/sdl_handmade.cpp -I ../src -o macos_handmade $sdl2
 
 popd

@@ -4,9 +4,9 @@
 
     A heavily modified version of the SDL Handmade Linux platform layer using SDL 2
 
-    Works on Linux and macOS
-
-    Has been tested to work on macOS Sequoia 15.2 compiled with Apple clang 16.0
+    Tested to work on:
+        - Linux Mint Cinnamon 22.3 compiled with clang++ 22.1.0
+        - macOS Sequoia 15.2 compiled with Apple clang 16.0
 */
 
 #include <SDL2/SDL.h>
