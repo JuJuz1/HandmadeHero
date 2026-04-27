@@ -5,8 +5,11 @@
     A heavily modified version of the SDL Handmade Linux platform layer using SDL 2
 
     Tested to work on:
-        - Linux Mint Cinnamon 22.3 compiled with clang++ 22.1.0
+        - Linux Mint Cinnamon 22.3 compiled with clang 22.1.0
+            - Linux Kernel 6.17.0.20-generic
+
         - macOS Sequoia 15.2 compiled with Apple clang 16.0
+            - Darwin Kernel Version 24.2.0
 */
 
 #include <SDL2/SDL.h>
