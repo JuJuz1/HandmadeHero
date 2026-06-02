@@ -20,17 +20,6 @@ GetEntityHashFromIndex(SimRegion* simRegion, i32 index) {
     return entityHash;
 }
 
-INTERNAL void
-MapStorageIndexToEntity(SimRegion* simRegion, SimEntity* entity, i32 lowIndex) {
-    ASSERT(lowIndex);
-
-    SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, lowIndex) };
-    ASSERT(entry->index == 0 || entry->index == lowIndex);
-
-    entry->index = lowIndex;
-    entry->ptr = entity;
-}
-
 NODISCARD
 INTERNAL SimEntity*
 GetEntityByIndex(SimRegion* simRegion, i32 lowIndex) {
@@ -73,19 +62,28 @@ AddEntityToSimulationRegion_(GameState* gameState, SimRegion* simRegion, LowEnti
     ASSERT(lowIndex);
     SimEntity* entity{};
 
-    if (simRegion->entityCount < simRegion->maxEntityCount) {
-        entity = &simRegion->entities[simRegion->entityCount++];
-        MapStorageIndexToEntity(simRegion, entity, lowIndex);
+    SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, lowIndex) };
+    if (!entry->ptr) {
+        if (simRegion->entityCount < simRegion->maxEntityCount) {
+            entity = &simRegion->entities[simRegion->entityCount++];
 
-        if (src) {
-            // TODO: this should not be a copy!
-            *entity = src->sim;
-            LoadEntityReference(gameState, simRegion, &entity->sword);
+            entry->index = lowIndex;
+            entry->ptr = entity;
+
+            if (src) {
+                // TODO: this should not be a copy!
+                *entity = src->sim;
+                LoadEntityReference(gameState, simRegion, &entity->sword);
+
+                // Debug code
+                ASSERT(!IsSet(&src->sim, SimEntityFlags::SIMULATING));
+                AddFlag(&src->sim, SimEntityFlags::SIMULATING);
+            }
+
+            entity->storageIndex = lowIndex;
+        } else {
+            INVALID_CODE_PATH;
         }
-
-        entity->storageIndex = lowIndex;
-    } else {
-        INVALID_CODE_PATH;
     }
 
     return entity;
@@ -178,7 +176,12 @@ EndSimulation(SimRegion* simRegion, GameState* gameState) {
     SimEntity* entity{ simRegion->entities };
     for (i32 i{}; i < simRegion->entityCount; ++i, ++entity) {
         auto* stored{ GetLowEntity(gameState, entity->storageIndex) };
+
+        ASSERT(IsSet(&stored->sim, SimEntityFlags::SIMULATING));
+
         stored->sim = *entity;
+        ASSERT(!IsSet(&stored->sim, SimEntityFlags::SIMULATING));
+
         StoreEntityReference(&stored->sim.sword);
 
         auto newPos{ !IsSet(entity, SimEntityFlags::NON_SPATIAL)

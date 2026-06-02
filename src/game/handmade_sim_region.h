@@ -44,9 +44,11 @@ struct EntityReference {
     };
 };
 
-enum SimEntityFlags {
+enum SimEntityFlags : u32 {
     COLLIDES = (1 << 1),
     NON_SPATIAL = (1 << 2),
+
+    SIMULATING = (1 << 30),
 };
 
 // Simulated (high)
