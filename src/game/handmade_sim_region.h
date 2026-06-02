@@ -1,13 +1,40 @@
 #ifndef HANDMADE_SIM_REGION_H
 #define HANDMADE_SIM_REGION_H
 
-#include "handmade.h"
+//#include "handmade.h"
 
-#include "game/handmade_entity.h"
-#include "game/handmade_memory.h"
-#include "game/handmade_world.h"
-#include "game/math/handmade_rect.h"
-#include "game/math/handmade_vec2.h"
+//#include "game/handmade_entity.h"
+//#include "game/handmade_memory.h"
+//#include "game/handmade_world.h"
+//#include "game/math/handmade_rect.h"
+//#include "game/math/handmade_vec2.h"
+
+struct MoveSpec {
+    f32 speed;
+    f32 drag;
+    bool32 unitMaxAccelVector;
+};
+
+/// Entities ///
+
+enum class EntityType {
+    NON_EXISTENT = 0,
+
+    WALL,
+    HERO,
+    FAMILIAR,
+    MONSTER,
+    SWORD,
+};
+
+GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };
+
+struct HitPoint {
+    i8 flags;
+    i8 filledAmount;
+};
+
+struct SimEntity;
 
 // A reference used to address sim entities with a storage (low) index
 struct EntityReference {
@@ -46,12 +73,20 @@ struct SimEntity {
     i32 storageIndex; // Index to low entity
 };
 
+/**
+ * Low frequency entity meant to be "ticked" at a slower rate compared to high frequency
+ */
+struct LowEntity {
+    SimEntity sim;
+    WorldPosition pos;
+};
+
 struct SimEntityHash {
     SimEntity* ptr;
     i32 index;
 };
 
-struct SimulationRegion {
+struct SimRegion {
     World* world;
     WorldPosition origin;
     Rect bounds;
@@ -61,6 +96,11 @@ struct SimulationRegion {
     SimEntity* entities;
 
     Array<SimEntityHash, 4096> hash;
+};
+
+struct TestWallResult {
+    f32 tMin;
+    bool32 hit;
 };
 
 #endif // HANDMADE_SIM_REGION_H

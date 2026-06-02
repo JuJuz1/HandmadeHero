@@ -1,8 +1,6 @@
-#include "handmade_sim_region.h"
-
 NODISCARD
 INTERNAL SimEntityHash*
-GetEntityHashFromIndex(SimulationRegion* simRegion, i32 index) {
+GetEntityHashFromIndex(SimRegion* simRegion, i32 index) {
     ASSERT(index);
 
     SimEntityHash* entityHash{};
@@ -23,7 +21,7 @@ GetEntityHashFromIndex(SimulationRegion* simRegion, i32 index) {
 }
 
 INTERNAL void
-MapStorageIndexToEntity(SimulationRegion* simRegion, SimEntity* entity, i32 lowIndex) {
+MapStorageIndexToEntity(SimRegion* simRegion, SimEntity* entity, i32 lowIndex) {
     ASSERT(lowIndex);
 
     SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, lowIndex) };
@@ -35,7 +33,7 @@ MapStorageIndexToEntity(SimulationRegion* simRegion, SimEntity* entity, i32 lowI
 
 NODISCARD
 INTERNAL SimEntity*
-GetEntityByIndex(SimulationRegion* simRegion, i32 lowIndex) {
+GetEntityByIndex(SimRegion* simRegion, i32 lowIndex) {
     ASSERT(lowIndex);
 
     SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, lowIndex) };
@@ -50,8 +48,11 @@ StoreEntityReference(EntityReference* ref) {
     }
 }
 
+INTERNAL SimEntity* AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion,
+                                                LowEntity* src, i32 lowIndex);
+
 INTERNAL void
-LoadEntityReference(GameState* gameState, SimulationRegion* simRegion, EntityReference* ref) {
+LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference* ref) {
     if (ref->index) {
         SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, ref->index) };
         if (!entry->ptr) {
@@ -65,18 +66,10 @@ LoadEntityReference(GameState* gameState, SimulationRegion* simRegion, EntityRef
 }
 
 NODISCARD
-INTERNAL Vec2
-GetSimSpacePos(SimulationRegion* region, LowEntity* stored) {
-    const auto diff{ SubtractWorldPos(region->world, &stored->pos, &region->origin) };
-    const Vec2 result{ diff.x, diff.y };
-
-    return result;
-}
-
-NODISCARD
 INTERNAL SimEntity*
-AddEntityToSimulationRegion(GameState* gameState, SimulationRegion* simRegion, LowEntity* src,
+AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
                             i32 lowIndex) {
+    ASSERT(lowIndex);
     SimEntity* entity{};
 
     if (simRegion->entityCount < simRegion->maxEntityCount) {
@@ -98,8 +91,17 @@ AddEntityToSimulationRegion(GameState* gameState, SimulationRegion* simRegion, L
 }
 
 NODISCARD
+INTERNAL Vec2
+GetSimSpacePos(SimRegion* region, LowEntity* stored) {
+    const auto diff{ SubtractWorldPos(region->world, &stored->pos, &region->origin) };
+    const Vec2 result{ diff.x, diff.y };
+
+    return result;
+}
+
+NODISCARD
 INTERNAL SimEntity*
-AddEntityToSimulationRegion(GameState* gameState, SimulationRegion* simRegion, LowEntity* src,
+AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
                             i32 lowIndex, Vec2 simPos) {
     SimEntity* dest{ AddEntityToSimulationRegion(gameState, simRegion, src, lowIndex) };
 
@@ -114,13 +116,15 @@ AddEntityToSimulationRegion(GameState* gameState, SimulationRegion* simRegion, L
     return dest;
 }
 
-INTERNAL SimulationRegion*
-BeginSimulation(GameState* gameState, MemoryArena* arena, World* world, WorldPosition origin,
+INTERNAL SimRegion*
+BeginSimulation(GameState* gameState, MemoryArena* simArena, World* world, WorldPosition origin,
                 Rect bounds) {
-    SimulationRegion* simRegion{ PushSize(arena, SimulationRegion) };
+    SimRegion* simRegion{ PushSize(simArena, SimRegion) };
+    ZeroSize(simRegion->hash);
+
     simRegion->maxEntityCount = simRegion->hash.size; // 4096
     simRegion->entityCount = 0;
-    simRegion->entities = PushArray(arena, simRegion->maxEntityCount, SimEntity);
+    simRegion->entities = PushArray(simArena, simRegion->maxEntityCount, SimEntity);
 
     simRegion->world = world;
     simRegion->origin = origin;
@@ -157,10 +161,12 @@ BeginSimulation(GameState* gameState, MemoryArena* arena, World* world, WorldPos
     if (movedCount > 0) {
         PRINT_I32("Entities moved to sim: ", movedCount);
     }
+
+    return simRegion;
 }
 
 INTERNAL void
-EndSimulation(SimulationRegion* simRegion, GameState* gameState) {
+EndSimulation(SimRegion* simRegion, GameState* gameState) {
     World* world{ gameState->world };
     i32 movedCount{};
 
@@ -217,8 +223,31 @@ EndSimulation(SimulationRegion* simRegion, GameState* gameState) {
     }
 }
 
+INTERNAL TestWallResult
+TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 tMin, f32 minY,
+         f32 maxY) {
+    // TODO: this should be moved elsewhere and not be in playerDelta space
+    constexpr f32 tEps{ 0.0001f };
+    TestWallResult result{};
+    f32 newTMin{ tMin };
+
+    if (playerDeltaX != 0.0f) {
+        const f32 tResult{ (wallX - relX) / playerDeltaX };
+        const f32 newY{ relY + (tResult * playerDeltaY) };
+        if (tResult >= 0.0f && tResult < tMin) {
+            if (newY >= minY && newY <= maxY) {
+                newTMin = MAX(0.0f, tResult - tEps);
+                result.tMin = newTMin;
+                result.hit = true;
+            }
+        }
+    }
+
+    return result;
+}
+
 INTERNAL void
-MoveEntity(SimulationRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
+MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
            f32 delta) {
     // TODO: move player speed away from here!
     //constexpr f32 speedModifier{ 4 };

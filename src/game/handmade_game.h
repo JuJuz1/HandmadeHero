@@ -1,17 +1,32 @@
 #ifndef HANDMADE_GAME_H
 #define HANDMADE_GAME_H
 
-#include "game/handmade.h"
+//#include "game/handmade.h"
 
-#include "game/handmade_array.h"
-#include "game/handmade_entity.h"
-#include "game/handmade_memory.h"
-#include "game/handmade_world.h"
-#include "game/math/handmade_vec2.h"
+//#include "game/handmade_array.h"
+//#include "game/handmade_entity.h"
+//#include "game/handmade_memory.h"
+//#include "game/handmade_world.h"
+//#include "game/math/handmade_vec2.h"
 
 /*
     Game specific code
 */
+
+//#include "handmade_intrinsics.h"
+#include "handmade_intrinsics.cpp"
+
+#include "math/handmade_math.cpp"
+
+#include "handmade_array.h"
+#include "handmade_memory.cpp"
+#include "handmade_random.h"
+
+#include "handmade_world.h"
+
+#include "handmade_sim_region.h"
+
+#include "handmade_entity.h"
 
 GLOBAL constexpr i32 tiles_Per_Width{ 17 };
 GLOBAL constexpr i32 tiles_Per_Height{ 9 };
@@ -39,10 +54,19 @@ struct EntityVisiblePiece {
     Vec2 dimension;
 };
 
+struct ControlledHero {
+    i32 entityIndex;
+
+    Vec2 ddP;
+    Vec2 dSword;
+    f32 dZ;
+};
+
 /**
  * The game state!
  */
 struct GameState {
+
     MemoryArena worldArena;
     World* world;
     f32 metersToPixels; // TODO: should this be here?
@@ -52,9 +76,8 @@ struct GameState {
 
     Array<LowEntity, 4096> lowEntities; // Holds all entities
     i32 lowEntityCount;
-    i32 highEntityCount;
 
-    Array<i32, ARRAY_COUNT(Input::playerInputs)> playerIndexFromController;
+    Array<ControlledHero, ARRAY_COUNT(Input::playerInputs)> controlledHeroes;
 
     Array<HeroBitmaps, 4> heroBitmaps;
     LoadedBitmapInfo background;

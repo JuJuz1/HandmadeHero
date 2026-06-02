@@ -1,12 +1,12 @@
 #ifndef HANDMADE_WORLD_H
 #define HANDMADE_WORLD_H
 
-#include "game/handmade.h"
+//#include "game/handmade.h"
 
-#include "game/handmade_array.h"
-#include "game/handmade_entity.h"
-#include "game/handmade_sim_region.h"
-#include "math/handmade_vec2.h"
+//#include "game/handmade_array.h"
+//#include "game/handmade_entity.h"
+//#include "game/handmade_sim_region.h"
+//#include "math/handmade_vec2.h"
 
 /*
     A world contains chunks. A chunk contains tiles.
@@ -78,52 +78,55 @@ struct World {
     f32 chunkSideInMeters;
 };
 
-NODISCARD
-INTERNAL WorldPosition NullWorldPos();
+//NODISCARD
+//INTERNAL WorldPosition NullWorldPos();
 
-NODISCARD
-INTERNAL bool32 IsValidWorldPos(WorldPosition pos);
+//NODISCARD
+//INTERNAL bool32 IsValidWorldPos(WorldPosition pos);
 
-INTERNAL void InitializeWorld(World* world, f32 tileSideInMeters);
+//INTERNAL void InitializeWorld(World* world, f32 tileSideInMeters);
 
-NODISCARD
-INTERNAL WorldChunk* GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ,
-                                   MemoryArena* arena);
+//NODISCARD
+//INTERNAL WorldChunk* GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ,
+//                                   MemoryArena* arena);
 
-NODISCARD
-INTERNAL bool32 IsTileValueEmpty(u32 value);
+//NODISCARD
+//INTERNAL bool32 IsTileValueEmpty(u32 value);
 
-NODISCARD
-INTERNAL bool32 IsCanonical(const World* world, f32 tileRel);
+//NODISCARD
+//INTERNAL bool32 IsCanonical(const World* world, f32 tileRel);
 
-NODISCARD
-INTERNAL bool32 IsCanonical(const World* world, Vec2 offset);
+//NODISCARD
+//INTERNAL bool32 IsCanonical(const World* world, Vec2 offset);
 
-INTERNAL void ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos);
+//INTERNAL void ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos);
 
-NODISCARD
-INTERNAL WorldPosition MapIntoChunkSpace(const World* world, WorldPosition pos, Vec2 offset);
+//NODISCARD
+//INTERNAL WorldPosition MapIntoChunkSpace(const World* world, WorldPosition pos, Vec2 offset);
 
-NODISCARD
-INTERNAL WorldPosition ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ);
+//NODISCARD
+//INTERNAL WorldPosition ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32
+//tileZ);
 
-NODISCARD
-INTERNAL bool32 AreOnSameChunk(const World* world, const WorldPosition* A, const WorldPosition* B);
+//NODISCARD
+//INTERNAL bool32 AreOnSameChunk(const World* world, const WorldPosition* A, const WorldPosition*
+//B);
 
-NODISCARD
-INTERNAL i32 WorldPositionModifyZChecked(const World* world, const WorldPosition* pos, i32 offset);
+//NODISCARD
+//INTERNAL i32 WorldPositionModifyZChecked(const World* world, const WorldPosition* pos, i32
+//offset);
 
-NODISCARD
-INTERNAL WorldDiff SubtractWorldPos(const World* world, const WorldPosition* a,
-                                    const WorldPosition* b);
+//NODISCARD
+//INTERNAL WorldDiff SubtractWorldPos(const World* world, const WorldPosition* a,
+//                                    const WorldPosition* b);
 
-INTERNAL WorldEntityBlock* FreeBlock(WorldEntityBlock* block);
+//INTERNAL WorldEntityBlock* FreeBlock(WorldEntityBlock* block);
 
-INTERNAL void ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowIndex,
-                                      WorldPosition* oldPos, WorldPosition* newPos);
+//INTERNAL void ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowIndex,
+//                                      WorldPosition* oldPos, WorldPosition* newPos);
 
-INTERNAL void ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex,
-                                   LowEntity* lowEntity, WorldPosition* oldPos,
-                                   WorldPosition* newPos);
+//INTERNAL void ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex,
+//                                   LowEntity* lowEntity, WorldPosition* oldPos,
+//                                   WorldPosition* newPos);
 
 #endif // HANDMADE_WORLD_H

@@ -89,9 +89,11 @@ NODISCARD
 INTERNAL bool32
 IsCanonical(const World* world, f32 relPos) {
     // TODO: fix the floating point math to not allow the case above of ==
-    ASSERT(relPos >= -world->chunkSideInMeters * 0.5f && relPos <= world->chunkSideInMeters * 0.5f);
-    const bool32 result{ relPos >= -world->chunkSideInMeters * 0.5f &&
-                         relPos <= world->chunkSideInMeters * 0.5f };
+    //ASSERT(relPos >= -world->chunkSideInMeters * 0.5f && relPos <= world->chunkSideInMeters *
+    //0.5f);
+    const f32 eps{ 0.0001f };
+    const bool32 result{ relPos >= -((world->chunkSideInMeters * 0.5f) + eps) &&
+                         relPos <= ((world->chunkSideInMeters * 0.5f) + eps) };
     return result;
 }
 
