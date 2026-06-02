@@ -54,6 +54,21 @@ if EXIST ../data/original (
 )
 echo.
 
+set useCTime=1
+if %useCTime% == 1 (
+    if not exist ctime.exe (
+        if exist ..\misc\ctime.exe (
+            copy ..\misc\ctime.exe ctime.exe >nul
+            echo Copied ctime.exe to build
+            echo.
+        ) else (
+            echo ctime.exe not found in misc, disabling ctime
+            echo.
+            set useCTime=0
+        )
+    )
+)
+
 set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
 
 rem other compile options
@@ -78,7 +93,14 @@ set buildFailed=0
 rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
 
+if %useCTime% == 1 (
+    ctime.exe -begin win32_platform.ctm
+)
+
 cl %commonCompilerFlags% ../src/game/handmade.cpp /I ../src /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
+if %useCTime% == 1 (
+    ctime.exe -end win32_platform.ctm
+)
 
 if ERRORLEVEL 1 (
     set buildFailed=1
@@ -87,7 +109,14 @@ if ERRORLEVEL 1 (
 
 del lock.tmp
 
+if %useCTime% == 1 (
+    ctime.exe -begin win32_handmade.ctm
+)
+
 cl %commonCompilerFlags% ../src/platform/win32/win32_handmade.cpp /I ../src /link %win32Libraries% %commonLinkerFlags%
+if %useCTime% == 1 (
+    ctime.exe -end win32_handmade.ctm
+)
 
 if ERRORLEVEL 1 (
     set buildFailed=1
