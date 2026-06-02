@@ -289,11 +289,25 @@ ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, Wo
 
 INTERNAL void
 ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex, LowEntity* lowEntity,
-                     WorldPosition* oldPos, WorldPosition* newPos) {
+                     WorldPosition newPosInit) {
+    WorldPosition* oldPos{};
+    WorldPosition* newPos{};
+
+    if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL) && IsValidWorldPos(lowEntity->pos)) {
+        oldPos = &lowEntity->pos;
+    }
+
+    if (IsValidWorldPos(newPosInit)) {
+        newPos = &newPosInit;
+    }
+
     ChangeEntityLocationRaw(world, arena, lowIndex, oldPos, newPos);
+
     if (newPos) {
         lowEntity->pos = *newPos;
+        ClearFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
     } else {
         lowEntity->pos = NullWorldPos();
+        AddFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
     }
 }

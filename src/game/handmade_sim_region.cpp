@@ -49,7 +49,7 @@ StoreEntityReference(EntityReference* ref) {
 }
 
 INTERNAL SimEntity* AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion,
-                                                LowEntity* src, i32 lowIndex);
+                                                LowEntity* src, i32 lowIndex, Vec2* simPos);
 
 INTERNAL void
 LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference* ref) {
@@ -57,7 +57,8 @@ LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference*
         SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, ref->index) };
         if (!entry->ptr) {
             auto* lowEntity{ GetLowEntity(gameState, ref->index) };
-            entry->ptr = AddEntityToSimulationRegion(gameState, simRegion, lowEntity, ref->index);
+            entry->ptr =
+                AddEntityToSimulationRegion(gameState, simRegion, lowEntity, ref->index, nullptr);
             entry->index = ref->index;
         }
 
@@ -67,8 +68,8 @@ LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference*
 
 NODISCARD
 INTERNAL SimEntity*
-AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
-                            i32 lowIndex) {
+AddEntityToSimulationRegion_(GameState* gameState, SimRegion* simRegion, LowEntity* src,
+                             i32 lowIndex) {
     ASSERT(lowIndex);
     SimEntity* entity{};
 
@@ -93,8 +94,11 @@ AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion, LowEntit
 NODISCARD
 INTERNAL Vec2
 GetSimSpacePos(SimRegion* region, LowEntity* stored) {
-    const auto diff{ SubtractWorldPos(region->world, &stored->pos, &region->origin) };
-    const Vec2 result{ diff.x, diff.y };
+    Vec2 result{ 100000.0f, 100000.0f };
+    if (!IsSet(&stored->sim, SimEntityFlags::NON_SPATIAL)) {
+        const auto diff{ SubtractWorldPos(region->world, &stored->pos, &region->origin) };
+        result = Vec2{ diff.x, diff.y };
+    }
 
     return result;
 }
@@ -102,12 +106,12 @@ GetSimSpacePos(SimRegion* region, LowEntity* stored) {
 NODISCARD
 INTERNAL SimEntity*
 AddEntityToSimulationRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
-                            i32 lowIndex, Vec2 simPos) {
-    SimEntity* dest{ AddEntityToSimulationRegion(gameState, simRegion, src, lowIndex) };
+                            i32 lowIndex, Vec2* simPos) {
+    SimEntity* dest{ AddEntityToSimulationRegion_(gameState, simRegion, src, lowIndex) };
 
     if (dest) {
-        if (simRegion) {
-            dest->pos = simPos;
+        if (simPos) {
+            dest->pos = *simPos;
         } else {
             dest->pos = GetSimSpacePos(simRegion, src);
         }
@@ -145,12 +149,13 @@ BeginSimulation(GameState* gameState, MemoryArena* simArena, World* world, World
                     for (i32 entityIndex{}; entityIndex < block->entityCount; ++entityIndex) {
                         const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
                         LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
-
-                        const Vec2 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
-                        if (IsInsideRectangle(bounds, simSpacePos)) {
-                            AddEntityToSimulationRegion(gameState, simRegion, lowEntity,
-                                                        lowEntityIndex, simSpacePos);
-                            ++movedCount;
+                        if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL)) {
+                            Vec2 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
+                            if (IsInsideRectangle(bounds, simSpacePos)) {
+                                AddEntityToSimulationRegion(gameState, simRegion, lowEntity,
+                                                            lowEntityIndex, &simSpacePos);
+                                ++movedCount;
+                            }
                         }
                     }
                 }
@@ -158,9 +163,9 @@ BeginSimulation(GameState* gameState, MemoryArena* simArena, World* world, World
         }
     }
 
-    if (movedCount > 0) {
-        PRINT_I32("Entities moved to sim: ", movedCount);
-    }
+    //if (movedCount > 0) {
+    //    PRINT_I32("Entities moved to sim: ", movedCount);
+    //}
 
     return simRegion;
 }
@@ -176,26 +181,28 @@ EndSimulation(SimRegion* simRegion, GameState* gameState) {
         stored->sim = *entity;
         StoreEntityReference(&stored->sim.sword);
 
-        auto newPos{ MapIntoChunkSpace(world, simRegion->origin, entity->pos) };
-        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored,
-                             &stored->pos, &newPos);
+        auto newPos{ !IsSet(entity, SimEntityFlags::NON_SPATIAL)
+                         ? MapIntoChunkSpace(world, simRegion->origin, entity->pos)
+                         : NullWorldPos() };
+        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, newPos);
         ++movedCount;
 
         // Camera position
         if (entity->storageIndex == gameState->cameraFollowingEntityIndex) {
             WorldPosition newCameraPos{ gameState->cameraPos };
+            newCameraPos.chunkZ = stored->pos.chunkZ;
 #if 1
-            if (entity->pos.x > (9.0f * world->tileSideInMeters)) {
-                newCameraPos.chunkX += tiles_Per_Width;
-            } else if (entity->pos.x < -(9.0f * world->tileSideInMeters)) {
-                newCameraPos.chunkX -= tiles_Per_Width;
-            }
+            //if (entity->pos.x > (9.0f * world->tileSideInMeters)) {
+            //    newCameraPos.chunkX += tiles_Per_Width;
+            //} else if (entity->pos.x < -(9.0f * world->tileSideInMeters)) {
+            //    newCameraPos.chunkX -= tiles_Per_Width;
+            //}
 
-            if (entity->pos.y > (5.0f * world->tileSideInMeters)) {
-                newCameraPos.chunkY += tiles_Per_Height;
-            } else if (entity->pos.y < -(5.0f * world->tileSideInMeters)) {
-                newCameraPos.chunkY -= tiles_Per_Height;
-            }
+            //if (entity->pos.y > (5.0f * world->tileSideInMeters)) {
+            //    newCameraPos.chunkY += tiles_Per_Height;
+            //} else if (entity->pos.y < -(5.0f * world->tileSideInMeters)) {
+            //    newCameraPos.chunkY -= tiles_Per_Height;
+            //}
 #else
             // Tile snap scrolling
             if (cameraFollowingentity->pos.x > (1.0f * world->tileSideInMeters)) {
@@ -210,17 +217,16 @@ EndSimulation(SimRegion* simRegion, GameState* gameState) {
                 newCameraPos.chunkY -= 1;
             }
 #endif
-            newCameraPos.chunkZ = stored->pos.chunkZ;
-#if 1
             // Fully smooth scrolling
             newCameraPos = stored->pos;
-#endif
+
+            gameState->cameraPos = newCameraPos;
         }
     }
 
-    if (movedCount > 0) {
-        PRINT_I32("Entities moved to back to low: ", movedCount);
-    }
+    //if (movedCount > 0) {
+    //    PRINT_I32("Entities moved to back to low: ", movedCount);
+    //}
 }
 
 INTERNAL TestWallResult
@@ -249,6 +255,7 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
 INTERNAL void
 MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
            f32 delta) {
+    ASSERT(!IsSet(entity, SimEntityFlags::NON_SPATIAL));
     // TODO: move player speed away from here!
     //constexpr f32 speedModifier{ 4 };
 
@@ -294,16 +301,18 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
 
         const Vec2 desiredPos{ entity->pos + playerDelta };
 
-        if (entity->collides) {
+        if (IsSet(entity, SimEntityFlags::COLLIDES) &&
+            !IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
                 const SimEntity* testEntity{ &simRegion->entities[highIndex] };
                 // Check if testEntity collides and don't compare to self!
-                if (!testEntity->collides || testEntity == entity) {
+                if (!IsSet(testEntity, SimEntityFlags::COLLIDES) ||
+                    IsSet(testEntity, SimEntityFlags::NON_SPATIAL) || testEntity == entity) {
                     continue;
                 }
 
-                const f32 diameterWidth{ entity->width + entity->width };
-                const f32 diameterHeight{ entity->height + entity->height };
+                const f32 diameterWidth{ testEntity->width + entity->width };
+                const f32 diameterHeight{ testEntity->height + entity->height };
                 const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
                 const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
 

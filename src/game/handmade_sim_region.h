@@ -44,14 +44,19 @@ struct EntityReference {
     };
 };
 
+enum SimEntityFlags {
+    COLLIDES = (1 << 1),
+    NON_SPATIAL = (1 << 2),
+};
+
 // Simulated (high)
 struct SimEntity {
     EntityType type;
+    i32 flags;
 
     f32 width, height;
     Vec2 velocity;
 
-    bool32 collides;
     i32 dChunkZ; // Stairs
 
     Vec2 pos; // NOTE: This is now already relative to the camera center
