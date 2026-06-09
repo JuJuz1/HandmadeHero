@@ -175,7 +175,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
     World* world{ gameState->world };
     i32 movedCount{};
 
-    SimEntity* entity{ simRegion->entities };
+    auto* entity{ simRegion->entities };
     for (i32 i{}; i < simRegion->entityCount; ++i, ++entity) {
         auto* stored{ GetLowEntity(gameState, entity->storageIndex) };
 
@@ -186,9 +186,40 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
 
         StoreEntityReference(&stored->sim.sword);
 
-        auto newPos{ !IsSet(entity, SimEntityFlags::NON_SPATIAL)
+        //auto newPos{ !IsSet(entity, SimEntityFlags::NON_SPATIAL)
+        //                 ? MapIntoChunkSpace(world, simRegion->origin, entity->pos)
+        //                 : NullWorldPos() };
+
+        /// Reset pos
+
+        WorldPosition newPos{};
+        bool32 doReset{};
+
+        for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
+             ++controlIndex) {
+            auto* controlled{ &gameState->controlledHeroes[controlIndex] };
+            if (controlled->entityIndex == entity->storageIndex) {
+                if (controlled->requestReset) {
+                    doReset = true;
+                    //controlled->requestReset = false;
+                }
+
+                // Only 1 hero can request reset, if multiple only the first is processed here
+                break;
+            }
+        }
+
+        if (doReset) {
+            PRINT_I32("Reset: ", entity->storageIndex);
+            newPos = stored->startingPos;
+            // TODO: reset velocity?
+            //entity->velocity = Vec2{};
+        } else {
+            newPos = !IsSet(entity, SimEntityFlags::NON_SPATIAL)
                          ? MapIntoChunkSpace(world, simRegion->origin, entity->pos)
-                         : NullWorldPos() };
+                         : NullWorldPos();
+        }
+
         ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, newPos);
         ++movedCount;
 

@@ -88,6 +88,9 @@ struct SimEntity {
 struct LowEntity {
     SimEntity sim;
     WorldPosition pos;
+
+    // Used when resetting
+    WorldPosition startingPos;
 };
 
 struct SimEntityHash {

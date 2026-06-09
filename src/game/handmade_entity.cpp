@@ -62,19 +62,19 @@ UpdateFamiliar(SimRegion* simRegion, SimEntity* entity, f32 delta) {
 
 INTERNAL void
 UpdateSword(SimRegion* simRegion, SimEntity* entity, f32 delta) {
-    if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
-        MoveSpec moveSpec{ DefaultMoveSpec() };
-        // This doesn't affect the sword at all!
-        moveSpec.speed = 0.0f;
+    //if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
+    MoveSpec moveSpec{ DefaultMoveSpec() };
+    // This doesn't affect the sword at all!
+    moveSpec.speed = 0.0f;
 
-        const Vec2 oldPos{ entity->pos };
-        MoveEntity(simRegion, entity, moveSpec, Vec2{}, delta);
+    const Vec2 oldPos{ entity->pos };
+    MoveEntity(simRegion, entity, moveSpec, Vec2{}, delta);
 
-        const f32 traveled{ Length(entity->pos - oldPos) };
-        entity->distanceRemaining -= traveled;
-        if (entity->distanceRemaining < 0.0f) {
-            MakeEntityNonSpatial(entity);
-            //ASSERT(!"NEED TO MAKE ENTITIES BE ABLE TO NOT BE THERE!");
-        }
+    const f32 traveled{ Length(entity->pos - oldPos) };
+    entity->distanceRemaining -= traveled;
+    if (entity->distanceRemaining < 0.0f) {
+        MakeEntityNonSpatial(entity);
+        //ASSERT(!"NEED TO MAKE ENTITIES BE ABLE TO NOT BE THERE!");
     }
+    //}
 }

@@ -769,6 +769,10 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 ProcessInputMessage(&input->playerInputs->E, isDown);
             } break;
 
+            case 'R': {
+                ProcessInputMessage(&input->playerInputs->R, isDown);
+            } break;
+
             case VK_SHIFT: {
                 ProcessInputMessage(&input->playerInputs->shift, isDown);
             } break;

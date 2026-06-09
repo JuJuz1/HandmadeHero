@@ -65,6 +65,8 @@ struct ControlledHero {
     f32 dZ;
 
     bool32 sprint; // Shift
+
+    bool32 requestReset; // Reset pos
 };
 
 /**

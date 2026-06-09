@@ -303,12 +303,13 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     ASSERT(gameState->lowEntityCount < gameState->lowEntities.size);
 
     const i32 entityIndex{ gameState->lowEntityCount++ };
-    LowEntity* lowEntity{ &gameState->lowEntities[entityIndex] };
+    auto* lowEntity{ &gameState->lowEntities[entityIndex] };
 
     // No need for this maybe
     *lowEntity = LowEntity{};
     lowEntity->sim.type = type;
     lowEntity->pos = NullWorldPos();
+    lowEntity->startingPos = pos;
 
     ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, pos);
 
@@ -346,11 +347,11 @@ AddSword(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
-    PRINT("New player!\n");
 
     WorldPosition pos{ gameState->cameraPos };
     auto entity{ AddLowEntity(gameState, EntityType::HERO, pos) };
     auto* lowEntity{ entity.lowEntity };
+    PRINT_I32("New player: ", entity.lowIndex);
 
     lowEntity->sim.height = 0.5f; // 1.4f;
     lowEntity->sim.width = 0.75f; // entity->dimension.y * 0.75f;
@@ -781,7 +782,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
         const InputButtons* inputButtons{ &input->playerInputs[controllerIndex] };
-        ControlledHero* controlled{ &gameState->controlledHeroes[controllerIndex] };
+        auto* controlled{ &gameState->controlledHeroes[controllerIndex] };
         if (controlled->entityIndex == 0) {
             if (hm_input::ActionJustPressed(&inputButtons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
@@ -798,6 +799,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             controlled->dSword = {};
             controlled->dZ = 0.0f;
             controlled->sprint = false;
+            controlled->requestReset = false;
 
             /// Input
 
@@ -826,6 +828,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             // Sprint
             if (hm_input::ActionPressed(&inputButtons->shift)) {
                 controlled->sprint = true;
+            }
+
+            // Reset position if we get stuck
+            if (hm_input::ActionJustPressed(&inputButtons->R)) {
+                controlled->requestReset = true;
             }
 
             // Sword
@@ -955,7 +962,18 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
                  ++controlIndex) {
                 auto* controlled{ &gameState->controlledHeroes[controlIndex] };
+                // Confirm we are the one controlling
                 if (entity->storageIndex == controlled->entityIndex) {
+                    // Reset, done in EndSim as we kind of have to for now
+                    //if (controlled->requestReset) {
+                    //    PRINT("Request reset!\n");
+                    //    auto* lowEntity{ GetLowEntity(gameState, entity->storageIndex) };
+                    //    ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex,
+                    //                         lowEntity, lowEntity->startingPos);
+                    //
+                    //    continue;
+                    //}
+
                     if (controlled->dZ != 0.0f && entity->z == 0.0f) {
                         entity->dZ = controlled->dZ;
                     }
