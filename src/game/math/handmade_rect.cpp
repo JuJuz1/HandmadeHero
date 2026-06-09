@@ -36,3 +36,13 @@ IsInsideRectangle(Rect rect, Vec2 test) {
                          test.y < rect.max.y };
     return result;
 }
+
+INTERNAL inline Rect
+AddRadiusTo(Rect rect, f32 w, f32 h) {
+    Rect result;
+
+    result.min = rect.min - Vec2{ w, w };
+    result.max = rect.max + Vec2{ h, h };
+
+    return result;
+}

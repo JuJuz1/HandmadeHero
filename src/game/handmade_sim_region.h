@@ -53,6 +53,10 @@ enum SimEntityFlags : u32 {
 
 // Simulated (high)
 struct SimEntity {
+    // NOTE: these are only for the sim region
+    bool32 updatable;
+    i32 storageIndex; // Index to low entity
+
     EntityType type;
     i32 flags;
 
@@ -76,8 +80,6 @@ struct SimEntity {
 
     EntityReference sword;
     f32 distanceRemaining; // How far the sword will go
-
-    i32 storageIndex; // Index to low entity
 };
 
 /**
@@ -97,6 +99,7 @@ struct SimRegion {
     World* world;
     WorldPosition origin;
     Rect bounds;
+    Rect updatableBounds;
 
     i32 maxEntityCount;
     i32 entityCount;

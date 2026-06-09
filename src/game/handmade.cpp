@@ -797,6 +797,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             controlled->ddP = {};
             controlled->dSword = {};
             controlled->dZ = 0.0f;
+            controlled->sprint = false;
 
             /// Input
 
@@ -822,6 +823,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
+            // Sprint
+            if (hm_input::ActionPressed(&inputButtons->shift)) {
+                controlled->sprint = true;
+            }
+
+            // Sword
             if (hm_input::ActionJustPressed(&inputButtons->actionUp)) {
                 controlled->dSword.y = 1.0f;
             }
@@ -871,8 +878,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     MemoryArena simArena;
     InitializeArena(&simArena, memory->transientStorage, memory->transientStorageSize);
-    auto* simRegion{ BeginSimulation(gameState, &simArena, gameState->world, gameState->cameraPos,
-                                     cameraBounds) };
+    auto* simRegion{ BeginSim(gameState, &simArena, gameState->world, gameState->cameraPos,
+                              cameraBounds) };
 
 // Debug printing
 #if 0
@@ -920,8 +927,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     EntityVisiblePieceGroup pieceGroup;
     pieceGroup.gameState = gameState;
 
+    /// Simulation
+
     auto* entity{ simRegion->entities };
     for (i32 i{}; i < simRegion->entityCount; ++i, ++entity) {
+        if (!entity->updatable) {
+            continue;
+        }
+
         pieceGroup.pieceCount = 0;
 
         // TODO: This is wrong, compute after update
@@ -949,6 +962,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                     MoveSpec moveSpec{ DefaultMoveSpec() };
                     moveSpec.speed = 30.0f;
+                    if (controlled->sprint) {
+                        moveSpec.speed *= 2.0f;
+                    }
+
                     moveSpec.drag = 4.0f;
                     moveSpec.unitMaxAccelVector = true;
                     MoveEntity(simRegion, entity, moveSpec, controlled->ddP, delta);
@@ -1071,7 +1088,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     WorldDiff diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
     DrawRectangle(screenBuff, Vec2{ diff.x, diff.y }, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
 
-    EndSimulation(simRegion, gameState);
+    EndSim(simRegion, gameState);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

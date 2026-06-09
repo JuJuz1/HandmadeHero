@@ -54,12 +54,17 @@ struct EntityVisiblePiece {
     Vec2 dimension;
 };
 
+/**
+ * State of the controlled hero, seperated from simulation
+ */
 struct ControlledHero {
     i32 entityIndex;
 
     Vec2 ddP;
     Vec2 dSword;
     f32 dZ;
+
+    bool32 sprint; // Shift
 };
 
 /**

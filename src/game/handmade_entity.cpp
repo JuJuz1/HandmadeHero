@@ -24,7 +24,7 @@ UpdateFamiliar(SimRegion* simRegion, SimEntity* entity, f32 delta) {
 
     // TODO: naive solution, BAD
     SimEntity* testEntity{ simRegion->entities };
-    for (i32 testIndex{}; testIndex < simRegion->entityCount; ++testIndex) {
+    for (i32 testIndex{}; testIndex < simRegion->entityCount; ++testIndex, ++testEntity) {
         if (testEntity->type == EntityType::HERO) {
             const f32 testDSq{ LengthSquared(testEntity->pos - entity->pos) };
             if (testDSq < closestHeroDSq) {
