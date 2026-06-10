@@ -950,6 +950,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             shadowAlpha = 0.0f;
         }
 
+        // Gets set for each entity
+        MoveSpec moveSpec{ DefaultMoveSpec() };
+        Vec2 ddP{};
+
         HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 
         switch (entity->type) {
@@ -978,7 +982,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                         entity->dZ = controlled->dZ;
                     }
 
-                    MoveSpec moveSpec{ DefaultMoveSpec() };
                     moveSpec.speed = 30.0f;
                     if (controlled->sprint) {
                         moveSpec.speed *= 2.0f;
@@ -986,7 +989,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                     moveSpec.drag = 4.0f;
                     moveSpec.unitMaxAccelVector = true;
-                    MoveEntity(simRegion, entity, moveSpec, controlled->ddP, delta);
+                    ddP = controlled->ddP;
 
                     /// Other actions ///
 
@@ -1014,7 +1017,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::MONSTER: {
-            UpdateMonster(gameState, entity, delta);
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
             PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
@@ -1022,7 +1024,45 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             DrawHitpoints(entity, &pieceGroup);
         } break;
         case EntityType::FAMILIAR: {
-            UpdateFamiliar(simRegion, entity, delta);
+            SimEntity* closestHero{};
+            constexpr f32 maxDist{ 10.0f };
+            f32 closestHeroDSq{ SquareF32(maxDist) };
+
+            // TODO: naive solution, BAD
+            SimEntity* testEntity{ simRegion->entities };
+            for (i32 testIndex{}; testIndex < simRegion->entityCount; ++testIndex, ++testEntity) {
+                if (testEntity->type == EntityType::HERO) {
+                    const f32 testDSq{ LengthSquared(testEntity->pos - entity->pos) };
+                    if (testDSq < closestHeroDSq) {
+                        closestHero = testEntity;
+                        closestHeroDSq = testDSq;
+                    }
+                }
+            }
+
+            const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
+            Vec2 acceleration{};
+
+            if (closestHero && closestHeroDSq > stopDistSq) {
+                constexpr f32 speed{ 0.5f };
+                const f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
+                acceleration = (closestHero->pos - entity->pos) * oneOverLength;
+                //PRINT_F32("before: closestHeroDSq: ", closestHeroDSq);
+                //PRINT_F32("before: acceleration.x: ", acceleration.x);
+                //PRINT_F32("before: acceleration.y: ", acceleration.y);
+                if (closestHeroDSq > 17.0f) {
+                    acceleration *= 1.75f;
+                }
+
+                //PRINT_F32("before: acceleration.x: ", acceleration.x);
+                //PRINT_F32("before: acceleration.y: ", acceleration.y);
+                //PRINT("\n");
+            }
+
+            moveSpec.speed = 50.0f;
+            moveSpec.drag = 8.0f;
+
+            ddP = acceleration;
 
             // Head bob
             constexpr f32 bobSpeed{ 3.5f };
@@ -1041,7 +1081,18 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                        heroBitmaps->align);
         } break;
         case EntityType::SWORD: {
-            UpdateSword(simRegion, entity, delta);
+            //if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
+            // This doesn't affect the sword at all!
+
+            moveSpec.speed = 0.0f;
+
+            // TODO IMPORTANT: now that MoveEntity happens after, how to handle this?
+            const Vec2 oldPos{ entity->pos };
+            const f32 traveled{ Length(entity->pos - oldPos) };
+            entity->distanceRemaining -= traveled;
+            if (entity->distanceRemaining < 0.0f) {
+                MakeEntityNonSpatial(entity);
+            }
 
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
@@ -1053,11 +1104,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
         }
 
-        const f32 gravity{ -9.8f };
-        entity->z = 0.5f * gravity * SquareF32(delta) + entity->dZ * delta + entity->z;
-        entity->dZ = gravity * delta + entity->dZ;
-        if (entity->z < 0.0f) {
-            entity->z = 0.0f;
+        if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
+            MoveEntity(simRegion, entity, moveSpec, ddP, delta);
         }
 
         //if (entity->type == EntityType::HERO) {

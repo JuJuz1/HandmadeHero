@@ -204,7 +204,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
                     //controlled->requestReset = false;
                 }
 
-                // Only 1 hero can request reset, if multiple only the first is processed here
+                // TODO: Only 1 hero can request reset, if multiple only the first is processed here
                 break;
             }
         }
@@ -292,11 +292,9 @@ INTERNAL void
 MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
            f32 delta) {
     ASSERT(!IsSet(entity, SimEntityFlags::NON_SPATIAL));
-    // TODO: move player speed away from here!
-    //constexpr f32 speedModifier{ 4 };
 
+    // Normalize if greater than unit circle length of 1
     if (moveSpec.unitMaxAccelVector) {
-        // Normalize if greater than unit circle length of 1
         const f32 accelerationLengthSq{ LengthSquared(acceleration) };
         if (accelerationLengthSq > 1.0f) {
             acceleration *= (1.0f / Sqrt(accelerationLengthSq));
@@ -308,12 +306,8 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
     //    acceleration *= 1.5f;
     //}
 
+    // acceleration <=> ddP
     acceleration *= moveSpec.speed;
-
-    // TODO: modify to include inputs for players
-    //if (hm_input::ActionPressed(&inputButtons->shift)) {
-    //    acceleration *= speedModifier;
-    //}
 
     // TODO: ordinary differential equations
     acceleration += -moveSpec.drag * entity->velocity;
@@ -323,7 +317,14 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
     // p' = 0.5 * at^2 + vt + p
     Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
-    // Collision checks
+    const f32 gravity{ -9.8f };
+    entity->z = 0.5f * gravity * SquareF32(delta) + entity->dZ * delta + entity->z;
+    entity->dZ = gravity * delta + entity->dZ;
+    if (entity->z < 0.0f) {
+        entity->z = 0.0f;
+    }
+
+    /// Collision checks
 
     //bool32 hitWall{}; // Used to modify velocity if we hit a wall during the frame
 
