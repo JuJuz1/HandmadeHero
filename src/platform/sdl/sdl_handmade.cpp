@@ -41,9 +41,9 @@ GLOBAL bool32 gShowCursor;
 GLOBAL hm_sdl::OffScreenBuffer gScreenBuff;
 GLOBAL u64 gPerfCounterFreq;
 
-#if HANDMADE_INTERNAL
-
 namespace hm_platform_export {
+
+#if HANDMADE_INTERNAL
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
@@ -72,6 +72,22 @@ DEBUG_PRINT_F32(DEBUGPrintFloat) {
 
     printf("%s%f\n", valueName, value);
 }
+
+#else
+
+INTERNAL
+DEBUG_PRINT(DEBUGPrint) {}
+
+INTERNAL
+DEBUG_PRINT_I32(DEBUGPrintInt) {}
+
+INTERNAL
+DEBUG_PRINT_U32(DEBUGPrintUInt) {}
+
+INTERNAL
+DEBUG_PRINT_F32(DEBUGPrintFloat) {}
+
+#endif // HANDMADE_INTERNAL
 
 DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
     if (memory) {
@@ -149,8 +165,6 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
 }
 
 } //namespace hm_platform_export
-
-#endif // HANDMADE_INTERNAL
 
 namespace hm_sdl {
 
@@ -491,6 +505,10 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
+            case SDL_SCANCODE_R: {
+                ProcessInputEvent(&input->playerInputs->R, isDown);
+            } break;
+
             case SDL_SCANCODE_LSHIFT:
             case SDL_SCANCODE_RSHIFT: {
                 ProcessInputEvent(&input->playerInputs->shift, isDown);
@@ -619,9 +637,9 @@ GetWallClock() {
 }
 
 NODISCARD
-INTERNAL f32
+INTERNAL f64
 GetSecondsElapsed(u64 Start, u64 End) {
-    const f32 result{ static_cast<f32>(End - Start) / static_cast<f32>(gPerfCounterFreq) };
+    const f64 result{ static_cast<f64>(End - Start) / static_cast<f64>(gPerfCounterFreq) };
     return result;
 }
 
@@ -713,9 +731,16 @@ main() {
     constexpr i32 startingWidth{ 960 };
     constexpr i32 startingHeight{ 540 };
 
-    SDL_Window* window{ SDL_CreateWindow("Handmade Hero", SDL_WINDOWPOS_UNDEFINED,
-                                         SDL_WINDOWPOS_UNDEFINED, startingWidth, startingHeight,
-                                         SDL_WINDOW_RESIZABLE) };
+    char name[64]{ "Handmade Hero" };
+#if HANDMADE_INTERNAL
+    AppendStr(name, sizeof(name), " | DEV");
+#endif
+#if HANDMADE_DEBUG
+    AppendStr(name, sizeof(name), " | DEBUG");
+#endif
+
+    SDL_Window* window{ SDL_CreateWindow(name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                         startingWidth, startingHeight, SDL_WINDOW_RESIZABLE) };
     if (!window) {
         printf("Couldn't create window!\n");
         return 0;
@@ -771,7 +796,6 @@ main() {
         ASSERT(!"One or more of the game memory allocations failed!");
     }
 
-#if HANDMADE_INTERNAL
     // Platform exports
     gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
     gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
@@ -781,7 +805,6 @@ main() {
     gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
     gameMemory.exports.DEBUGReadFile = hm_platform_export::DEBUGReadFile;
     gameMemory.exports.DEBUGWriteFile = hm_platform_export::DEBUGWriteFile;
-#endif
 
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
@@ -812,6 +835,7 @@ main() {
     allState.isReplayLooping = true;
 
     gPerfCounterFreq = SDL_GetPerformanceFrequency();
+    printf("PerfCounterFreq: %llu\n", gPerfCounterFreq);
 
     u64 lastCounter{ hm_sdl::GetWallClock() };
     u64 lastCycleCount{ _rdtsc() };
@@ -890,8 +914,9 @@ main() {
 #endif
 
         endCounter = hm_sdl::GetWallClock();
-        const f64 ms{ 1000 * hm_sdl::GetSecondsElapsed(lastCounter, endCounter) };
-        const f64 FPS{ 1000 / ms };
+        // ms is rounded for some reason
+        const f64 ms{ 1000.0 * hm_sdl::GetSecondsElapsed(lastCounter, endCounter) };
+        const f64 FPS{ 1000.0 / ms };
 
         const auto wndDimension{ hm_sdl::GetWindowdimension(window) };
         hm_sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width,
@@ -900,6 +925,9 @@ main() {
         const u64 endCycleCount{ _rdtsc() };
         const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) /
                                  (1000 * 1000) };
+
+        //const f64 ms{ 1000.0 * secondsElapsed };
+        //const f64 FPS{ 1000.0 / ms };
 
 #if 0
         printf("frame: %.5f ms | FPS: %.2f | cycles: %.4f M\n", ms, FPS, cycleElapsedM);

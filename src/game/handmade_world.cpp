@@ -201,8 +201,8 @@ SubtractWorldPos(const World* world, const WorldPosition* a, const WorldPosition
     return diff;
 }
 
-INTERNAL WorldEntityBlock*
-FreeBlock(WorldEntityBlock* block) {}
+//INTERNAL WorldEntityBlock*
+//FreeBlock(WorldEntityBlock* block) {}
 
 INTERNAL void
 ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, WorldPosition* oldPos,
