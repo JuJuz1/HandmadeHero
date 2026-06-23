@@ -15,11 +15,27 @@ else
     echo "Using default assets"
 fi
 
-commonCompilerDefines="-DHANDMADE_MACOS=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 -DHANDMADE_USE_REAL_ASSETS=$useRealAssets"
+commonCompilerDefines="-DHANDMADE_MACOS=1 -DHANDMADE_USE_REAL_ASSETS=$useRealAssets"
 
 commonCompilerWarnings="-Wall -Wextra -Wpedantic -Wno-unused-function -Wno-missing-braces -Wno-unused-variable -Wno-unused-parameter -Wno-null-dereference -Wno-missing-field-initializers -Wno-gnu-anonymous-struct -Wno-nested-anon-types -Wno-sign-compare"
-# -O3 when testing on the VM as it lags quite hard (-O0 debug)
-commonCompilerFlags="$commonCompilerDefines $commonCompilerWarnings -g -O3 -fno-exceptions -fno-rtti -std=c++20"
+
+commonCompilerFlags="-O0 -g"
+
+mode="${1:-debug}"
+if [[ $mode == "rel" || $mode == "release" ]]; then
+    echo "config: RELEASE"
+    # -O3 when testing on the VM as it lags quite hard (-O0 debug)
+    # TODO: other options?
+    commonCompilerFlags="-O3"
+else
+    echo "config: DEBUG"
+    commonCompilerDefines="$commonCompilerDefines -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1"
+fi
+
+commonCompilerFlags="$commonCompilerDefines $commonCompilerFlags -fno-exceptions -fno-rtti -std=c++20 $commonCompilerWarnings"
+
+echo "$commonCompilerFlags"
+echo
 
 sdl2=$(sdl2-config --cflags --libs)
 

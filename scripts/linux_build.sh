@@ -38,7 +38,7 @@ fi
 commonCompilerFlags="$commonCompilerDefines $commonCompilerFlags -fno-exceptions -fno-rtti -std=c++20 $commonCompilerWarnings"
 
 echo "$commonCompilerFlags"
-echo .
+echo
 
 sdl2=$(sdl2-config --cflags --libs)
 
