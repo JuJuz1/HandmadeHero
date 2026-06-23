@@ -194,6 +194,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
 
         WorldPosition newPos{};
         bool32 doReset{};
+        bool32 doResetSword{};
 
         for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
              ++controlIndex) {
@@ -202,6 +203,8 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
                 if (controlled->requestReset) {
                     doReset = true;
                     //controlled->requestReset = false;
+                } else if (controlled->requestResetSword) {
+                    doResetSword = true;
                 }
 
                 // TODO: Only 1 hero can request reset, if multiple only the first is processed here
@@ -209,11 +212,24 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             }
         }
 
+        if (doResetSword) {
+            PRINT_I32("Reset sword: ", stored->sim.sword.index);
+            auto* sword{ GetLowEntity(gameState, stored->sim.sword.index) };
+            // TODO: sometimes hit assert inside MoveEntity because distanceRemaining is below 0
+            // TODO: @Hack do we even have to do this?
+            sword->sim.velocity = {};
+            sword->sim.distanceLimit = {};
+
+            // These have to be done I guess
+            MakeEntityNonSpatial(&sword->sim);
+            ChangeEntityLocation(world, &gameState->worldArena, stored->sim.sword.index, sword,
+                                 NullWorldPos());
+        }
+
         if (doReset) {
             PRINT_I32("Reset: ", entity->storageIndex);
             newPos = stored->startingPos;
-            // TODO: reset velocity?
-            //entity->velocity = Vec2{};
+            stored->sim.velocity = {};
         } else {
             newPos = !IsSet(entity, SimEntityFlags::NON_SPATIAL)
                          ? MapIntoChunkSpace(world, simRegion->origin, entity->pos)
@@ -292,6 +308,7 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
 INTERNAL void
 HandleCollision(SimEntity* a, SimEntity* b) {
     if (a->type == EntityType::MONSTER && b->type == EntityType::SWORD) {
+        PRINT_I32("Monster hit, curr hp: ", a->hitPointMax);
         --a->hitPointMax;
         MakeEntityNonSpatial(b);
     }
@@ -437,7 +454,9 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
 
         entity->pos += playerDelta * tMin;
         distanceRemaining -= playerDeltaLength * tMin;
-        ASSERT(distanceRemaining >= 0);
+        distanceRemaining = MAX(distanceRemaining, 0.0f); // Do this just for safety?
+        // This is sometimes hit when the sword is reset
+        //ASSERT(distanceRemaining >= 0);
 
         if (hitEntity) {
             playerDelta = desiredPos - entity->pos;

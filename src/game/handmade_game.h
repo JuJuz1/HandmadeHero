@@ -66,14 +66,14 @@ struct ControlledHero {
 
     bool32 sprint; // Shift
 
-    bool32 requestReset; // Reset pos
+    bool32 requestReset;      // Reset pos
+    bool32 requestResetSword; // Reset sword pos
 };
 
 /**
  * The game state!
  */
 struct GameState {
-
     MemoryArena worldArena;
     World* world;
     f32 metersToPixels; // TODO: should this be here?

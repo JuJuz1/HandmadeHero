@@ -783,10 +783,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
-        const InputButtons* inputButtons{ &input->playerInputs[controllerIndex] };
+        const InputButtons* buttons{ &input->playerInputs[controllerIndex] };
         auto* controlled{ &gameState->controlledHeroes[controllerIndex] };
         if (controlled->entityIndex == 0) {
-            if (hm_input::ActionJustPressed(&inputButtons->enter) || gameState->startWithAPlayer) {
+            if (hm_input::ActionJustPressed(&buttons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
                     gameState->startWithAPlayer = false;
                 }
@@ -797,57 +797,64 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
         } else {
             // Be careful not to clear the index
+            // TODO: make easier to scale?
             controlled->ddP = {};
             controlled->dSword = {};
-            controlled->dZ = 0.0f;
+            controlled->dZ = {};
             controlled->sprint = false;
             controlled->requestReset = false;
+            controlled->requestResetSword = false;
 
             /// Input
 
             // Need to check the type as we have the null entity...
             //if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
-            if (hm_input::ActionPressed(&inputButtons->up)) {
+            if (hm_input::ActionPressed(&buttons->up)) {
                 controlled->ddP.y = 1.0f;
             }
-            if (hm_input::ActionPressed(&inputButtons->down)) {
+            if (hm_input::ActionPressed(&buttons->down)) {
                 controlled->ddP.y = -1.0f;
             }
-            if (hm_input::ActionPressed(&inputButtons->left)) {
+            if (hm_input::ActionPressed(&buttons->left)) {
                 controlled->ddP.x = -1.0f;
             }
-            if (hm_input::ActionPressed(&inputButtons->right)) {
+            if (hm_input::ActionPressed(&buttons->right)) {
                 controlled->ddP.x = 1.0f;
             }
 
             // Jump
-            if (hm_input::ActionJustPressed(&inputButtons->space)) {
+            if (hm_input::ActionJustPressed(&buttons->space)) {
                 if (controlled->dZ == 0.0f) {
                     controlled->dZ = 3.0f;
                 }
             }
 
             // Sprint
-            if (hm_input::ActionPressed(&inputButtons->shift)) {
+            if (hm_input::ActionPressed(&buttons->shift)) {
                 controlled->sprint = true;
             }
 
             // Reset position if we get stuck
-            if (hm_input::ActionJustPressed(&inputButtons->R)) {
-                controlled->requestReset = true;
+            if (hm_input::ActionJustPressed(&buttons->R)) {
+                // Shift means resetting the sword
+                if (hm_input::ActionPressed(&buttons->shift)) {
+                    controlled->requestResetSword = true;
+                } else {
+                    controlled->requestReset = true;
+                }
             }
 
             // Sword
-            if (hm_input::ActionJustPressed(&inputButtons->actionUp)) {
+            if (hm_input::ActionJustPressed(&buttons->actionUp)) {
                 controlled->dSword.y = 1.0f;
             }
-            if (hm_input::ActionJustPressed(&inputButtons->actionDown)) {
+            if (hm_input::ActionJustPressed(&buttons->actionDown)) {
                 controlled->dSword.y = -1.0f;
             }
-            if (hm_input::ActionJustPressed(&inputButtons->actionLeft)) {
+            if (hm_input::ActionJustPressed(&buttons->actionLeft)) {
                 controlled->dSword.x = -1.0f;
             }
-            if (hm_input::ActionJustPressed(&inputButtons->actionRight)) {
+            if (hm_input::ActionJustPressed(&buttons->actionRight)) {
                 controlled->dSword.x = 1.0f;
             }
 
