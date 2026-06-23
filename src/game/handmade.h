@@ -44,6 +44,7 @@ HANDMADE_DEBUG:
 // clang-tidy NOLINTEND
 #else
 #    define ASSERT(expr)
+#    define INVALID_CODE_PATH
 #endif
 
 // Defines for different meanings of static
@@ -107,6 +108,25 @@ StrLength(const char* str) {
     }
 
     return len;
+}
+
+// Very unsafe, only used for window title
+INTERNAL void
+AppendStr(char* dest, i64 destSize, const char* append) {
+    ASSERT(dest && append);
+
+    const i64 destLen{ StrLength(dest) };
+    ASSERT(destSize > destLen);
+    char* original{ dest };
+    dest += destLen;
+
+    i32 written{};
+    while (*append) {
+        *dest++ = *append++;
+        ++written;
+    }
+
+    original[destLen + written] = '\0';
 }
 
 #endif // HANDMADE_H

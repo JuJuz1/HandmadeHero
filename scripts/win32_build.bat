@@ -68,22 +68,27 @@ if %useCTime% == 1 (
     )
 )
 
-set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
+set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
 
 rem other compile options
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
 
-set commonCompilerFlags=%commonCompilerDefines% /Zc:__cplusplus /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set commonCompilerFlags=/MTd /Od /Zi
+
 if "%1" == "rel" (
     echo config: RELEASE
-    set commonCompilerFlags=%commonCompilerFlags% /MT /O2
+    set commonCompilerFlags=/MT /O2
 ) else if "%1" == "release" (
     echo config: RELEASE
-    set commonCompilerFlags=%commonCompilerFlags% /MT /O2
+    set commonCompilerFlags=/MT /O2
 ) else (
     echo config: DEBUG
-    set commonCompilerFlags=%commonCompilerFlags% /MTd /Od /Zi
+    set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
 )
+
+set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% /Zc:__cplusplus /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+
+echo %commonCompilerFlags%
 echo.
 
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO

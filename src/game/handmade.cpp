@@ -434,7 +434,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     const auto readFileFunc{ memory->exports.DEBUGReadFile };
 
-    // TODO: This should be made runtime probably
+    // TODO: This should really be a runtime property...
 #if HANDMADE_USE_REAL_ASSETS
     gameState->background =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_background.bmp");

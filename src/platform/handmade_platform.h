@@ -4,7 +4,7 @@
 /*
     Platform specific code aimed for C-compatibility that is seperated from everything else
     TODO: This seperation needs to be refined, though, if we want the platform file to only include
-   this file!
+    this file!
 */
 
 #ifdef __cplusplus
@@ -63,8 +63,6 @@ typedef struct ThreadContext {
     i32 placeHolder;
 } ThreadContext;
 
-#if HANDMADE_INTERNAL
-
 /// Services that the platform layer provides to the game ///
 
 typedef struct DEBUGFileReadResult {
@@ -107,8 +105,6 @@ typedef struct PlatformExports {
     debug_write_file* DEBUGWriteFile;
 } PlatformExports;
 
-#endif // HANDMADE_INTERNAL
-
 // All the memory the game needs
 typedef struct GameMemory {
     void* permanentStorage;
@@ -119,9 +115,7 @@ typedef struct GameMemory {
 
     bool32 isInitialized;
 
-#if HANDMADE_INTERNAL
     PlatformExports exports;
-#endif
 } GameMemory;
 
 // Struct to hold screen buffer info
@@ -199,7 +193,7 @@ typedef struct MouseButtons {
 } MouseButtons;
 
 typedef struct Input {
-    InputButtons playerInputs[2];
+    InputButtons playerInputs[2]; // Essentially the player count
 
     MouseButtons mouseButtons;
     i32 mouseX, mouseY, mouseZ; // mouseZ is scroll

@@ -23,9 +23,9 @@ GLOBAL LPDIRECTSOUNDBUFFER gSecondaryBuff;
 GLOBAL i64 gPerfCounterFreq;
 GLOBAL WINDOWPLACEMENT gWindowPlacement{ sizeof(gWindowPlacement) };
 
-#if HANDMADE_INTERNAL
-
 namespace hm_platform_export {
+
+#if HANDMADE_INTERNAL
 
 // TODO: make these more generic (and allow variadic arguments?)
 // and much safer...
@@ -64,6 +64,22 @@ DEBUG_PRINT_F32(DEBUGPrintFloat) {
     sprintf_s(buf, "%s%f\n", valueName, value);
     OutputDebugStringA(buf);
 }
+
+#else
+
+INTERNAL
+DEBUG_PRINT(DEBUGPrint) {}
+
+INTERNAL
+DEBUG_PRINT_I32(DEBUGPrintInt) {}
+
+INTERNAL
+DEBUG_PRINT_U32(DEBUGPrintUInt) {}
+
+INTERNAL
+DEBUG_PRINT_F32(DEBUGPrintFloat) {}
+
+#endif
 
 INTERNAL
 DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
@@ -140,8 +156,6 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) {
 }
 
 } //namespace hm_platform_export
-
-#endif // HANDMADE_INTERNAL
 
 namespace hm_win32 {
 
@@ -972,7 +986,16 @@ WinMain(
     windowClass.lpfnWndProc = hm_win32::MainWindowCallback;
     windowClass.hInstance = hInstance;
 
-    const char* name{ "Handmade Hero" };
+    char name[64]{ "Handmade Hero" };
+#if HANDMADE_INTERNAL
+    // Not using CatStrings because that would read from the buffer and at the same time write back
+    // to it, not sure if that's deterministic on all platforms
+    AppendStr(name, sizeof(name), " | DEV");
+#endif
+#if HANDMADE_DEBUG
+    AppendStr(name, sizeof(name), " | DEBUG");
+#endif
+
     windowClass.lpszClassName = name;
 
     // Also works
@@ -980,9 +1003,9 @@ WinMain(
     windowClass.hCursor = cursor; // This is not enough apparently
     gCursor = cursor;             // Have to SetCursor to gCursor in WM_SETCURSOR...
 
-#if HANDMADE_INTERNAL
+    //#if HANDMADE_INTERNAL
     gShowCursor = true;
-#endif
+    //#endif
 
     // NOTE: This will not be used if we recap episode 20 audio fixes
     // 3 seems to be enough for monitorHz of 60 (gameUpdateHz 30), 5 for 144
@@ -1078,7 +1101,6 @@ WinMain(
         ASSERT(!"One or more of the game memory allocations failed!");
     }
 
-#if HANDMADE_INTERNAL
     // Platform exports
     gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
     gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
@@ -1088,8 +1110,6 @@ WinMain(
     gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
     gameMemory.exports.DEBUGReadFile = hm_platform_export::DEBUGReadFile;
     gameMemory.exports.DEBUGWriteFile = hm_platform_export::DEBUGWriteFile;
-
-#endif
 
     allState.gameMemory = gameMemory.permanentStorage;
     allState.memorySize = totalSize;
