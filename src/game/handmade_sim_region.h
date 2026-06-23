@@ -68,6 +68,8 @@ struct SimEntity {
     Vec2 pos; // NOTE: This is now already relative to the camera center
     u32 chunkZ;
 
+    f32 distanceLimit; // For every entity a max limit
+
     f32 z;
     f32 dZ;
 
@@ -79,7 +81,6 @@ struct SimEntity {
     Array<HitPoint, 16> hitPoints;
 
     EntityReference sword;
-    f32 distanceRemaining; // How far the sword will go
 };
 
 /**

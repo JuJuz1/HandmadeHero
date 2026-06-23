@@ -288,6 +288,15 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
     return result;
 }
 
+// TODO: make this so it doesn't rely on the order of the types
+INTERNAL void
+HandleCollision(SimEntity* a, SimEntity* b) {
+    if (a->type == EntityType::MONSTER && b->type == EntityType::SWORD) {
+        --a->hitPointMax;
+        MakeEntityNonSpatial(b);
+    }
+}
+
 INTERNAL void
 MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
            f32 delta) {
@@ -314,6 +323,7 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
     // v' = at + v
     entity->velocity += acceleration * delta;
 
+    // TODO: rename playerDelta as now we use this function for all entities
     // p' = 0.5 * at^2 + vt + p
     Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
@@ -328,20 +338,42 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
 
     //bool32 hitWall{}; // Used to modify velocity if we hit a wall during the frame
 
+    // Now we limit distance moved
+    f32 distanceRemaining{ entity->distanceLimit };
+    if (distanceRemaining == 0.0f) {
+        // TODO: make this not a magic number?
+        distanceRemaining = 10000.0f;
+    }
+
     constexpr i32 iterationCount{ 4 };
 
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
         f32 tMin{ 1.0f };
+
+        f32 playerDeltaLength{ Length(playerDelta) };
+        // TODO: epsilon!!! we shouldn't allow lengths of 0.001 or so
+        if (playerDeltaLength == 0) {
+            break;
+        }
+
+        // Calculate new tMin for the remaining length allowed to move
+        if (playerDeltaLength > distanceRemaining) {
+            tMin = distanceRemaining / playerDeltaLength;
+        }
+
         Vec2 wallNormal{};
         TestWallResult testWallResult{};
-        i32 hitHighEntityIndex{};
+
+        const bool32 stopsOnCollision{ IsSet(entity, SimEntityFlags::COLLIDES) };
+
+        i32 hitHighEntityIndex{}; // Probably not needed
+        SimEntity* hitEntity{};
 
         const Vec2 desiredPos{ entity->pos + playerDelta };
 
-        if (IsSet(entity, SimEntityFlags::COLLIDES) &&
-            !IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
+        if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
-                const SimEntity* testEntity{ &simRegion->entities[highIndex] };
+                SimEntity* testEntity{ &simRegion->entities[highIndex] };
                 // Check if testEntity collides and don't compare to self!
                 if (!IsSet(testEntity, SimEntityFlags::COLLIDES) ||
                     IsSet(testEntity, SimEntityFlags::NON_SPATIAL) || testEntity == entity) {
@@ -365,6 +397,7 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
                     wallNormal = Vec2{ -1, 0 };
                     //hitWall = true;
                     hitHighEntityIndex = highIndex;
+                    hitEntity = testEntity;
                 }
 
                 testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
@@ -374,6 +407,7 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
                     wallNormal = Vec2{ 1, 0 };
                     //hitWall = true;
                     hitHighEntityIndex = highIndex;
+                    hitEntity = testEntity;
                 }
 
                 // y
@@ -384,6 +418,7 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
                     wallNormal = Vec2{ 0, -1 };
                     //hitwall = true;
                     hitHighEntityIndex = highIndex;
+                    hitEntity = testEntity;
                 }
 
                 testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
@@ -393,6 +428,7 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
                     wallNormal = Vec2{ 0, 1 };
                     //hitwall = true;
                     hitHighEntityIndex = highIndex;
+                    hitEntity = testEntity;
                 }
             }
         }
@@ -400,13 +436,30 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
         //PRINT_F32("tMin: ", tMin);
 
         entity->pos += playerDelta * tMin;
-        if (hitHighEntityIndex) {
-            entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
+        distanceRemaining -= playerDeltaLength * tMin;
+        ASSERT(distanceRemaining >= 0);
+
+        if (hitEntity) {
             playerDelta = desiredPos - entity->pos;
-            playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
+            // Slide along
+            if (stopsOnCollision) {
+                entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
+                playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
+            }
+
+            // TODO: collision table
+
+            // Make sure a is always before b in terms of the type so we avoid duplication
+            SimEntity* a{ entity->type < hitEntity->type ? entity : hitEntity };
+            SimEntity* b{ entity->type < hitEntity->type ? hitEntity : entity };
+            HandleCollision(a, b);
         } else {
             break;
         }
+    }
+
+    if (entity->distanceLimit != 0.0f) {
+        entity->distanceLimit = distanceRemaining;
     }
 
     // Delta independent friction using exponential decay: e^(-kt)

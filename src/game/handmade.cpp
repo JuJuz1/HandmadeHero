@@ -336,6 +336,8 @@ AddSword(GameState* gameState) {
     auto entity{ AddLowEntity(gameState, EntityType::SWORD, NullWorldPos()) };
     auto* lowEntity{ entity.lowEntity };
 
+    PRINT_I32("New sword: ", entity.lowIndex);
+
     lowEntity->sim.height = 0.75f;
     lowEntity->sim.width = 0.3f;
     // TODO: needed?
@@ -987,8 +989,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                         moveSpec.speed *= 2.0f;
                     }
 
-                    moveSpec.drag = 4.0f;
                     moveSpec.unitMaxAccelVector = true;
+                    moveSpec.drag = 4.0f;
                     ddP = controlled->ddP;
 
                     /// Other actions ///
@@ -1000,8 +1002,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                         SimEntity* sword{ entity->sword.ptr };
                         if (sword && IsSet(sword, SimEntityFlags::NON_SPATIAL)) {
                             PRINT("Used sword!\n");
-                            sword->distanceRemaining = 6.0f;
-                            MakeEntitySpatial(sword, entity->pos, controlled->dSword * 8.0f);
+                            sword->distanceLimit = 6.0f;
+                            const f32 swordVel{ 8.0f };
+                            MakeEntitySpatial(sword, entity->pos, controlled->dSword * swordVel);
                         }
                     }
                 }
@@ -1023,6 +1026,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             DrawHitpoints(entity, &pieceGroup);
         } break;
+
         case EntityType::FAMILIAR: {
             SimEntity* closestHero{};
             constexpr f32 maxDist{ 10.0f };
@@ -1080,17 +1084,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, bobStrength * bobSin,
                        heroBitmaps->align);
         } break;
-        case EntityType::SWORD: {
-            //if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
-            // This doesn't affect the sword at all!
 
+            // FIXME: this seems to not get called if we stand still and use the sword at the start
+            // of the game, the sword stops working then
+        case EntityType::SWORD: {
+            // This doesn't affect the sword at all!
             moveSpec.speed = 0.0f;
 
-            // TODO IMPORTANT: now that MoveEntity happens after, how to handle this?
-            const Vec2 oldPos{ entity->pos };
-            const f32 traveled{ Length(entity->pos - oldPos) };
-            entity->distanceRemaining -= traveled;
-            if (entity->distanceRemaining < 0.0f) {
+            if (entity->distanceLimit == 0.0f) {
                 MakeEntityNonSpatial(entity);
             }
 
@@ -1104,7 +1105,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
         }
 
-        if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
+        //if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
+        if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             MoveEntity(simRegion, entity, moveSpec, ddP, delta);
         }
 

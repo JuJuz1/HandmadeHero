@@ -52,7 +52,6 @@ if EXIST ../data/original (
 ) else (
     echo Using default assets
 )
-echo.
 
 set useCTime=1
 if %useCTime% == 1 (
@@ -73,7 +72,20 @@ set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_DE
 
 rem other compile options
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
-set commonCompilerFlags=%commonCompilerDefines% /MTd /Zi /Zc:__cplusplus /FC /Fm /Od /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+
+set commonCompilerFlags=%commonCompilerDefines% /Zc:__cplusplus /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+if "%1" == "rel" (
+    echo config: RELEASE
+    set commonCompilerFlags=%commonCompilerFlags% /MT /O2
+) else if "%1" == "release" (
+    echo config: RELEASE
+    set commonCompilerFlags=%commonCompilerFlags% /MT /O2
+) else (
+    echo config: DEBUG
+    set commonCompilerFlags=%commonCompilerFlags% /MTd /Od /Zi
+)
+echo.
+
 set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
 
 set win32Libraries=User32.lib Gdi32.lib Winmm.lib
@@ -94,33 +106,33 @@ rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
 
 if %useCTime% == 1 (
-    ctime.exe -begin win32_platform.ctm
+    ctime.exe -begin win32_handmade.ctm
 )
 
 cl %commonCompilerFlags% ../src/game/handmade.cpp /I ../src /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
-if %useCTime% == 1 (
-    ctime.exe -end win32_platform.ctm
-)
-
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
 )
 
-del lock.tmp
-
-if %useCTime% == 1 (
-    ctime.exe -begin win32_handmade.ctm
-)
-
-cl %commonCompilerFlags% ../src/platform/win32/win32_handmade.cpp /I ../src /link %win32Libraries% %commonLinkerFlags%
 if %useCTime% == 1 (
     ctime.exe -end win32_handmade.ctm
 )
 
+del lock.tmp
+
+if %useCTime% == 1 (
+    ctime.exe -begin win32_platform.ctm
+)
+
+cl %commonCompilerFlags% ../src/platform/win32/win32_handmade.cpp /I ../src /link %win32Libraries% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mwin32_handmade.cpp failed[0m[1m
+)
+
+if %useCTime% == 1 (
+    ctime.exe -end win32_platform.ctm
 )
 
 rem needed if building from command line and not vscode

@@ -118,6 +118,7 @@ NODISCARD
 INTERNAL inline f32
 Length(Vec2 v) {
     const f32 result{ Sqrt(LengthSquared(v)) };
+    ASSERT(result >= 0.0f);
     return result;
 }
 
@@ -126,6 +127,7 @@ NODISCARD
 INTERNAL inline f32
 LengthSquared(Vec2 v) {
     const f32 result{ Dot(v, v) };
+    ASSERT(result >= 0.0f);
     return result;
 }
 

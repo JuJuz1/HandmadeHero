@@ -17,7 +17,7 @@ ClearFlag(SimEntity* simEntity, i32 flag) {
     simEntity->flags &= ~flag;
 }
 
-GLOBAL constexpr Vec2 invalid_Pos{ 10000.0f, 10000.0f };
+GLOBAL constexpr Vec2 invalid_Pos{ 100000.0f, 100000.0f };
 
 INTERNAL void
 MakeEntityNonSpatial(SimEntity* entity) {
