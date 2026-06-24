@@ -304,19 +304,58 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
     return result;
 }
 
-// TODO: make this so it doesn't rely on the order of the types
-INTERNAL void
-HandleCollision(SimEntity* a, SimEntity* b) {
-    if (a->type == EntityType::MONSTER && b->type == EntityType::SWORD) {
-        PRINT_I32("Monster hit, curr hp: ", a->hitPointMax);
-        --a->hitPointMax;
-        MakeEntityNonSpatial(b);
+INTERNAL bool32
+ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
+    bool32 result{};
+
+    if (a->storageIndex > b->storageIndex) {
+        SimEntity* temp{ a };
+        a = b;
+        b = temp;
     }
+
+    if (!IsSet(a, SimEntityFlags::NON_SPATIAL) && !IsSet(b, SimEntityFlags::NON_SPATIAL)) {
+        result = true;
+    }
+
+    // TODO: Better hash func
+    const u32 hashBucket{ a->storageIndex & (gameState->collisionRuleHash.size - 1) };
+    for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
+        if (rule->storageIndexA == a->storageIndex && rule->storageIndexB == b->storageIndex) {
+            result = rule->shouldCollide;
+            break;
+        }
+    }
+
+    return result;
+}
+
+INTERNAL bool32
+HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
+    bool32 stopsOnCollision{};
+
+    if (!(entity->type == EntityType::SWORD)) {
+        stopsOnCollision = true;
+    }
+
+    // TODO: make this so it doesn't rely on the order of the types
+    SimEntity* a{ entity->type < hitEntity->type ? entity : hitEntity };
+    SimEntity* b{ entity->type < hitEntity->type ? hitEntity : entity };
+
+    if (a->type == EntityType::MONSTER && b->type == EntityType::SWORD) {
+        if (a->hitPointMax > 0) {
+            --a->hitPointMax;
+        }
+
+        PRINT_I32("Monster hit, curr hp: ", a->hitPointMax);
+    }
+
+    return stopsOnCollision;
 }
 
 INTERNAL void
-MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acceleration,
-           f32 delta) {
+MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec,
+           Vec2 acceleration, f32 delta) {
     ASSERT(!IsSet(entity, SimEntityFlags::NON_SPATIAL));
 
     // Normalize if greater than unit circle length of 1
@@ -381,8 +420,6 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
         Vec2 wallNormal{};
         TestWallResult testWallResult{};
 
-        const bool32 stopsOnCollision{ IsSet(entity, SimEntityFlags::COLLIDES) };
-
         i32 hitHighEntityIndex{}; // Probably not needed
         SimEntity* hitEntity{};
 
@@ -391,61 +428,57 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
         if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
                 SimEntity* testEntity{ &simRegion->entities[highIndex] };
-                // Check if testEntity collides and don't compare to self!
-                if (!IsSet(testEntity, SimEntityFlags::COLLIDES) ||
-                    IsSet(testEntity, SimEntityFlags::NON_SPATIAL) || testEntity == entity) {
-                    continue;
-                }
+                if (ShouldCollide(gameState, entity, testEntity)) {
+                    const f32 diameterWidth{ testEntity->width + entity->width };
+                    const f32 diameterHeight{ testEntity->height + entity->height };
+                    const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
+                    const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
 
-                const f32 diameterWidth{ testEntity->width + entity->width };
-                const f32 diameterHeight{ testEntity->height + entity->height };
-                const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
-                const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
+                    const Vec2 relPos{ entity->pos - testEntity->pos };
 
-                const Vec2 relPos{ entity->pos - testEntity->pos };
+                    // Test all four "walls", used for other entities as well
 
-                // Test all four walls
+                    // x
+                    testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                              playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                    if (testWallResult.hit) {
+                        tMin = testWallResult.tMin;
+                        wallNormal = Vec2{ -1, 0 };
+                        //hitWall = true;
+                        hitHighEntityIndex = highIndex;
+                        hitEntity = testEntity;
+                    }
 
-                // x
-                testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ -1, 0 };
-                    //hitWall = true;
-                    hitHighEntityIndex = highIndex;
-                    hitEntity = testEntity;
-                }
+                    testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                              playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                    if (testWallResult.hit) {
+                        tMin = testWallResult.tMin;
+                        wallNormal = Vec2{ 1, 0 };
+                        //hitWall = true;
+                        hitHighEntityIndex = highIndex;
+                        hitEntity = testEntity;
+                    }
 
-                testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                          playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ 1, 0 };
-                    //hitWall = true;
-                    hitHighEntityIndex = highIndex;
-                    hitEntity = testEntity;
-                }
+                    // y
+                    testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                              playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                    if (testWallResult.hit) {
+                        tMin = testWallResult.tMin;
+                        wallNormal = Vec2{ 0, -1 };
+                        //hitwall = true;
+                        hitHighEntityIndex = highIndex;
+                        hitEntity = testEntity;
+                    }
 
-                // y
-                testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ 0, -1 };
-                    //hitwall = true;
-                    hitHighEntityIndex = highIndex;
-                    hitEntity = testEntity;
-                }
-
-                testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                          playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                if (testWallResult.hit) {
-                    tMin = testWallResult.tMin;
-                    wallNormal = Vec2{ 0, 1 };
-                    //hitwall = true;
-                    hitHighEntityIndex = highIndex;
-                    hitEntity = testEntity;
+                    testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                              playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                    if (testWallResult.hit) {
+                        tMin = testWallResult.tMin;
+                        wallNormal = Vec2{ 0, 1 };
+                        //hitwall = true;
+                        hitHighEntityIndex = highIndex;
+                        hitEntity = testEntity;
+                    }
                 }
             }
         }
@@ -460,18 +493,16 @@ MoveEntity(SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec, Vec2 acce
 
         if (hitEntity) {
             playerDelta = desiredPos - entity->pos;
+
+            const bool32 stopsOnCollision{ HandleCollision(entity, hitEntity) };
+
             // Slide along
             if (stopsOnCollision) {
-                entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
                 playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
+                entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
+            } else {
+                AddCollisionRule(gameState, entity->storageIndex, hitEntity->storageIndex, false);
             }
-
-            // TODO: collision table
-
-            // Make sure a is always before b in terms of the type so we avoid duplication
-            SimEntity* a{ entity->type < hitEntity->type ? entity : hitEntity };
-            SimEntity* b{ entity->type < hitEntity->type ? hitEntity : entity };
-            HandleCollision(a, b);
         } else {
             break;
         }

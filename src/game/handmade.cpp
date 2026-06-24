@@ -349,7 +349,6 @@ AddSword(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
-
     WorldPosition pos{ gameState->cameraPos };
     auto entity{ AddLowEntity(gameState, EntityType::HERO, pos) };
     auto* lowEntity{ entity.lowEntity };
@@ -364,6 +363,8 @@ AddPlayer(GameState* gameState) {
 
     auto sword{ AddSword(gameState) };
     lowEntity->sim.sword.index = sword.lowIndex;
+
+    AddCollisionRule(gameState, entity.lowIndex, sword.lowIndex, false);
 
     // Not needed for now
     //EntityToHighFreq(gameState, entityIndex);
@@ -738,6 +739,74 @@ PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dimensio
 }
 
 INTERNAL void
+ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
+    PRINT("ClearCollisionRulesFor\n");
+    PRINT_I32("Index: ", storageIndex);
+
+    // @Speed
+    // TODO: better way to remove collision rather than walking through the whole map!
+    for (u32 hashBucket{}; hashBucket < gameState->collisionRuleHash.size; ++hashBucket) {
+        for (auto** rule{ &gameState->collisionRuleHash[hashBucket] }; *rule;) {
+            if ((*rule)->storageIndexA == storageIndex || (*rule)->storageIndexB == storageIndex) {
+                auto* removedRule{ *rule };
+                *rule = (*rule)->nextInHash;
+
+                removedRule->nextInHash = gameState->firstFreeCollisionRule;
+                gameState->firstFreeCollisionRule = removedRule;
+            } else {
+                rule = &(*rule)->nextInHash;
+            }
+        }
+    }
+}
+
+INTERNAL void
+AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 shouldCollide) {
+    PRINT("AddCollisionRule\n");
+    PRINT_I32("A: ", storageIndexA);
+    PRINT_I32("B: ", storageIndexB);
+    PRINT_I32("Collide: ", shouldCollide);
+
+    if (storageIndexA > storageIndexB) {
+        const i32 temp{ storageIndexA };
+        storageIndexA = storageIndexB;
+        storageIndexB = temp;
+    }
+
+    PairWiseCollisionRule* found{};
+    // TODO: Better hash func
+    const u32 hashBucket{ storageIndexA & (gameState->collisionRuleHash.size - 1) };
+    for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
+        if (rule->storageIndexA == storageIndexA && rule->storageIndexB == storageIndexB) {
+            found = rule;
+            break;
+        }
+    }
+
+    if (!found) {
+        found = gameState->firstFreeCollisionRule;
+        if (found) {
+            gameState->firstFreeCollisionRule = found->nextInHash;
+        } else {
+            // Push to head always
+            found = PushSize(&gameState->worldArena, PairWiseCollisionRule);
+        }
+
+        found->nextInHash = gameState->collisionRuleHash[hashBucket];
+        gameState->collisionRuleHash[hashBucket] = found;
+    }
+
+    ASSERT(found);
+    // Out of memory handling?
+    // Update if found earlier
+    if (found) {
+        found->storageIndexA = storageIndexA;
+        found->storageIndexB = storageIndexB;
+        found->shouldCollide = shouldCollide;
+    }
+}
+
+INTERNAL void
 DrawHitpoints(SimEntity* entity, EntityVisiblePieceGroup* group) {
     if (entity->hitPointMax >= 1) {
         constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
@@ -1004,14 +1073,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                     // Sword
                     if (controlled->dSword != Vec2::ZERO) {
-                        //const i32 swordIndex{ controllingEntity.low->swordIndex };
-                        //auto lowSword{ GetLowEntity(gameState, swordIndex) };
                         SimEntity* sword{ entity->sword.ptr };
                         if (sword && IsSet(sword, SimEntityFlags::NON_SPATIAL)) {
                             PRINT("Used sword!\n");
                             sword->distanceLimit = 6.0f;
                             const f32 swordVel{ 8.0f };
                             MakeEntitySpatial(sword, entity->pos, controlled->dSword * swordVel);
+                            AddCollisionRule(gameState, sword->storageIndex, entity->storageIndex,
+                                             false);
                         }
                     }
                 }
@@ -1100,6 +1169,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             if (entity->distanceLimit == 0.0f) {
                 MakeEntityNonSpatial(entity);
+                ClearCollisionRulesFor(gameState, entity->storageIndex);
             }
 
             PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
@@ -1114,7 +1184,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         //if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
         if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
-            MoveEntity(simRegion, entity, moveSpec, ddP, delta);
+            MoveEntity(gameState, simRegion, entity, moveSpec, ddP, delta);
         }
 
         //if (entity->type == EntityType::HERO) {

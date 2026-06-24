@@ -70,6 +70,13 @@ struct ControlledHero {
     bool32 requestResetSword; // Reset sword pos
 };
 
+struct PairWiseCollisionRule {
+    bool32 shouldCollide;
+    i32 storageIndexA;
+    i32 storageIndexB;
+    PairWiseCollisionRule* nextInHash;
+};
+
 /**
  * The game state!
  */
@@ -94,6 +101,10 @@ struct GameState {
     LoadedBitmapInfo sword;
 
     bool32 startWithAPlayer;
+
+    // Must be power of two!
+    Array<PairWiseCollisionRule*, 256> collisionRuleHash;
+    PairWiseCollisionRule* firstFreeCollisionRule;
 };
 
 // TODO: this should just be a part of the renderer...
@@ -118,5 +129,10 @@ GetLowEntity(GameState* gameState, i32 lowIndex) {
 
     return lowEntity;
 }
+
+INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
+
+INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
+                               bool32 shouldCollide);
 
 #endif // HANDMADE_GAME_H
