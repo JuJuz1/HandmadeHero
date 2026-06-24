@@ -308,6 +308,10 @@ INTERNAL bool32
 ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     bool32 result{};
 
+    if (a == b) {
+        return result;
+    }
+
     if (a->storageIndex > b->storageIndex) {
         SimEntity* temp{ a };
         a = b;
@@ -319,7 +323,7 @@ ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     }
 
     // TODO: Better hash func
-    const u32 hashBucket{ a->storageIndex & (gameState->collisionRuleHash.size - 1) };
+    const i32 hashBucket{ a->storageIndex & (gameState->collisionRuleHash.size - 1) };
     for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
         if (rule->storageIndexA == a->storageIndex && rule->storageIndexB == b->storageIndex) {
             result = rule->shouldCollide;

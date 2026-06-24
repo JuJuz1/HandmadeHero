@@ -41,8 +41,8 @@ INTERNAL inline Rect
 AddRadiusTo(Rect rect, f32 w, f32 h) {
     Rect result;
 
-    result.min = rect.min - Vec2{ w, w };
-    result.max = rect.max + Vec2{ h, h };
+    result.min = rect.min - Vec2{ w, h };
+    result.max = rect.max + Vec2{ w, h };
 
     return result;
 }

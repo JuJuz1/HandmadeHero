@@ -1037,7 +1037,7 @@ WinMain(
     constexpr i32 startingHeight{ 540 };
     hm_win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
-    char buf[64];
+    char buf[128];
     // NOTE: in the future make the game function with arbitrary frame rate?
     // Ideally yes, but in practice would need a lot of work
     const HDC deviceContext{ GetDC(windowHandle) }; // clang-tidy NOLINT
@@ -1056,6 +1056,9 @@ WinMain(
     // NOTE : Could this be the same as monitorHz?
     const f32 gameUpdateHz{ static_cast<f32>(monitorHz) / 2.0f };
     const f32 targetSecondsPerFrame{ 1.0f / gameUpdateHz };
+    sprintf_s(buf, "gameUpdateHz: %.1f, targetSecondsPerFrame: %.6f (%.2f ms)\n", gameUpdateHz,
+              targetSecondsPerFrame, targetSecondsPerFrame * 1000.0f);
+    OutputDebugStringA(buf);
 
     // DirectSound
     hm_win32::SoundOutput soundOutput{};

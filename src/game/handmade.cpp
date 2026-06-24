@@ -404,7 +404,7 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     lowEntity->sim.width = 0.6f;
     AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
-    InitHitpoints(lowEntity, 3);
+    InitHitpoints(lowEntity, 5);
 
     return entity;
 }
@@ -745,7 +745,8 @@ ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
 
     // @Speed
     // TODO: better way to remove collision rather than walking through the whole map!
-    for (u32 hashBucket{}; hashBucket < gameState->collisionRuleHash.size; ++hashBucket) {
+    // Storing A,B and B,A would allow easy removal, see ep 70 for full explanation
+    for (i32 hashBucket{}; hashBucket < gameState->collisionRuleHash.size; ++hashBucket) {
         for (auto** rule{ &gameState->collisionRuleHash[hashBucket] }; *rule;) {
             if ((*rule)->storageIndexA == storageIndex || (*rule)->storageIndexB == storageIndex) {
                 auto* removedRule{ *rule };
@@ -775,7 +776,7 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
 
     PairWiseCollisionRule* found{};
     // TODO: Better hash func
-    const u32 hashBucket{ storageIndexA & (gameState->collisionRuleHash.size - 1) };
+    const i32 hashBucket{ storageIndexA & (gameState->collisionRuleHash.size - 1) };
     for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
         if (rule->storageIndexA == storageIndexA && rule->storageIndexB == storageIndexB) {
             found = rule;
@@ -812,7 +813,7 @@ DrawHitpoints(SimEntity* entity, EntityVisiblePieceGroup* group) {
         constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
         constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
         Vec2 hitPointPos{ -0.5f * (entity->hitPointMax - 1) * spacingX, -0.25f };
-        const Vec2 dPos{ spacingX, 0.0f };
+        constexpr Vec2 dPos{ spacingX, 0.0f };
 
         for (i32 i{}; i < entity->hitPointMax; ++i) {
             HitPoint* hitPoint{ &entity->hitPoints[i] };
