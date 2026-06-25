@@ -1,12 +1,17 @@
 #ifndef HANDMADE_RECT_H
 #define HANDMADE_RECT_H
 
-#include "game/handmade.h"
+//#include "game/handmade.h"
 
-#include "game/math/handmade_vec2.h"
+//#include "game/math/handmade_vec2.h"
+//#include "game/math/handmade_vec3.h"
 
-struct Rect {
+struct Rect2 {
     Vec2 min, max;
+};
+
+struct Rect3 {
+    Vec3 min, max;
 };
 
 //NODISCARD

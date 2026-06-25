@@ -177,3 +177,10 @@ SignOf(i32 value) {
     const i32 result{ value >= 0 ? 1 : -1 };
     return result;
 }
+
+NODISCARD
+INTERNAL inline f32
+SquareF32(f32 value) {
+    const f32 result{ value * value };
+    return result;
+}

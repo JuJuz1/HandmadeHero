@@ -1,6 +1,25 @@
 #include "game/handmade.h"
 #include "game/handmade_game.h"
 
+// Moved back to the original unity build style with no .h declaration and .cpp impl seperation
+// That caused more headaches than actually helping development
+
+//#include "game/handmade_intrinsics.cpp"
+//#include "game/math/handmade_math.cpp"
+
+//#include "game/handmade_memory.cpp"
+
+//#include "game/handmade_random.cpp"
+
+//#include "game/handmade_intrinsics.cpp"
+//#include "game/handmade_memory.cpp"
+//#include "game/handmade_random.cpp"
+//#include "game/handmade_sim_region.cpp"
+//#include "game/handmade_world.cpp"
+//#include "game/math/handmade_math.cpp"
+
+/// Original unity build
+
 // Any global variables need to be initialized after hot reload (so probably every frame)
 GLOBAL ThreadContext* gThreadContext;
 GLOBAL GameMemory* gMemory;
@@ -13,28 +32,11 @@ GLOBAL GameMemory* gMemory;
 #define PRINT_F32(message, value)                                                                  \
     (*gMemory->exports.DEBUGPrintFloat)(gThreadContext, message, value)
 
-// Moved back to the original unity build style with no .h declaration and .cpp impl seperation
-// That caused more headaches than actually helping development
-
-//#include "game/handmade_intrinsics.cpp"
-//#include "game/math/handmade_math.cpp"
-
-//#include "game/handmade_memory.cpp"
-
-//#include "game/handmade_random.cpp"
-
+// clang-format off
 #include "game/handmade_world.cpp"
-
 #include "game/handmade_sim_region.cpp"
-
 #include "game/handmade_entity.cpp"
-
-//#include "game/handmade_intrinsics.cpp"
-//#include "game/handmade_memory.cpp"
-//#include "game/handmade_random.cpp"
-//#include "game/handmade_sim_region.cpp"
-//#include "game/handmade_world.cpp"
-//#include "game/math/handmade_math.cpp"
+// clang-format on
 
 namespace hm_input {
 
@@ -278,17 +280,6 @@ DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f3
     }
 }
 
-/**
- * Maps the entity to camera space
- */
-NODISCARD INTERNAL Vec2
-GetCameraSpacePos(GameState* gameState, const LowEntity* lowEntity) {
-    const WorldDiff diff{ SubtractWorldPos(gameState->world, &lowEntity->pos,
-                                           &gameState->cameraPos) };
-    const Vec2 result{ diff.x, diff.y };
-    return result;
-}
-
 struct AddLowEntityResult {
     LowEntity* lowEntity;
     i32 lowIndex;
@@ -333,29 +324,29 @@ InitHitpoints(LowEntity* lowEntity, i32 hitPointCount) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddSword(GameState* gameState) {
-    auto entity{ AddLowEntity(gameState, EntityType::SWORD, NullWorldPos()) };
-    auto* lowEntity{ entity.lowEntity };
+    auto sword{ AddLowEntity(gameState, EntityType::SWORD, NullWorldPos()) };
+    auto* lowEntity{ sword.lowEntity };
 
-    PRINT_I32("New sword: ", entity.lowIndex);
+    PRINT_I32("New sword: ", sword.lowIndex);
 
-    lowEntity->sim.height = 0.75f;
-    lowEntity->sim.width = 0.3f;
+    lowEntity->sim.dim.y = 0.75f;
+    lowEntity->sim.dim.x = 0.3f;
     // TODO: needed?
     //AddFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
 
-    return entity;
+    return sword;
 }
 
 NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
     WorldPosition pos{ gameState->cameraPos };
-    auto entity{ AddLowEntity(gameState, EntityType::HERO, pos) };
-    auto* lowEntity{ entity.lowEntity };
-    PRINT_I32("New player: ", entity.lowIndex);
+    auto player{ AddLowEntity(gameState, EntityType::HERO, pos) };
+    auto* lowEntity{ player.lowEntity };
+    PRINT_I32("New player: ", player.lowIndex);
 
-    lowEntity->sim.height = 0.5f; // 1.4f;
-    lowEntity->sim.width = 0.75f; // entity->dimension.y * 0.75f;
+    lowEntity->sim.dim.y = 0.5f;  // 1.4f;
+    lowEntity->sim.dim.x = 0.75f; // entity->dimension.y * 0.75f;
 
     AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
@@ -364,17 +355,18 @@ AddPlayer(GameState* gameState) {
     auto sword{ AddSword(gameState) };
     lowEntity->sim.sword.index = sword.lowIndex;
 
-    AddCollisionRule(gameState, entity.lowIndex, sword.lowIndex, false);
+    // We add the rule every time the sword is used
+    //AddCollisionRule(gameState, player.lowIndex, sword.lowIndex, false);
 
     // Not needed for now
     //EntityToHighFreq(gameState, entityIndex);
 
     // Camera to follow first player
     if (!gameState->cameraFollowingEntityIndex) {
-        gameState->cameraFollowingEntityIndex = entity.lowIndex;
+        gameState->cameraFollowingEntityIndex = player.lowIndex;
     }
 
-    return entity;
+    return player;
 }
 
 NODISCARD
@@ -382,14 +374,14 @@ INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
-    auto entity{ AddLowEntity(gameState, EntityType::WALL, pos) };
-    auto* lowEntity{ entity.lowEntity };
+    auto wall{ AddLowEntity(gameState, EntityType::WALL, pos) };
+    auto* lowEntity{ wall.lowEntity };
 
-    lowEntity->sim.height = gameState->world->tileSideInMeters;
-    lowEntity->sim.width = gameState->world->tileSideInMeters;
+    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
+    lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
     AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
-    return entity;
+    return wall;
 }
 
 NODISCARD
@@ -397,16 +389,16 @@ INTERNAL AddLowEntityResult
 AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
-    auto entity{ AddLowEntity(gameState, EntityType::MONSTER, pos) };
-    auto* lowEntity{ entity.lowEntity };
+    auto monster{ AddLowEntity(gameState, EntityType::MONSTER, pos) };
+    auto* lowEntity{ monster.lowEntity };
 
-    lowEntity->sim.height = 0.75f;
-    lowEntity->sim.width = 0.6f;
+    lowEntity->sim.dim.y = 0.75f;
+    lowEntity->sim.dim.x = 0.6f;
     AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     InitHitpoints(lowEntity, 5);
 
-    return entity;
+    return monster;
 }
 
 NODISCARD
@@ -414,14 +406,14 @@ INTERNAL AddLowEntityResult
 AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
-    auto entity{ AddLowEntity(gameState, EntityType::FAMILIAR, pos) };
-    auto* lowEntity{ entity.lowEntity };
+    auto familiar{ AddLowEntity(gameState, EntityType::FAMILIAR, pos) };
+    auto* lowEntity{ familiar.lowEntity };
 
-    lowEntity->sim.height = 0.5f;
-    lowEntity->sim.width = 1.0f;
+    lowEntity->sim.dim.y = 0.5f;
+    lowEntity->sim.dim.x = 1.0f;
     AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
-    return entity;
+    return familiar;
 }
 
 INTERNAL void
@@ -867,13 +859,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
         } else {
             // Be careful not to clear the index
-            // TODO: make easier to scale?
-            controlled->ddP = {};
-            controlled->dSword = {};
-            controlled->dZ = {};
-            controlled->sprint = false;
-            controlled->requestReset = false;
-            controlled->requestResetSword = false;
+            const i32 entityIndex{ controlled->entityIndex };
+            *controlled = {};
+            controlled->entityIndex = entityIndex;
 
             /// Input
 
@@ -958,16 +946,19 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
     constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
-    const Rect cameraBounds{ RectCenterDim(
-        Vec2{}, Vec2{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY) } *
-                    gameState->world->tileSideInMeters) };
+    constexpr i32 tileSpanZ{ 1 };
+    const Rect3 cameraBounds{ RectCenterDim(Vec3{}, Vec3{ static_cast<f32>(tileSpanX),
+                                                          static_cast<f32>(tileSpanY),
+                                                          static_cast<f32>(tileSpanZ) } *
+                                                        gameState->world->tileSideInMeters) };
 
     MemoryArena simArena;
     InitializeArena(&simArena, memory->transientStorage, memory->transientStorageSize);
     auto* simRegion{ BeginSim(gameState, &simArena, gameState->world, gameState->cameraPos,
-                              cameraBounds) };
+                              cameraBounds, delta) };
 
-// Debug printing
+    /// Debug printing
+
 #if 0
     const auto player{ GetLowEntity(gameState, gameState->cameraFollowingEntityIndex) };
     if (IsValidWorldPos(player->pos)) {
@@ -995,8 +986,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
 #endif
 
-    // Background
-
+    /// Background
 #if 0
     DrawBitmap(screenBuff, &gameState->background, 0, 0);
 #else
@@ -1024,14 +1014,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         pieceGroup.pieceCount = 0;
 
         // TODO: This is wrong, compute after update
-        f32 shadowAlpha{ 1.0f - 0.5f * entity->z };
+        f32 shadowAlpha{ 1.0f - 0.5f * entity->pos.z };
         if (shadowAlpha < 0) {
             shadowAlpha = 0.0f;
         }
 
         // Gets set for each entity
         MoveSpec moveSpec{ DefaultMoveSpec() };
-        Vec2 ddP{};
+        Vec3 ddP{};
 
         HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 
@@ -1057,8 +1047,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     //    continue;
                     //}
 
-                    if (controlled->dZ != 0.0f && entity->z == 0.0f) {
-                        entity->dZ = controlled->dZ;
+                    // Don't allow jumping if not on ground
+                    if (controlled->dZ != 0.0f && entity->pos.z == 0.0f) {
+                        entity->velocity.z = controlled->dZ;
                     }
 
                     moveSpec.speed = 30.0f;
@@ -1068,12 +1059,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                     moveSpec.unitMaxAccelVector = true;
                     moveSpec.drag = 4.0f;
-                    ddP = controlled->ddP;
+                    ddP = Vec3{ controlled->ddP.x, controlled->ddP.y, 0 };
 
                     /// Other actions ///
 
                     // Sword
-                    if (controlled->dSword != Vec2::ZERO) {
+                    if (controlled->dSword != Vec3::ZERO) {
                         SimEntity* sword{ entity->sword.ptr };
                         if (sword && IsSet(sword, SimEntityFlags::NON_SPATIAL)) {
                             PRINT("Used sword!\n");
@@ -1113,7 +1104,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             SimEntity* testEntity{ simRegion->entities };
             for (i32 testIndex{}; testIndex < simRegion->entityCount; ++testIndex, ++testEntity) {
                 if (testEntity->type == EntityType::HERO) {
-                    const f32 testDSq{ LengthSquared(testEntity->pos - entity->pos) };
+                    const f32 testDSq{ LengthSq(testEntity->pos - entity->pos) };
                     if (testDSq < closestHeroDSq) {
                         closestHero = testEntity;
                         closestHeroDSq = testDSq;
@@ -1122,7 +1113,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
-            Vec2 acceleration{};
+            Vec3 acceleration{};
 
             if (closestHero && closestHeroDSq > stopDistSq) {
                 constexpr f32 speed{ 0.5f };
@@ -1195,18 +1186,18 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels * entity->pos.x),
                                       screenCenter.y -
                                           (gameState->metersToPixels * entity->pos.y) };
-        const f32 entityZ{ -entity->z * gameState->metersToPixels };
+        const f32 entityZ{ -entity->pos.z * gameState->metersToPixels };
 
         constexpr f32 r{ 0.5f };
         constexpr f32 g{ 0.1f };
         constexpr f32 b{ 0.5f };
 
         const Vec2 leftTop{
-            entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->width),
-            entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->height)
+            entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->dim.x),
+            entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->dim.y)
         };
 
-        const Vec2 entityWidthHeight{ entity->width, entity->height };
+        const Vec2 entityWidthHeight{ entity->dim.x, entity->dim.y };
 
         // Draw pieces
         for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
@@ -1230,8 +1221,38 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
+    /// Debug
+#if 0
+    PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
+    PRINT_I32("Max index: ", simRegion->maxRecordedEntityVelocityIndex);
+
+    const char* typeStr{};
+    switch (simRegion->maxRecordedEntityVelocityType) {
+    case EntityType::WALL: {
+        typeStr = "Wall";
+    } break;
+    case EntityType::HERO: {
+        typeStr = "Hero";
+    } break;
+    case EntityType::FAMILIAR: {
+        typeStr = "Familiar";
+    } break;
+    case EntityType::MONSTER: {
+        typeStr = "Monstar";
+    } break;
+    case EntityType::SWORD: {
+        typeStr = "Sword";
+    } break;
+    }
+
+    ASSERT(typeStr);
+    PRINT("Max type: ");
+    PRINT(typeStr);
+    PRINT("\n");
+#endif
+
     WorldPosition worldOrigin{};
-    WorldDiff diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
+    const Vec3 diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
     DrawRectangle(screenBuff, Vec2{ diff.x, diff.y }, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
 
     EndSim(simRegion, gameState);

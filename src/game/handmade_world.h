@@ -37,19 +37,13 @@ struct WorldChunkPosition_ {
     i32 chunkRelativeTileY;
 };
 
-struct WorldDiff {
-    f32 x;
-    f32 y;
-    f32 z;
-};
-
 struct WorldPosition {
     i32 chunkX;
     i32 chunkY;
     i32 chunkZ;
 
     // Tile-relative x and y from the center of the chunk
-    Vec2 offset_;
+    Vec3 offset_;
 };
 
 struct WorldEntityBlock {
@@ -75,7 +69,8 @@ struct World {
     WorldEntityBlock* firstFree;
 
     f32 tileSideInMeters;
-    f32 chunkSideInMeters;
+    f32 tileDepthInMeters;
+    Vec3 chunkDimInMeters;
 };
 
 //NODISCARD
@@ -117,7 +112,7 @@ struct World {
 //offset);
 
 //NODISCARD
-//INTERNAL WorldDiff SubtractWorldPos(const World* world, const WorldPosition* a,
+//INTERNAL Vec3 SubtractWorldPos(const World* world, const WorldPosition* a,
 //                                    const WorldPosition* b);
 
 //INTERNAL WorldEntityBlock* FreeBlock(WorldEntityBlock* block);

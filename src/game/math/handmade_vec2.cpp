@@ -114,19 +114,19 @@ Dot(Vec2 lhs, Vec2 rhs) {
     return result;
 }
 
+// This is cheaper to compute than Length, so use if we really don't need the actual length
 NODISCARD
 INTERNAL inline f32
-Length(Vec2 v) {
-    const f32 result{ Sqrt(LengthSquared(v)) };
+LengthSq(Vec2 v) {
+    const f32 result{ Dot(v, v) };
     ASSERT(result >= 0.0f);
     return result;
 }
 
-// This is cheaper to compute than Length, so use if we really don't need the actual length
 NODISCARD
 INTERNAL inline f32
-LengthSquared(Vec2 v) {
-    const f32 result{ Dot(v, v) };
+Length(Vec2 v) {
+    const f32 result{ Sqrt(LengthSq(v)) };
     ASSERT(result >= 0.0f);
     return result;
 }
@@ -135,7 +135,7 @@ NODISCARD
 INTERNAL inline bool32
 IsNormalized(Vec2 v) {
     constexpr f32 eps{ 0.001f };
-    const bool32 result{ AbsF32(LengthSquared(v) - 1.0f) < eps };
+    const bool32 result{ AbsF32(LengthSq(v) - 1.0f) < eps };
     return result;
 }
 
@@ -148,7 +148,7 @@ Normalize(Vec2 v) {
     }
 
     Vec2 result{ v };
-    const f32 lengthSq{ LengthSquared(v) };
+    const f32 lengthSq{ LengthSq(v) };
     if (lengthSq > 0.0f) {
         result /= Sqrt(lengthSq);
     }

@@ -36,19 +36,18 @@ StoreEntityReference(EntityReference* ref) {
 }
 
 NODISCARD
-INTERNAL Vec2
+INTERNAL Vec3
 GetSimSpacePos(SimRegion* region, LowEntity* stored) {
-    Vec2 result{ 100000.0f, 100000.0f };
+    Vec3 result{ invalid_Pos };
     if (!IsSet(&stored->sim, SimEntityFlags::NON_SPATIAL)) {
-        const auto diff{ SubtractWorldPos(region->world, &stored->pos, &region->origin) };
-        result = Vec2{ diff.x, diff.y };
+        result = SubtractWorldPos(region->world, &stored->pos, &region->origin);
     }
 
     return result;
 }
 
 INTERNAL SimEntity* AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
-                                         i32 lowIndex, Vec2* simPos);
+                                         i32 lowIndex, Vec3* simPos);
 
 INTERNAL void
 LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference* ref) {
@@ -56,7 +55,7 @@ LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference*
         SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, ref->index) };
         if (!entry->ptr) {
             auto* lowEntity{ GetLowEntity(gameState, ref->index) };
-            Vec2 pos = GetSimSpacePos(simRegion, lowEntity);
+            Vec3 pos{ GetSimSpacePos(simRegion, lowEntity) };
             entry->ptr = AddEntityToSimRegion(gameState, simRegion, lowEntity, ref->index, nullptr);
             entry->index = ref->index;
         }
@@ -100,15 +99,23 @@ AddEntityToSimRegion_(GameState* gameState, SimRegion* simRegion, LowEntity* src
 }
 
 NODISCARD
+INTERNAL bool32
+EntityOverlapsRect(Vec3 p, Vec3 dim, Rect3 rect) {
+    const Rect3 grown{ AddRadiusTo(rect, 0.5f * dim) };
+    const bool32 result{ IsInsideRectangle(grown, p) };
+    return result;
+}
+
+NODISCARD
 INTERNAL SimEntity*
 AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src, i32 lowIndex,
-                     Vec2* simPos) {
+                     Vec3* simPos) {
     SimEntity* dest{ AddEntityToSimRegion_(gameState, simRegion, src, lowIndex) };
 
     if (dest) {
         if (simPos) {
             dest->pos = *simPos;
-            dest->updatable = IsInsideRectangle(simRegion->updatableBounds, dest->pos);
+            dest->updatable = EntityOverlapsRect(dest->pos, dest->dim, simRegion->updatableBounds);
         } else {
             dest->pos = GetSimSpacePos(simRegion, src);
         }
@@ -117,9 +124,10 @@ AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
     return dest;
 }
 
+NODISCARD
 INTERNAL SimRegion*
 BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPosition origin,
-         Rect bounds) {
+         Rect3 bounds, f32 delta) {
     SimRegion* simRegion{ PushSize(simArena, SimRegion) };
     ZeroSize(simRegion->hash);
 
@@ -127,15 +135,31 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
     simRegion->entityCount = 0;
     simRegion->entities = PushArray(simArena, simRegion->maxEntityCount, SimEntity);
 
-    const f32 safetyMargin{ 1.0f };
+    // Makes the gathering region larger to include entities just outside of the region but some
+    // of their part is inside the region
+    simRegion->maxEntityRadius = 5.0f;
+    simRegion->maxEntityVelocity = 30.0f; // TODO: revise more
+
+    simRegion->maxRecordedEntityVelocitySq = {};
+    simRegion->maxRecordedEntityVelocityIndex = {};
+    simRegion->maxRecordedEntityVelocityType = {};
+
+    // Take into account max velocity of any entity and the delta time!
+    const f32 safetyMargin{ simRegion->maxEntityRadius + (simRegion->maxEntityVelocity * delta) };
+    constexpr f32 safetyMarginZ{ 1.0f };
 
     simRegion->world = world;
     simRegion->origin = origin;
-    simRegion->updatableBounds = bounds;
-    simRegion->bounds = AddRadiusTo(simRegion->updatableBounds, safetyMargin, safetyMargin);
+    simRegion->updatableBounds =
+        AddRadiusTo(bounds, Vec3{ simRegion->maxEntityRadius, simRegion->maxEntityRadius,
+                                  simRegion->maxEntityRadius });
+    simRegion->bounds =
+        AddRadiusTo(simRegion->updatableBounds, Vec3{ safetyMargin, safetyMargin, safetyMarginZ });
 
-    const WorldPosition minChunk{ MapIntoChunkSpace(world, origin, bounds.min) };
-    const WorldPosition maxChunk{ MapIntoChunkSpace(world, origin, bounds.max) };
+    const WorldPosition minChunk{ MapIntoChunkSpace(world, origin,
+                                                    Vec3{ bounds.min.x, bounds.min.y, 0 }) };
+    const WorldPosition maxChunk{ MapIntoChunkSpace(world, origin,
+                                                    Vec3{ bounds.max.x, bounds.max.y, 0 }) };
 
     i32 movedCount{};
 
@@ -150,8 +174,8 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
                         const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
                         LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
                         if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL)) {
-                            Vec2 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
-                            if (IsInsideRectangle(bounds, simSpacePos)) {
+                            Vec3 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
+                            if (EntityOverlapsRect(simSpacePos, lowEntity->sim.dim, bounds)) {
                                 AddEntityToSimRegion(gameState, simRegion, lowEntity,
                                                      lowEntityIndex, &simSpacePos);
                                 ++movedCount;
@@ -270,7 +294,9 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             }
 #endif
             // Fully smooth scrolling
+            const f32 camOffsetZ{ newCameraPos.offset_.z };
             newCameraPos = stored->pos;
+            newCameraPos.offset_.z = camOffsetZ;
 
             gameState->cameraPos = newCameraPos;
         }
@@ -304,6 +330,7 @@ TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 
     return result;
 }
 
+NODISCARD
 INTERNAL bool32
 ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     bool32 result{};
@@ -334,6 +361,7 @@ ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     return result;
 }
 
+NODISCARD
 INTERNAL bool32
 HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
     bool32 stopsOnCollision{};
@@ -359,12 +387,12 @@ HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
 
 INTERNAL void
 MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSpec moveSpec,
-           Vec2 acceleration, f32 delta) {
+           Vec3 acceleration, f32 delta) {
     ASSERT(!IsSet(entity, SimEntityFlags::NON_SPATIAL));
 
     // Normalize if greater than unit circle length of 1
     if (moveSpec.unitMaxAccelVector) {
-        const f32 accelerationLengthSq{ LengthSquared(acceleration) };
+        const f32 accelerationLengthSq{ LengthSq(acceleration) };
         if (accelerationLengthSq > 1.0f) {
             acceleration *= (1.0f / Sqrt(accelerationLengthSq));
         }
@@ -378,21 +406,27 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // acceleration <=> ddP
     acceleration *= moveSpec.speed;
 
+    const f32 gravity{ -9.8f };
     // TODO: ordinary differential equations
     acceleration += -moveSpec.drag * entity->velocity;
+    acceleration += Vec3{ 0, 0, gravity };
     // v' = at + v
     entity->velocity += acceleration * delta;
 
+    // TODO: clamp the max velocity?
+    const f32 velocitySq{ LengthSq(entity->velocity) };
+    ASSERT(velocitySq <= SquareF32(simRegion->maxEntityVelocity));
+
+    // Debug code
+    if (velocitySq > simRegion->maxRecordedEntityVelocitySq) {
+        simRegion->maxRecordedEntityVelocitySq = velocitySq;
+        simRegion->maxRecordedEntityVelocityIndex = entity->storageIndex;
+        simRegion->maxRecordedEntityVelocityType = entity->type;
+    }
+
     // TODO: rename playerDelta as now we use this function for all entities
     // p' = 0.5 * at^2 + vt + p
-    Vec2 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
-
-    const f32 gravity{ -9.8f };
-    entity->z = 0.5f * gravity * SquareF32(delta) + entity->dZ * delta + entity->z;
-    entity->dZ = gravity * delta + entity->dZ;
-    if (entity->z < 0.0f) {
-        entity->z = 0.0f;
-    }
+    Vec3 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     /// Collision checks
 
@@ -410,7 +444,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
         f32 tMin{ 1.0f };
 
-        f32 playerDeltaLength{ Length(playerDelta) };
+        const f32 playerDeltaLength{ Length(playerDelta) };
         // TODO: epsilon!!! we shouldn't allow lengths of 0.001 or so
         if (playerDeltaLength == 0) {
             break;
@@ -421,24 +455,26 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
             tMin = distanceRemaining / playerDeltaLength;
         }
 
-        Vec2 wallNormal{};
+        Vec3 wallNormal{};
         TestWallResult testWallResult{};
 
         i32 hitHighEntityIndex{}; // Probably not needed
         SimEntity* hitEntity{};
 
-        const Vec2 desiredPos{ entity->pos + playerDelta };
+        const Vec3 desiredPos{ entity->pos + playerDelta };
 
         if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
                 SimEntity* testEntity{ &simRegion->entities[highIndex] };
                 if (ShouldCollide(gameState, entity, testEntity)) {
-                    const f32 diameterWidth{ testEntity->width + entity->width };
-                    const f32 diameterHeight{ testEntity->height + entity->height };
-                    const Vec2 minCorner{ Vec2{ -diameterWidth, -diameterHeight } * 0.5f };
-                    const Vec2 maxCorner{ Vec2{ diameterWidth, diameterHeight } * 0.5f };
+                    const Vec3 minkowskiDiameter{ testEntity->dim.x + entity->dim.x,
+                                                  testEntity->dim.y + entity->dim.y,
+                                                  testEntity->dim.z + entity->dim.z };
 
-                    const Vec2 relPos{ entity->pos - testEntity->pos };
+                    const Vec3 minCorner{ minkowskiDiameter * -0.5f };
+                    const Vec3 maxCorner{ minkowskiDiameter * 0.5f };
+
+                    const Vec3 relPos{ entity->pos - testEntity->pos };
 
                     // Test all four "walls", used for other entities as well
 
@@ -447,7 +483,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                               playerDelta.y, tMin, minCorner.y, maxCorner.y);
                     if (testWallResult.hit) {
                         tMin = testWallResult.tMin;
-                        wallNormal = Vec2{ -1, 0 };
+                        wallNormal = Vec3{ -1, 0 };
                         //hitWall = true;
                         hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
@@ -457,7 +493,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                               playerDelta.y, tMin, minCorner.y, maxCorner.y);
                     if (testWallResult.hit) {
                         tMin = testWallResult.tMin;
-                        wallNormal = Vec2{ 1, 0 };
+                        wallNormal = Vec3{ 1, 0 };
                         //hitWall = true;
                         hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
@@ -468,7 +504,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                               playerDelta.x, tMin, minCorner.x, maxCorner.x);
                     if (testWallResult.hit) {
                         tMin = testWallResult.tMin;
-                        wallNormal = Vec2{ 0, -1 };
+                        wallNormal = Vec3{ 0, -1 };
                         //hitwall = true;
                         hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
@@ -478,7 +514,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                               playerDelta.x, tMin, minCorner.x, maxCorner.x);
                     if (testWallResult.hit) {
                         tMin = testWallResult.tMin;
-                        wallNormal = Vec2{ 0, 1 };
+                        wallNormal = Vec3{ 0, 1 };
                         //hitwall = true;
                         hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
@@ -512,6 +548,11 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         }
     }
 
+    if (entity->pos.z < 0) {
+        entity->pos.z = 0;
+        entity->velocity.z = 0;
+    }
+
     if (entity->distanceLimit != 0.0f) {
         entity->distanceLimit = distanceRemaining;
     }
@@ -524,8 +565,8 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     //}
 
     // Facing direction checks
-    const Vec2 velocity{ entity->velocity };
-    if (velocity == Vec2::ZERO) {
+    const Vec3 velocity{ entity->velocity };
+    if (velocity == Vec3::ZERO) {
         // Keep previous
     } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
         if (velocity.x > 0) {

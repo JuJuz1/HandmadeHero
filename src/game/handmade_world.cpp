@@ -1,8 +1,8 @@
 #include "handmade_world.h"
 
-#include "game/handmade_intrinsics.h"
-#include "game/handmade_memory.h"
-#include "game/math/handmade_vec3.h"
+//#include "game/handmade_intrinsics.h"
+//#include "game/handmade_memory.h"
+//#include "game/math/handmade_vec3.h"
 
 NODISCARD
 INTERNAL WorldPosition
@@ -24,7 +24,9 @@ InitializeWorld(World* world, f32 tileSideInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
     world->tileSideInMeters = tileSideInMeters;
 
-    world->chunkSideInMeters = tileSideInMeters * tiles_Per_Chunk;
+    world->chunkDimInMeters = Vec3{ tileSideInMeters * tiles_Per_Chunk,
+                                    tileSideInMeters * tiles_Per_Chunk, tileSideInMeters };
+    world->tileDepthInMeters = tileSideInMeters;
     world->firstFree = nullptr;
 
     for (i32 tileChunkIndex{}; tileChunkIndex < world->worldChunkHash.size; ++tileChunkIndex) {
@@ -87,44 +89,47 @@ IsTileValueEmpty(u32 value) {
 
 NODISCARD
 INTERNAL bool32
-IsCanonical(const World* world, f32 relPos) {
+IsCanonical(f32 chunkDim, f32 relPos) {
     // TODO: fix the floating point math to not allow the case above of ==
     //ASSERT(relPos >= -world->chunkSideInMeters * 0.5f && relPos <= world->chunkSideInMeters *
     //0.5f);
-    const f32 eps{ 0.0001f };
-    const bool32 result{ relPos >= -((world->chunkSideInMeters * 0.5f) + eps) &&
-                         relPos <= ((world->chunkSideInMeters * 0.5f) + eps) };
+    constexpr f32 eps{ 0.0001f };
+    const bool32 result{ relPos >= -((chunkDim * 0.5f) + eps) &&
+                         relPos <= ((chunkDim * 0.5f) + eps) };
     return result;
 }
 
 NODISCARD
 INTERNAL bool32
-IsCanonical(const World* world, Vec2 offset) {
-    const bool32 result{ IsCanonical(world, offset.x) && IsCanonical(world, offset.y) };
+IsCanonical(const World* world, Vec3 offset) {
+    const bool32 result{ IsCanonical(world->chunkDimInMeters.x, offset.x) &&
+                         IsCanonical(world->chunkDimInMeters.y, offset.y) &&
+                         IsCanonical(world->chunkDimInMeters.z, offset.z) };
     return result;
 }
 
 INTERNAL void
-ReCanonicalizeCoordinate(const World* world, i32* tileIndex, f32* relPos) {
-    const i32 offset{ RoundF32ToI32(*relPos / world->chunkSideInMeters) };
+ReCanonicalizeCoordinate(f32 chunkDim, i32* tileIndex, f32* relPos) {
+    const i32 offset{ RoundF32ToI32(*relPos / chunkDim) };
     // NOTE: Wrapping is not allowed so all coordinates are assumed to be within the safe margins
     *tileIndex += offset;
 
-    *relPos -= static_cast<f32>(offset) * world->chunkSideInMeters;
+    *relPos -= static_cast<f32>(offset) * chunkDim;
     // TODO: what to do if: *relPos == world->tilesideinpixels
     // This can happen because we do the divide and floor and then multiple, the player might
     // end up being on the same tile Relative positions must be within the tile size in pixels
-    ASSERT(IsCanonical(world, *relPos));
+    ASSERT(IsCanonical(chunkDim, *relPos));
 }
 
 NODISCARD
 INTERNAL WorldPosition
-MapIntoChunkSpace(const World* world, WorldPosition pos, Vec2 offset) {
+MapIntoChunkSpace(const World* world, WorldPosition pos, Vec3 offset) {
     WorldPosition result{ pos };
     result.offset_ += offset;
 
-    ReCanonicalizeCoordinate(world, &result.chunkX, &result.offset_.x);
-    ReCanonicalizeCoordinate(world, &result.chunkY, &result.offset_.y);
+    ReCanonicalizeCoordinate(world->chunkDimInMeters.x, &result.chunkX, &result.offset_.x);
+    ReCanonicalizeCoordinate(world->chunkDimInMeters.y, &result.chunkY, &result.offset_.y);
+    ReCanonicalizeCoordinate(world->chunkDimInMeters.z, &result.chunkZ, &result.offset_.z);
 
     return result;
 }
@@ -132,19 +137,11 @@ MapIntoChunkSpace(const World* world, WorldPosition pos, Vec2 offset) {
 NODISCARD
 INTERNAL WorldPosition
 ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition result{};
-
-    result.chunkX = tileX / tiles_Per_Chunk;
-    result.chunkY = tileY / tiles_Per_Chunk;
-    result.chunkZ = tileZ / tiles_Per_Chunk;
-
-    // TODO: Align tiles with chunks accurately to prevent errors
-    result.offset_.x = ((tileX - tiles_Per_Chunk / 2) - (result.chunkX * tiles_Per_Chunk)) *
-                       world->tileSideInMeters;
-    result.offset_.y = ((tileY - tiles_Per_Chunk / 2) - (result.chunkY * tiles_Per_Chunk)) *
-                       world->tileSideInMeters;
-    // TODO: Move to 3D Z
-
+    const Vec3 offset{ world->tileSideInMeters * Vec3{ static_cast<f32>(tileX),
+                                                       static_cast<f32>(tileY),
+                                                       static_cast<f32>(tileZ) } };
+    WorldPosition basePos{};
+    const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset) };
     ASSERT(IsCanonical(world, result.offset_));
 
     return result;
@@ -186,19 +183,13 @@ WorldPositionModifyZChecked(const World* world, const WorldPosition* pos, i32 of
 }
 
 NODISCARD
-INTERNAL WorldDiff
+INTERNAL Vec3
 SubtractWorldPos(const World* world, const WorldPosition* a, const WorldPosition* b) {
-    WorldDiff diff{};
-
     const Vec3 dTile{ static_cast<f32>(a->chunkX) - static_cast<f32>(b->chunkX),
                       static_cast<f32>(a->chunkY) - static_cast<f32>(b->chunkY),
                       static_cast<f32>(a->chunkZ) - static_cast<f32>(b->chunkZ) };
-
-    diff.x = (world->chunkSideInMeters * dTile.x) + a->offset_.x - b->offset_.x;
-    diff.y = (world->chunkSideInMeters * dTile.y) + a->offset_.y - b->offset_.y;
-    diff.z = world->chunkSideInMeters * dTile.z;
-
-    return diff;
+    const Vec3 result{ (world->chunkDimInMeters * dTile) + (a->offset_ - b->offset_) };
+    return result;
 }
 
 //INTERNAL WorldEntityBlock*

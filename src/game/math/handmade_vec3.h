@@ -21,24 +21,38 @@ struct Vec3 {
     inline Vec3& operator-=(Vec3 rhs);
     inline Vec3& operator*=(f32 scalar);
     inline Vec3& operator/=(f32 scalar);
+
+    NOT_BOUND const Vec3 ZERO;
 };
 
-NODISCARD
-INTERNAL inline Vec3 operator-(Vec3 rhs);
+inline constexpr Vec3 Vec3::ZERO{};
 
-NODISCARD
-INTERNAL inline Vec3 operator+(Vec3 lhs, Vec3 rhs);
+//NODISCARD
+//INTERNAL inline Vec3 operator-(Vec3 rhs);
 
-NODISCARD
-INTERNAL inline Vec3 operator-(Vec3 lhs, Vec3 rhs);
+//NODISCARD
+//INTERNAL inline Vec3 operator+(Vec3 lhs, Vec3 rhs);
 
-NODISCARD
-INTERNAL inline Vec3 operator*(Vec3 lhs, f32 scalar);
+//NODISCARD
+//INTERNAL inline Vec3 operator-(Vec3 lhs, Vec3 rhs);
 
-NODISCARD
-INTERNAL inline Vec3 operator*(f32 scalar, Vec3 rhs);
+//NODISCARD
+//INTERNAL inline Vec3 operator*(Vec3 lhs, f32 scalar);
 
-NODISCARD
-INTERNAL inline Vec3 operator/(Vec3 lhs, f32 scalar);
+//NODISCARD
+//INTERNAL inline Vec3 operator*(f32 scalar, Vec3 rhs);
+
+//NODISCARD
+//INTERNAL inline Vec3 operator/(Vec3 lhs, f32 scalar);
+
+//NODISCARD
+//INTERNAL inline bool32 operator==(Vec3 lhs, Vec3 rhs);
+
+//NODISCARD
+//INTERNAL inline bool32 operator!=(Vec3 lhs, Vec3 rhs);
+
+//// Hadamard product
+//NODISCARD
+//INTERNAL inline Vec3 operator*(Vec3 lhs, Vec3 rhs);
 
 #endif // HANDMADE_VEC3_H

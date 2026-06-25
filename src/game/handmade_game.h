@@ -60,8 +60,8 @@ struct EntityVisiblePiece {
 struct ControlledHero {
     i32 entityIndex;
 
-    Vec2 ddP;
-    Vec2 dSword;
+    Vec3 ddP;
+    Vec3 dSword;
     f32 dZ;
 
     bool32 sprint; // Shift

@@ -60,18 +60,12 @@ struct SimEntity {
     EntityType type;
     i32 flags;
 
-    f32 width, height;
-    Vec2 velocity;
+    Vec3 dim;
 
-    i32 dChunkZ; // Stairs
-
-    Vec2 pos; // NOTE: This is now already relative to the camera center
-    u32 chunkZ;
+    Vec3 pos; // NOTE: This is now already relative to the camera center
+    Vec3 velocity;
 
     f32 distanceLimit; // For every entity a max limit
-
-    f32 z;
-    f32 dZ;
 
     i32 facingDir;
 
@@ -102,8 +96,15 @@ struct SimEntityHash {
 struct SimRegion {
     World* world;
     WorldPosition origin;
-    Rect bounds;
-    Rect updatableBounds;
+    Rect3 bounds;
+    Rect3 updatableBounds;
+
+    f32 maxEntityRadius;
+    f32 maxEntityVelocity;
+
+    f32 maxRecordedEntityVelocitySq; // Stored in MoveEntity
+    i32 maxRecordedEntityVelocityIndex;
+    EntityType maxRecordedEntityVelocityType;
 
     i32 maxEntityCount;
     i32 entityCount;

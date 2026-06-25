@@ -26,22 +26,22 @@ struct Vec4 {
     inline Vec4& operator/=(f32 scalar);
 };
 
-NODISCARD
-INTERNAL inline Vec4 operator-(Vec4 rhs);
+//NODISCARD
+//INTERNAL inline Vec4 operator-(Vec4 rhs);
 
-NODISCARD
-INTERNAL inline Vec4 operator+(Vec4 lhs, Vec4 rhs);
+//NODISCARD
+//INTERNAL inline Vec4 operator+(Vec4 lhs, Vec4 rhs);
 
-NODISCARD
-INTERNAL inline Vec4 operator-(Vec4 lhs, Vec4 rhs);
+//NODISCARD
+//INTERNAL inline Vec4 operator-(Vec4 lhs, Vec4 rhs);
 
-NODISCARD
-INTERNAL inline Vec4 operator*(Vec4 lhs, f32 scalar);
+//NODISCARD
+//INTERNAL inline Vec4 operator*(Vec4 lhs, f32 scalar);
 
-NODISCARD
-INTERNAL inline Vec4 operator*(f32 scalar, Vec4 rhs);
+//NODISCARD
+//INTERNAL inline Vec4 operator*(f32 scalar, Vec4 rhs);
 
-NODISCARD
-INTERNAL inline Vec4 operator/(Vec4 lhs, f32 scalar);
+//NODISCARD
+//INTERNAL inline Vec4 operator/(Vec4 lhs, f32 scalar);
 
 #endif // HANDMADE_VEC4_H

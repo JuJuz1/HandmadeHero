@@ -40,50 +40,50 @@ inline constexpr Vec2 Vec2::UP{ 0.0f, 1.0f };
 inline constexpr Vec2 Vec2::DOWN{ 0.0f, -1.0f };
 inline constexpr Vec2 Vec2::ZERO{};
 
-NODISCARD
-INTERNAL inline Vec2 operator-(Vec2 rhs);
+//NODISCARD
+//INTERNAL inline Vec2 operator-(Vec2 rhs);
 
-NODISCARD
-INTERNAL inline Vec2 operator+(Vec2 lhs, Vec2 rhs);
+//NODISCARD
+//INTERNAL inline Vec2 operator+(Vec2 lhs, Vec2 rhs);
 
-NODISCARD
-INTERNAL inline Vec2 operator-(Vec2 lhs, Vec2 rhs);
+//NODISCARD
+//INTERNAL inline Vec2 operator-(Vec2 lhs, Vec2 rhs);
 
-NODISCARD
-INTERNAL inline Vec2 operator*(Vec2 lhs, f32 scalar);
+//NODISCARD
+//INTERNAL inline Vec2 operator*(Vec2 lhs, f32 scalar);
 
-NODISCARD
-INTERNAL inline Vec2 operator*(f32 scalar, Vec2 rhs);
+//NODISCARD
+//INTERNAL inline Vec2 operator*(f32 scalar, Vec2 rhs);
 
-NODISCARD
-INTERNAL inline Vec2 operator/(Vec2 lhs, f32 scalar);
+//NODISCARD
+//INTERNAL inline Vec2 operator/(Vec2 lhs, f32 scalar);
 
-NODISCARD
-INTERNAL inline bool32 operator==(Vec2 lhs, Vec2 rhs);
+//NODISCARD
+//INTERNAL inline bool32 operator==(Vec2 lhs, Vec2 rhs);
 
-NODISCARD
-INTERNAL inline bool32 operator!=(Vec2 lhs, Vec2 rhs);
+//NODISCARD
+//INTERNAL inline bool32 operator!=(Vec2 lhs, Vec2 rhs);
 
-// Hadamard product
-NODISCARD
-INTERNAL inline Vec2 operator*(Vec2 lhs, Vec2 rhs);
+//// Hadamard product
+//NODISCARD
+//INTERNAL inline Vec2 operator*(Vec2 lhs, Vec2 rhs);
 
-NODISCARD
-INTERNAL inline f32 Dot(Vec2 lhs, Vec2 rhs);
+//NODISCARD
+//INTERNAL inline f32 Dot(Vec2 lhs, Vec2 rhs);
 
-NODISCARD
-INTERNAL inline f32 Length(Vec2 v);
+//NODISCARD
+//INTERNAL inline f32 LengthSq(Vec2 v);
 
-NODISCARD
-INTERNAL inline f32 LengthSquared(Vec2 v);
+//NODISCARD
+//INTERNAL inline f32 Length(Vec2 v);
 
-NODISCARD
-INTERNAL inline bool32 IsNormalized(Vec2 v);
+//NODISCARD
+//INTERNAL inline bool32 IsNormalized(Vec2 v);
 
-NODISCARD
-INTERNAL inline Vec2 Normalize(Vec2 v);
+//NODISCARD
+//INTERNAL inline Vec2 Normalize(Vec2 v);
 
-NODISCARD
-INTERNAL inline Vec2 Reflect(Vec2 v, Vec2 n);
+//NODISCARD
+//INTERNAL inline Vec2 Reflect(Vec2 v, Vec2 n);
 
 #endif // HANDMADE_VEC2_H
