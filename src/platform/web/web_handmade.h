@@ -1,0 +1,7 @@
+#ifndef WEB_HANDMADE_H
+#define WEB_HANDMADE_H
+
+#if HANDMADE_WEB
+
+#endif // HANDMADE_WEB
+#endif // WEB_HANDMADE_H

@@ -138,6 +138,20 @@ Run it:
 ./build/macos_handmade
 ```
 
+### Web
+
+Using [emscripten](https://emscripten.org/index.html) to compile the C++ code to WebAssembly. Install it via: https://emscripten.org/docs/getting_started/downloads.html
+
+Because browsers are trying to be so safe nowadays we have to host a local web server to be able to test the game... Navigate to build/web and host a server via python:
+
+```
+python -m http.server
+```
+
+-> Open web_handmade.html
+
+...
+
 ### Using the original art assets
 
 By default the build scripts use placeholder assets I have created. If you wish to use the original art assets obtained by preordering the game, create a folder inside data called "original". Then add test and test2 folders from the downloaded art zip to data/original. The build scripts should automatically detect the existence of data/original and configure HANDMADE_USE_REAL_ASSETS to 1
