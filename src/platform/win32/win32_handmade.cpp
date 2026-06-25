@@ -3,11 +3,59 @@
     This is not a final platform layer!
 */
 
-// Windows stuff
-#include <dsound.h>
+// A classic...
+#define WIN32_LEAN_AND_MEAN
+
+// Taken from <windows.h>
+// I think this lowered compile times a bit? (now on avg ~0.55s, down about ~0.1s)
+
+#define NOGDICAPMASKS // -CC_*, LC_*, PC_*, CP_*, TC_*, RC_
+//#define NOVIRTUALKEYCODES // -VK_*
+//#define NOWINMESSAGES // -WM_*, EM_*, LB_*, CB_*
+//#define NOWINSTYLES  // -WS_*, CS_*, ES_*, LBS_*, SBS_*, CBS_*
+#define NOSYSMETRICS  // -SM_*
+#define NOMENUS       // -MF_*
+#define NOICONS       // -IDI_*
+#define NOKEYSTATES   // -MK_*
+#define NOSYSCOMMANDS // -SC_*
+//#define NORASTEROPS   // -Binary and Tertiary raster ops
+#define NOSHOWWINDOW // -SW_*
+#define OEMRESOURCE  // -OEM Resource values
+#define NOATOM       // -Atom Manager routines
+#define NOCLIPBOARD  // -Clipboard routines
+#define NOCOLOR      // -Screen colors
+#define NOCTLMGR     // -Control and Dialog routines
+#define NODRAWTEXT   // -DrawText() and DT_*
+//#define NOGDI        // -All GDI defines and routines
+#define NOKERNEL // -All KERNEL defines and routines
+//#define NOUSER     // -All USER defines and routines
+#define NONLS      // -All NLS defines and routines
+#define NOMB       // -MB_*and MessageBox()
+#define NOMEMMGR   // -GMEM_*, LMEM_*, GHND, LHND, associated routines
+#define NOMETAFILE // -typedef METAFILEPICT
+#define NOMINMAX   // -Macros min(a, b) and max(a, b)
+//#define NOMSG             // -typedef MSG and associated routines
+#define NOOPENFILE   // -OpenFile(), OemToAnsi, AnsiToOem, and OF_*
+#define NOSCROLL     // -SB_*and scrolling routines
+#define NOSERVICE    // -All Service Controller routines, SERVICE_ equates, etc.
+#define NOSOUND      // -Sound driver routines
+#define NOTEXTMETRIC // -typedef TEXTMETRIC and associated routines
+#define NOWH         // -SetWindowsHook and WH_ *
+//#define NOWINOFFSETS     // -GWL_*, GCL_*, associated routines
+#define NOCOMM           // -COMM driver routines
+#define NOKANJI          // -Kanji support stuff.
+#define NOHELP           // -Help engine interface.
+#define NOPROFILER       // -Profiler interface.
+#define NODEFERWINDOWPOS // -DeferWindowPos routines
+#define NOMCX            // -Modem Configuration Extensions
+
 #include <windows.h>
 
-#include <cstdio>
+#include <Mmreg.h> // DirectSound stuff after disabling a bunch of headers...
+#include <dsound.h>
+#include <timeapi.h> // for timeBeginPeriod and TIMERR_NOERROR
+
+#include <cstdio> // sprintf_s
 
 #include "game/handmade.h"
 
@@ -504,7 +552,7 @@ INTERNAL void
 GetInputFilePath(const AllState* allState, bool32 inputStream, i32 slotIndex, char* dest,
                  i32 destCount) {
     Array<char, 32> temp;
-    wsprintfA(temp.data_, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
+    sprintf_s(temp.data_, "loop_edit%d_%s.hmi", slotIndex, inputStream ? "input" : "state");
     BuildGamePathFilename(allState, temp.data_, dest, destCount);
 }
 
@@ -557,7 +605,7 @@ BeginInputPlayback(AllState* allState, i32 playingIndex) {
     const ReplayBuffer* replayBuffer{ GetReplayBuffer(allState, playingIndex) };
     if (!replayBuffer->isRecordedAtLeastOnce) {
         char buf[32];
-        wsprintfA(buf, "Can't playback buffer %u as it has not yet been recorded to!\n",
+        sprintf_s(buf, "Can't playback buffer %u as it has not yet been recorded to!\n",
                   playingIndex);
         OutputDebugStringA(buf);
         return;
@@ -636,17 +684,17 @@ HandleRecordButton(AllState* allState, Input* input, i32 selectedIndex) {
 
     if (allState->playingIndex == replay_Buffer_Not_Playing) {
         if (allState->recordingIndex == replay_Buffer_Not_Recording) {
-            wsprintfA(buf, "L: Recording STARTED, selected: %u!\n", selectedIndex);
+            sprintf_s(buf, "L: Recording STARTED, selected: %u!\n", selectedIndex);
             OutputDebugStringA(buf);
             BeginRecordInput(allState, selectedIndex);
         } else {
-            wsprintfA(buf, "L: Recording STOPPED, selected: %u!\n", selectedIndex);
+            sprintf_s(buf, "L: Recording STOPPED, selected: %u!\n", selectedIndex);
             OutputDebugStringA(buf);
             EndRecordInput(allState);
             BeginInputPlayback(allState, selectedIndex);
         }
     } else {
-        wsprintfA(buf, "L: PLAYING STOPPED, selected: %u!\n", selectedIndex);
+        sprintf_s(buf, "L: PLAYING STOPPED, selected: %u!\n", selectedIndex);
         OutputDebugStringA(buf);
         EndInputPlayback(allState);
     }
@@ -670,7 +718,7 @@ HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bo
 
     allState->selectedIndex = selectedIndex;
     char buf[32];
-    wsprintfA(buf, "Replay buffer %u selected\n", selectedIndex);
+    sprintf_s(buf, "Replay buffer %u selected\n", selectedIndex);
     OutputDebugStringA(buf);
 
     // Always clear previous input playback, had some problems when doing this only when not
