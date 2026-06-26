@@ -42,8 +42,8 @@ jobs:
           ./scripts/linux_build.sh
 
   build-macos:
-    # See if we can do this without a paid Github version
-    runs-on: macos-latest-large
+    # See if we can do this without a paid Github version -> can not
+    runs-on: macos-15-intel
 
     steps:
       - uses: actions/checkout@v6
