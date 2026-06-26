@@ -768,7 +768,8 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
 
     PairWiseCollisionRule* found{};
     // TODO: Better hash func
-    const i32 hashBucket{ storageIndexA & (gameState->collisionRuleHash.size - 1) };
+    const i32 hashBucket{ static_cast<i32>(storageIndexA &
+                                           (gameState->collisionRuleHash.size - 1)) };
     for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
         if (rule->storageIndexA == storageIndexA && rule->storageIndexB == storageIndexB) {
             found = rule;

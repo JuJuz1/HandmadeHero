@@ -835,7 +835,7 @@ main() {
     allState.isReplayLooping = true;
 
     gPerfCounterFreq = SDL_GetPerformanceFrequency();
-    printf("PerfCounterFreq: %llu\n", gPerfCounterFreq);
+    printf("PerfCounterFreq: %lu\n", gPerfCounterFreq);
 
     u64 lastCounter{ hm_sdl::GetWallClock() };
     u64 lastCycleCount{ _rdtsc() };
