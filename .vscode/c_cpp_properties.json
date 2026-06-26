@@ -57,6 +57,24 @@
             "cStandard": "c17",
             "cppStandard": "c++20",
             "intelliSenseMode": "macos-clang-x64"
+        },
+        {
+            "name": "Web",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/devel/emsdk/upstream/emscripten/cache/sysroot/include"
+            ],
+            "defines": [
+                "HANDMADE_WEB",
+                "HANDMADE_INTERNAL",
+                "HANDMADE_DEBUG",
+                "HANDMADE_USE_REAL_ASSETS",
+                "__EMSCRIPTEN__"
+            ],
+            "compilerPath": "C:/devel/emsdk/upstream/bin/clang.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "linux-clang-x64"
         }
     ],
     "version": 4

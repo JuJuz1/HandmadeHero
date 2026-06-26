@@ -55,7 +55,7 @@
 #include <dsound.h>
 #include <timeapi.h> // for timeBeginPeriod and TIMERR_NOERROR
 
-#include <cstdio> // sprintf_s
+#include <stdio.h> // sprintf_s
 
 #include "game/handmade.h"
 
@@ -544,7 +544,8 @@ GetExePathAndFilename(AllState* allState) {
 
 INTERNAL void
 BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, i32 destCount) {
-    CatStrings(allState->exePath.data_, allState->exeFilename - allState->exePath.data_, filename,
+    CatStrings(allState->exePath.data_,
+               static_cast<i32>(allState->exeFilename - allState->exePath.data_), filename,
                StrLength(filename), dest, destCount);
 }
 

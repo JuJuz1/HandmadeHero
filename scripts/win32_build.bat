@@ -46,7 +46,7 @@ rem TODO: enable /WX back, remove /wd4505 /wd4100 /wd4189
 rem search if the preordered data assets exist
 set useRealAssets=0
 
-if EXIST ../data/original (
+if EXIST ..\data\original (
     set useRealAssets=1
     echo Using original assets
 ) else (
@@ -55,8 +55,8 @@ if EXIST ../data/original (
 
 set useCTime=1
 if %useCTime% == 1 (
-    if not exist ctime.exe (
-        if exist ..\misc\ctime.exe (
+    if NOT EXIST ctime.exe (
+        if EXIST ..\misc\ctime.exe (
             copy ..\misc\ctime.exe ctime.exe >nul
             echo Copied ctime.exe to build
             echo.
@@ -69,10 +69,8 @@ if %useCTime% == 1 (
 )
 
 set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
-
 rem other compile options
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
-
 set commonCompilerFlags=/MTd /Od /Zi
 
 if "%1" == "rel" (

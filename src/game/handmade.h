@@ -68,9 +68,11 @@
 
 #include "platform/handmade_platform.h"
 
+#if !HANDMADE_WEB
 // Ensure we are compiling as 64-bit for now...
 // NOTE: is this a good way?
 static_assert(sizeof(void*) == 8, "Size of pointer is not 8!");
+#endif
 
 /*
 HANDMADE_INTERNAL:
@@ -130,10 +132,10 @@ HANDMADE_DEBUG:
 #endif
 
 INTERNAL void
-CatStrings(const char* srcA, i64 srcASize, const char* srcB, i64 srcBSize, char* dest,
-           i64 destSize) {
+CatStrings(const char* srcA, i32 srcASize, const char* srcB, i32 srcBSize, char* dest,
+           i32 destSize) {
     // Space for null terminator
-    i64 total{ srcASize + srcBSize };
+    i32 total{ srcASize + srcBSize };
     if (total >= destSize) {
         total = destSize - 1;
     }
@@ -164,10 +166,10 @@ StrLength(const char* str) {
 
 // Very unsafe, only used for window title
 INTERNAL void
-AppendStr(char* dest, i64 destSize, const char* append) {
+AppendStr(char* dest, i32 destSize, const char* append) {
     ASSERT(dest && append);
 
-    const i64 destLen{ StrLength(dest) };
+    const i32 destLen{ StrLength(dest) };
     ASSERT(destSize > destLen);
     char* original{ dest };
     dest += destLen;

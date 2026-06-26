@@ -727,7 +727,7 @@ PushBitmap(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset
 INTERNAL void
 PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dimension, Vec4 color,
          f32 entityZC = 1.0f) {
-    PushPiece(group, 0, offset, offsetZ, Vec2{}, dimension, color, entityZC);
+    PushPiece(group, nullptr, offset, offsetZ, Vec2{}, dimension, color, entityZC);
 }
 
 INTERNAL void

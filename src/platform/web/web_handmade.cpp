@@ -1,63 +1,223 @@
-// Copyright 2011 The Emscripten Authors.  All rights reserved.
-// Emscripten is available under two separate licenses, the MIT license and the
-// University of Illinois/NCSA Open Source License.  Both these licenses can be
-// found in the LICENSE file.
+/*
+    Web platform layer
+*/
 
-#include <SDL/SDL.h>
-#include <stdio.h>
+#if !HANDMADE_WEB
+#    error "This file should only be used when building for the web!"
+#endif
+
+#include <SDL2/SDL.h>
+#include <stdio.h> // Console I/O
+
+#include <emscripten.h>
+
+#include "game/handmade.h"
 
 #include "web_handmade.h"
 
-#ifdef __EMSCRIPTEN__
-#    include <emscripten.h>
-#endif
+struct GameState {
+    int x, y;
+};
 
-int
-main(int argc, char** argv) {
-    printf("Hello, world TEST!\n");
+GLOBAL SDL_Window* gWindow{};
+GLOBAL SDL_Renderer* gRenderer{};
 
-#if HANDMADE_INTERNAL
-    printf("HANDMADE_INTERNAL\n");
-#endif
-#if HANDMADE_DEBUG
-    printf("HANDMADE_DEBUG\n");
-#endif
+GLOBAL GameState gGameState{};
+GLOBAL Input gInput{};
 
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_Surface* screen = SDL_SetVideoMode(256, 256, 32, SDL_SWSURFACE);
-
-#ifdef TEST_SDL_LOCK_OPTS
-    EM_ASM("SDL.defaults.copyOnLock = false; SDL.defaults.discardOnLock = true; "
-           "SDL.defaults.opaqueFrontBuffer = false;");
-#endif
-
-    if (SDL_MUSTLOCK(screen)) {
-        SDL_LockSurface(screen);
+INTERNAL void
+ProcessInputEvent(Button* button, bool32 isDown) {
+    if (button->endedDown != isDown) {
+        button->endedDown = isDown;
+        ++button->halfTransitionCount;
     }
-    for (int i = 0; i < 256; i++) {
-        for (int j = 0; j < 256; j++) {
-#ifdef TEST_SDL_LOCK_OPTS
-            // Alpha behaves like in the browser, so write proper opaque pixels.
-            int alpha = 255;
-#else
-            // To emulate native behavior with blitting to screen, alpha component is ignored. Test
-            // that it is so by outputting data (and testing that it does get discarded)
-            int alpha = (i + j) % 255;
-#endif
-            *((Uint32*)screen->pixels + i * 256 + j) =
-                SDL_MapRGBA(screen->format, i, j, 255 - i, alpha);
+}
+
+void
+ProcessInput(Input* input) {
+    //ProcessInput() {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+        case SDL_QUIT: {
+            printf("SDL_QUIT\n");
+            emscripten_cancel_main_loop();
+        } break;
+
+        case SDL_KEYUP:
+        case SDL_KEYDOWN: {
+            const SDL_Scancode scancode{ event.key.keysym.scancode };
+            const bool32 isDown{ event.key.state == SDL_PRESSED };
+
+            const u8* kbState{ SDL_GetKeyboardState(0) };
+            const bool32 shiftPressed{ kbState[SDL_SCANCODE_LSHIFT] ||
+                                       kbState[SDL_SCANCODE_RSHIFT] };
+            const bool32 altPressed{ kbState[SDL_SCANCODE_LALT] || kbState[SDL_SCANCODE_RALT] };
+
+            if (event.key.repeat != 0) {
+                continue;
+            }
+
+            switch (scancode) {
+            case SDL_SCANCODE_W: {
+                ProcessInputEvent(&input->playerInputs->up, isDown);
+                //gInput.up = true;
+                //input->up = true;
+            } break;
+            case SDL_SCANCODE_S: {
+                ProcessInputEvent(&input->playerInputs->down, isDown);
+                //gInput.down = true;
+                //input->down = true;
+            } break;
+            case SDL_SCANCODE_A: {
+                ProcessInputEvent(&input->playerInputs->left, isDown);
+            } break;
+            case SDL_SCANCODE_D: {
+                ProcessInputEvent(&input->playerInputs->right, isDown);
+            } break;
+
+            case SDL_SCANCODE_UP: {
+                ProcessInputEvent(&input->playerInputs->actionUp, isDown);
+            } break;
+            case SDL_SCANCODE_DOWN: {
+                ProcessInputEvent(&input->playerInputs->actionDown, isDown);
+            } break;
+            case SDL_SCANCODE_LEFT: {
+                ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
+            } break;
+            case SDL_SCANCODE_RIGHT: {
+                ProcessInputEvent(&input->playerInputs->actionRight, isDown);
+            } break;
+
+            case SDL_SCANCODE_SPACE: {
+                ProcessInputEvent(&input->playerInputs->space, isDown);
+            } break;
+
+            case SDL_SCANCODE_Q: {
+                ProcessInputEvent(&input->playerInputs->Q, isDown);
+            } break;
+            case SDL_SCANCODE_E: {
+                ProcessInputEvent(&input->playerInputs->E, isDown);
+            } break;
+
+            case SDL_SCANCODE_R: {
+                ProcessInputEvent(&input->playerInputs->R, isDown);
+            } break;
+
+            case SDL_SCANCODE_LSHIFT:
+            case SDL_SCANCODE_RSHIFT: {
+                ProcessInputEvent(&input->playerInputs->shift, isDown);
+            } break;
+            case SDL_SCANCODE_RETURN: {
+                ProcessInputEvent(&input->playerInputs->enter, isDown);
+            } break;
+
+            case SDL_SCANCODE_F11: {
+                if (isDown) {
+                    SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
+                    if (window) {
+                        //ToggleFullscreen(window);
+                    }
+                }
+            } break;
+
+            default: {
+                //if (isDown) {
+                printf("scancode %u, keycode: %u NOT HANDLED\n", scancode, event.key.keysym.sym);
+                //}
+            } break;
+            }
+        } break;
+
+        // Window events
+        case SDL_WINDOWEVENT: {
+            switch (event.window.event) {
+            case SDL_WINDOWEVENT_SIZE_CHANGED: {
+                printf("SDL_WINDOWEVENT_SIZE_CHANGED (%d, %d)\n", event.window.data1,
+                       event.window.data2);
+            } break;
+
+            case SDL_WINDOWEVENT_FOCUS_GAINED: {
+                printf("SDL_WINDOWEVENT_FOCUS_GAINED\n");
+            } break;
+
+            // Similar to WM_PAINT on Windows
+            case SDL_WINDOWEVENT_EXPOSED: {
+                printf("SDL_WINDOWEVENT_EXPOSED\n");
+
+                //const auto wndDimension{ GetWindowdimension(window) };
+                //DisplayBufferWindow(gRenderer, &gScreenBuff, wndDimension.width,
+                //                    wndDimension.height);
+            } break;
+
+            default: {
+            } break;
+            }
+        }
         }
     }
-    if (SDL_MUSTLOCK(screen)) {
-        SDL_UnlockSurface(screen);
+}
+
+void
+UpdateAndRender() {
+    for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gInput.playerInputs);
+         ++controllerIndex) {
+        for (i32 i{}; i < ARRAY_COUNT(gInput.playerInputs[0].buttons); ++i) {
+            gInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
+        }
     }
-    SDL_Flip(screen);
 
-    printf("you should see a smoothly-colored square - no sharp lines but the square borders!\n");
-    printf("and here is some text that should be HTML-friendly: amp: |&| double-quote: |\"| quote: "
-           "|'| less-than, greater-than, html-like tags: |<cheez></cheez>|\nanother line.\n");
+    ProcessInput(&gInput);
 
-    SDL_Quit();
+    if (gInput.playerInputs[0].up.endedDown) {
+        if (gInput.playerInputs->shift.endedDown) {
+            gGameState.y -= 2;
+        }
+    }
+    if (gInput.playerInputs[0].down.endedDown) {
+        gGameState.y += 2;
+    }
+    if (gInput.playerInputs[0].left.endedDown) {
+        gGameState.x -= 2;
+    }
+    if (gInput.playerInputs[0].right.endedDown) {
+        gGameState.x += 2;
+    }
+
+    SDL_SetRenderDrawColor(gRenderer, 20, 20, 20, 255);
+    SDL_RenderClear(gRenderer);
+
+    SDL_Rect rect{ gGameState.x, gGameState.y, 50, 50 };
+
+    SDL_SetRenderDrawColor(gRenderer, 255, 200, 0, 255);
+    SDL_RenderFillRect(gRenderer, &rect);
+
+    SDL_RenderPresent(gRenderer);
+}
+
+int
+main() {
+    SDL_Init(SDL_INIT_VIDEO);
+    gWindow = SDL_CreateWindow("Handmade Web", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960,
+                               540, SDL_WINDOW_RESIZABLE);
+    if (!gWindow) {
+        printf("Couldn't create window!\n");
+        return 0;
+    }
+
+    gRenderer =
+        SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!gRenderer) {
+        printf("Couldn't create renderer!\n");
+        return 0;
+    }
+
+    gGameState.x = 100;
+    gGameState.y = 100;
+
+    printf("Init success\n");
+
+    emscripten_set_main_loop(UpdateAndRender, 0, true);
 
     return 0;
 }

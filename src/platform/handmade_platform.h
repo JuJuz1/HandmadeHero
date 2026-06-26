@@ -14,7 +14,7 @@ extern "C" {
 #include <stddef.h> // size_t
 #include <stdint.h> // common types
 
-// Compilers
+/// Compilers
 
 #ifndef COMPILER_MSVC
 #    define COMPILER_MSVC 0
@@ -108,10 +108,21 @@ typedef struct PlatformExports {
 // All the memory the game needs
 typedef struct GameMemory {
     void* permanentStorage;
+    // TODO: because we target wasm32, better ways to do this? JUST TARGET 64???
+    // Although most browser already support wasm64 at the time 26/6/2026
+    // As an exercise it would be best to keep it 32-bit just to see how the code needs to change
+#if HANDMADE_WEB
+    u32 permanentStorageSize;
+#else
     u64 permanentStorageSize;
+#endif
 
     void* transientStorage;
+#if HANDMADE_WEB
+    u32 transientStorageSize;
+#else
     u64 transientStorageSize;
+#endif
 
     bool32 isInitialized;
 
