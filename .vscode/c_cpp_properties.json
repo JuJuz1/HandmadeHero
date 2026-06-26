@@ -74,7 +74,7 @@
             "compilerPath": "C:/devel/emsdk/upstream/bin/clang.exe",
             "cStandard": "c17",
             "cppStandard": "c++20",
-            "intelliSenseMode": "linux-clang-x64"
+            "intelliSenseMode": "linux-clang-x86"
         }
     ],
     "version": 4

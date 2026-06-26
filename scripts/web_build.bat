@@ -31,7 +31,13 @@ rem TODO: emcc defines and flags
 set commonCompilerDefines=-DHANDMADE_WEB=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
 set commonCompilerWarnings=-Wall -Wextra -Wpedantic -Wno-unused-function -Wno-missing-braces -Wno-unused-variable -Wno-unused-parameter -Wno-null-dereference -Wno-missing-field-initializers -Wno-gnu-anonymous-struct -Wno-nested-anon-types -Wno-sign-compare
 set commonCompilerFlags=-O0 -g2 -gsource-map --source-map-base http://localhost:8000/
-rem -s ASSERTIONS=1 -s SAFE_HEAP=1 -s STACK_OVERFLOW_CHECK=1 -s ALLOW_MEMORY_GROWTH=1
+rem -sASSERTIONS=1 -sSAFE_HEAP=1 -sSTACK_OVERFLOW_CHECK=1 -sALLOW_MEMORY_GROWTH=1
+
+if %useRealAssets% == 1 (
+    set commonCompilerFlags=%commonCompilerFlags% --preload-file ../../data/original@/original
+) else (
+    set commonCompilerFlags=%commonCompilerFlags% --preload-file ../../data/handmade@/handmade
+)
 
 if "%1" == "rel" (
     echo config: RELEASE
@@ -45,6 +51,8 @@ if "%1" == "rel" (
 )
 
 set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% %commonCompilerWarnings%
+rem 32 MB
+set initialMemory=33554432
 
 echo.
 
@@ -54,10 +62,9 @@ if %useCTime% == 1 (
     ctime.exe -begin web_handmade.ctm
 )
 
-
 echo web_handmade.cpp
-echo emcc %commonCompilerFlags% ../../src/platform/web/web_handmade.cpp -I ../../src -s USE_SDL=2 -o web_handmade.html
-emcc %commonCompilerFlags% ../../src/platform/web/web_handmade.cpp -I ../../src -s USE_SDL=2 -o web_handmade.html
+echo emcc %commonCompilerFlags% ../../src/platform/web/web_handmade.cpp -I ../../src -sUSE_SDL=2 -sINITIAL_MEMORY=%initialMemory% -o web_handmade.html
+emcc %commonCompilerFlags% ../../src/platform/web/web_handmade.cpp -I ../../src -sUSE_SDL=2 -sINITIAL_MEMORY=%initialMemory% -o web_handmade.html
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mweb_handmade.cpp failed[0m[1m
