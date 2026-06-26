@@ -33,6 +33,9 @@ set commonCompilerWarnings=-Wall -Wextra -Wpedantic -Wno-unused-function -Wno-mi
 set commonCompilerFlags=-gsource-map --source-map-base http://localhost:8000/
 rem -sASSERTIONS=1 -sSAFE_HEAP=1 -sSTACK_OVERFLOW_CHECK=1 -sALLOW_MEMORY_GROWTH=1
 
+rem couldn't get this to work easily, F11 works though, but alongside the button causes weird behaviour
+rem -sEXPORTED_FUNCTIONS=_main,_ToggleFullscreen -sEXPORTED_RUNTIME_METHODS=ccall,cwrap
+
 if %useRealAssets% == 1 (
     set commonCompilerFlags=%commonCompilerFlags% --preload-file ../../data/original@/original
 ) else (

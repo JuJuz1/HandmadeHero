@@ -145,7 +145,9 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) { return false; }
 
 namespace hm_web {
 
-extern "C" void
+// TODO: Expose to be called from Javascript, if we want to use the button instead of F11
+//extern "C"
+INTERNAL void
 ToggleFullscreen(SDL_Window* window) {
     const u32 flags{ SDL_GetWindowFlags(window) };
     if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
@@ -361,17 +363,18 @@ GetSecondsElapsed(u64 Start, u64 End) {
 
 INTERNAL void
 WebMainLoop() {
-    u64 endCounter{ hm_web::GetWallClock() };
+    const u64 endCounter{ hm_web::GetWallClock() };
     f64 secondsElapsed{ hm_web::GetSecondsElapsed(gLastCounter, endCounter) };
     gLastCounter = endCounter;
 
+    // 15 fps -> 66,66... ms
     constexpr f64 maxDelta{ 1 / 15.0f };
     if (secondsElapsed > maxDelta) {
         secondsElapsed = maxDelta;
     }
 
     gInput.frameDeltaTime = secondsElapsed;
-    printf("dt %.4f (%.2f ms)\n", secondsElapsed, secondsElapsed * 1000.0);
+    //printf("dt %.4f (%.2f ms)\n", secondsElapsed, secondsElapsed * 1000.0);
 
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gInput.playerInputs);
          ++controllerIndex) {
