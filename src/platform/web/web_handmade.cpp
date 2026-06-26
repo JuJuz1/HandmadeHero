@@ -145,6 +145,16 @@ DEBUG_WRITE_FILE(DEBUGWriteFile) { return false; }
 
 namespace hm_web {
 
+extern "C" void
+ToggleFullscreen(SDL_Window* window) {
+    const u32 flags{ SDL_GetWindowFlags(window) };
+    if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+        SDL_SetWindowFullscreen(window, 0);
+    } else {
+        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    }
+}
+
 NODISCARD
 INTERNAL WindowDimension
 GetWindowdimension(SDL_Window* window) {
@@ -281,10 +291,19 @@ ProcessPendingEvents(Input* input) {
 
             case SDL_SCANCODE_F11: {
                 if (isDown) {
-                    SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
-                    if (window) {
-                        //ToggleFullscreen(window);
+                    ToggleFullscreen(gWindow);
+                }
+            } break;
+
+            case SDL_SCANCODE_P: {
+                if (isDown) {
+                    if (gIsGamePaused) {
+                        printf("P: Game unpaused!\n");
+                    } else {
+                        printf("P: Game paused!\n");
                     }
+
+                    gIsGamePaused = !gIsGamePaused;
                 }
             } break;
 
@@ -343,11 +362,12 @@ GetSecondsElapsed(u64 Start, u64 End) {
 INTERNAL void
 WebMainLoop() {
     u64 endCounter{ hm_web::GetWallClock() };
-    const f64 secondsElapsed{ hm_web::GetSecondsElapsed(gLastCounter, endCounter) };
+    f64 secondsElapsed{ hm_web::GetSecondsElapsed(gLastCounter, endCounter) };
     gLastCounter = endCounter;
 
-    if (gIsGamePaused) {
-        return;
+    constexpr f64 maxDelta{ 1 / 15.0f };
+    if (secondsElapsed > maxDelta) {
+        secondsElapsed = maxDelta;
     }
 
     gInput.frameDeltaTime = secondsElapsed;
@@ -362,21 +382,23 @@ WebMainLoop() {
 
     hm_web::ProcessPendingEvents(&gInput);
 
-    ThreadContext threadContext{};
+    if (!gIsGamePaused) {
+        ThreadContext threadContext{};
 
-    // TODO: screen buffer
-    OffScreenBuffer screenBuff{};
-    screenBuff.memory = gScreenBuff.memory;
-    screenBuff.width = gScreenBuff.width;
-    screenBuff.height = gScreenBuff.height;
-    screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
-    screenBuff.pitch = gScreenBuff.pitch;
+        OffScreenBuffer screenBuff{};
+        screenBuff.memory = gScreenBuff.memory;
+        screenBuff.width = gScreenBuff.width;
+        screenBuff.height = gScreenBuff.height;
+        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
+        screenBuff.pitch = gScreenBuff.pitch;
 
-    // Game call
-    UpdateAndRender(&threadContext, &gGameMemory, &screenBuff, &gInput);
+        // Game call
+        UpdateAndRender(&threadContext, &gGameMemory, &screenBuff, &gInput);
 
-    const auto wndDimension{ hm_web::GetWindowdimension(gWindow) };
-    hm_web::DisplayBufferWindow(gRenderer, &gScreenBuff, wndDimension.width, wndDimension.height);
+        const auto wndDimension{ hm_web::GetWindowdimension(gWindow) };
+        hm_web::DisplayBufferWindow(gRenderer, &gScreenBuff, wndDimension.width,
+                                    wndDimension.height);
+    }
 }
 
 int

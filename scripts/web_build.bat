@@ -30,7 +30,7 @@ if %useCTime% == 1 (
 rem TODO: emcc defines and flags
 set commonCompilerDefines=-DHANDMADE_WEB=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
 set commonCompilerWarnings=-Wall -Wextra -Wpedantic -Wno-unused-function -Wno-missing-braces -Wno-unused-variable -Wno-unused-parameter -Wno-null-dereference -Wno-missing-field-initializers -Wno-gnu-anonymous-struct -Wno-nested-anon-types -Wno-sign-compare
-set commonCompilerFlags=-O0 -g2 -gsource-map --source-map-base http://localhost:8000/
+set commonCompilerFlags=-gsource-map --source-map-base http://localhost:8000/
 rem -sASSERTIONS=1 -sSAFE_HEAP=1 -sSTACK_OVERFLOW_CHECK=1 -sALLOW_MEMORY_GROWTH=1
 
 if %useRealAssets% == 1 (
@@ -41,12 +41,13 @@ if %useRealAssets% == 1 (
 
 if "%1" == "rel" (
     echo config: RELEASE
-    set commonCompilerFlags=-O3
+    set commonCompilerFlags=%commonCompilerFlags% -O3
 ) else if "%1" == "release" (
     echo config: RELEASE
-    set commonCompilerFlags=-O3
+    set commonCompilerFlags=%commonCompilerFlags% -O3
 ) else (
     echo config: DEBUG
+    set commonCompilerFlags=%commonCompilerFlags% -O0 -g2
     set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
 )
 
