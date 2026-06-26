@@ -24,6 +24,7 @@
 #include <x86intrin.h> // Cpu intrinsics
 
 #include "game/handmade.h"
+#include "game/handmade_input.h"
 
 #include "sdl_handmade.h"
 
@@ -419,14 +420,6 @@ HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bo
 }
 
 INTERNAL void
-ProcessInputEvent(Button* button, bool32 isDown) {
-    if (button->endedDown != isDown) {
-        button->endedDown = isDown;
-        ++button->halfTransitionCount;
-    }
-}
-
-INTERNAL void
 ProcessPendingEvents(Input* input, AllState* allState) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -456,65 +449,65 @@ ProcessPendingEvents(Input* input, AllState* allState) {
 
             switch (scancode) {
             case SDL_SCANCODE_W: {
-                ProcessInputEvent(&input->playerInputs->up, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->up, isDown);
             } break;
             case SDL_SCANCODE_S: {
-                ProcessInputEvent(&input->playerInputs->down, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->down, isDown);
             } break;
             case SDL_SCANCODE_A: {
-                ProcessInputEvent(&input->playerInputs->left, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->left, isDown);
             } break;
             case SDL_SCANCODE_D: {
-                ProcessInputEvent(&input->playerInputs->right, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
                 //case SDL_SCANCODE_UP: {
-                //    ProcessInputEvent(&input->playerInputs[1].up, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].up, isDown);
                 //} break;
                 //case SDL_SCANCODE_DOWN: {
-                //    ProcessInputEvent(&input->playerInputs[1].down, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].down, isDown);
                 //} break;
                 //case SDL_SCANCODE_LEFT: {
-                //    ProcessInputEvent(&input->playerInputs[1].left, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].left, isDown);
                 //} break;
                 //case SDL_SCANCODE_RIGHT: {
-                //    ProcessInputEvent(&input->playerInputs[1].right, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].right, isDown);
                 //} break;
 
             case SDL_SCANCODE_UP: {
-                ProcessInputEvent(&input->playerInputs->actionUp, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
             case SDL_SCANCODE_DOWN: {
-                ProcessInputEvent(&input->playerInputs->actionDown, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
             case SDL_SCANCODE_LEFT: {
-                ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
             case SDL_SCANCODE_RIGHT: {
-                ProcessInputEvent(&input->playerInputs->actionRight, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
             case SDL_SCANCODE_SPACE: {
-                ProcessInputEvent(&input->playerInputs->space, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
             case SDL_SCANCODE_Q: {
-                ProcessInputEvent(&input->playerInputs->Q, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
             case SDL_SCANCODE_E: {
-                ProcessInputEvent(&input->playerInputs->E, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
             case SDL_SCANCODE_R: {
-                ProcessInputEvent(&input->playerInputs->R, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
             } break;
 
             case SDL_SCANCODE_LSHIFT:
             case SDL_SCANCODE_RSHIFT: {
-                ProcessInputEvent(&input->playerInputs->shift, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
             } break;
             case SDL_SCANCODE_RETURN: {
-                ProcessInputEvent(&input->playerInputs->enter, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;
 
             case SDL_SCANCODE_F4: {
@@ -582,7 +575,7 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             } break;
 
             case SDL_SCANCODE_Z: {
-                ProcessInputEvent(&input->playerInputs->Z, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Z, isDown);
             } break;
 #endif
 
@@ -852,14 +845,9 @@ main() {
             game = hm_sdl::LoadGameCode(srcDllPath.data_, lockFilePath.data_);
         }
 
-        // Keyboard input
+        /// Keyboard input
 
-        for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput.playerInputs);
-             ++controllerIndex) {
-            for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
-                gameInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
-            }
-        }
+        hm_input::ClearInputTransitionCounts(gameInput);
 
         hm_sdl::ProcessPendingEvents(&gameInput, &allState);
 

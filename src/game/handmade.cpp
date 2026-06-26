@@ -38,42 +38,6 @@ GLOBAL GameMemory* gMemory;
 #include "game/handmade_entity.cpp"
 // clang-format on
 
-namespace hm_input {
-
-/**
- * Returns true if the button was just pressed during the frame
- */
-NODISCARD
-INTERNAL bool32
-ActionJustPressed(const Button* button) {
-    const bool32 result{ button->endedDown && button->halfTransitionCount > 0 };
-    return result;
-}
-
-/**
- * Returns true if the button was pressed during the frame
- * As this returns true for the first frame as well, ActionJustPressed and ActionPressed both return
- * true for the first frame for the same button
- */
-NODISCARD
-INTERNAL bool32
-ActionPressed(const Button* button) {
-    const bool32 result{ button->endedDown };
-    return result;
-}
-
-/**
- * Returns true if the button was just released during the frame
- */
-NODISCARD
-INTERNAL bool32
-ActionReleased(const Button* button) {
-    const bool32 result{ !button->endedDown && button->halfTransitionCount > 0 };
-    return result;
-}
-
-} //namespace hm_input
-
 /**
  * Write the sound data to buff
  */

@@ -58,6 +58,7 @@
 #include <cstdio> // sprintf_s
 
 #include "game/handmade.h"
+#include "game/handmade_input.h"
 
 #include "win32_handmade.h"
 
@@ -738,15 +739,6 @@ HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bo
 }
 
 INTERNAL void
-ProcessInputMessage(Button* button, bool32 isDown) {
-    // NOTE: maybe just use if instead of ASSERT due to the way we do mouse input polling atm
-    if (button->endedDown != isDown) {
-        button->endedDown = isDown;
-        ++button->halfTransitionCount;
-    }
-}
-
-INTERNAL void
 ProcessPendingMessages(Input* input, AllState* allState) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
@@ -781,66 +773,66 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             case 'W': {
                 // This approach won't work for justPressed, we have to use halfTransitionCount
                 //input->playerInputs->up.pressed = true;
-                ProcessInputMessage(&input->playerInputs->up, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->up, isDown);
             } break;
             case 'S': {
-                ProcessInputMessage(&input->playerInputs->down, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->down, isDown);
             } break;
             case 'A': {
-                ProcessInputMessage(&input->playerInputs->left, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->left, isDown);
             } break;
             case 'D': {
-                ProcessInputMessage(&input->playerInputs->right, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
                 // TODO: remove these, only for debugging the second player
                 //case VK_UP: {
-                //    ProcessInputMessage(&input->playerInputs[1].up, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].up, isDown);
                 //} break;
                 //case VK_DOWN: {
-                //    ProcessInputMessage(&input->playerInputs[1].down, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].down, isDown);
                 //} break;
                 //case VK_LEFT: {
-                //    ProcessInputMessage(&input->playerInputs[1].left, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].left, isDown);
                 //} break;
                 //case VK_RIGHT: {
-                //    ProcessInputMessage(&input->playerInputs[1].right, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].right, isDown);
                 //} break;
 
             case VK_UP: {
-                ProcessInputMessage(&input->playerInputs->actionUp, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
             case VK_DOWN: {
-                ProcessInputMessage(&input->playerInputs->actionDown, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
             case VK_LEFT: {
-                ProcessInputMessage(&input->playerInputs->actionLeft, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
             case VK_RIGHT: {
-                ProcessInputMessage(&input->playerInputs->actionRight, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
             case VK_SPACE: {
-                ProcessInputMessage(&input->playerInputs->space, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
             case 'Q': {
-                ProcessInputMessage(&input->playerInputs->Q, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
             case 'E': {
-                ProcessInputMessage(&input->playerInputs->E, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
             case 'R': {
-                ProcessInputMessage(&input->playerInputs->R, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
             } break;
 
             case VK_SHIFT: {
-                ProcessInputMessage(&input->playerInputs->shift, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
             } break;
             // Enter
             case VK_RETURN: {
-                ProcessInputMessage(&input->playerInputs->enter, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;
 
             case VK_F4: {
@@ -908,7 +900,7 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             } break;
 
             case 'Z': {
-                ProcessInputMessage(&input->playerInputs->Z, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Z, isDown);
             } break;
 #endif
 
@@ -1222,14 +1214,9 @@ WinMain(
             game = hm_win32::LoadGameCode(srcDllPath.data_, tempDllPath.data_, lockFilePath.data_);
         }
 
-        // Keyboard input
+        /// Keyboard input
 
-        for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput.playerInputs);
-             ++controllerIndex) {
-            for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
-                gameInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
-            }
-        }
+        hm_input::ClearInputTransitionCounts(&gameInput);
 
         hm_win32::ProcessPendingMessages(&gameInput, &allState);
 
@@ -1263,16 +1250,16 @@ WinMain(
         }
 
         // NOTE: query these in ProcessPendingMessages so everything is in one place?
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.left,
-                                      GetKeyState(VK_LBUTTON) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.middle,
-                                      GetKeyState(VK_MBUTTON) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.right,
-                                      GetKeyState(VK_RBUTTON) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.x1,
-                                      GetKeyState(VK_XBUTTON1) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.x2,
-                                      GetKeyState(VK_XBUTTON2) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.left,
+                                    GetKeyState(VK_LBUTTON) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.middle,
+                                    GetKeyState(VK_MBUTTON) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.right,
+                                    GetKeyState(VK_RBUTTON) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.x1,
+                                    GetKeyState(VK_XBUTTON1) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.x2,
+                                    GetKeyState(VK_XBUTTON2) & (1 << 15));
 
         if (gIsGamePaused) {
             continue;
