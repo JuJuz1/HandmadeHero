@@ -350,7 +350,8 @@ ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     }
 
     // TODO: Better hash func
-    const i32 hashBucket{ a->storageIndex & (gameState->collisionRuleHash.size - 1) };
+    const i32 hashBucket{ static_cast<i32>(a->storageIndex &
+                                           (gameState->collisionRuleHash.size - 1)) };
     for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
         if (rule->storageIndexA == a->storageIndex && rule->storageIndexB == b->storageIndex) {
             result = rule->shouldCollide;
