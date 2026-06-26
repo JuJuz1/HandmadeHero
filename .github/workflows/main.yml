@@ -1,0 +1,61 @@
+name: Build All Platforms
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-win32:
+    runs-on: windows-2025-vs2026
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
+      - name: Get toolset info
+        run: cl
+
+      - name: Build Win32
+        shell: cmd
+        run: |
+          scripts\win32_build.bat
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install deps
+        # Have to apt-get update to find SDL2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang libsdl2-dev
+
+      - name: Build Linux
+        run: |
+          chmod +x ./scripts/linux_build.sh
+          ./scripts/linux_build.sh
+
+  build-macos:
+    # See if we can do this without a paid Github version
+    runs-on: macos-latest-large
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install SDL2
+        run: |
+          brew install sdl2
+
+      - name: Build macOS
+        run: |
+          chmod +x ./scripts/macos_build.sh
+          ./scripts/macos_build.sh
+
+# TODO: web
+# https://github.com/emscripten-core/setup-emsdk
