@@ -506,6 +506,10 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             case SDL_SCANCODE_RSHIFT: {
                 hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
             } break;
+            case SDL_SCANCODE_LCTRL:
+            case SDL_SCANCODE_RCTRL: {
+                hm_input::ProcessInputEvent(&input->playerInputs->ctrl, isDown);
+            } break;
             case SDL_SCANCODE_RETURN: {
                 hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;

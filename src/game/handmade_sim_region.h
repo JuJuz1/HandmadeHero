@@ -25,6 +25,7 @@ enum class EntityType {
     FAMILIAR,
     MONSTER,
     SWORD,
+    STAIRWELL,
 };
 
 GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };

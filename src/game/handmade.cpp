@@ -335,6 +335,22 @@ AddPlayer(GameState* gameState) {
 
 NODISCARD
 INTERNAL AddLowEntityResult
+AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
+    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+
+    auto stair{ AddLowEntity(gameState, EntityType::STAIRWELL, pos) };
+    auto* lowEntity{ stair.lowEntity };
+
+    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
+    lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
+    lowEntity->sim.dim.x = gameState->world->tileDepthInMeters;
+    //AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+
+    return stair;
+}
+
+NODISCARD
+INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
 
@@ -399,6 +415,8 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tree00.bmp");
     gameState->shadow =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_shadow.bmp");
+
+    gameState->stairwell = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock02.bmp");
 
     gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock03.bmp");
 
@@ -529,6 +547,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     i32 absTileZ{ screenBaseZ };
 
     i32 wallsAdded{};
+    i32 stairsAdded{};
 
     // How many rooms to create
     constexpr i32 screenCount{ 50 };
@@ -538,12 +557,11 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         ASSERT(randomNumIndex < hm_random::randomNumbers.size);
         u32 randomChoice;
         // Lateral only
-        //if (doorUp || doorDown) {
-        // TODO: remove comments
-        randomChoice = hm_random::randomNumbers[randomNumIndex++] % 2;
-        //} else {
-        //    randomChoice = hm_random::randomNumbers[randomNumIndex++] % 3;
-        //}
+        if (doorUp || doorDown) {
+            randomChoice = hm_random::randomNumbers[randomNumIndex++] % 2;
+        } else {
+            randomChoice = hm_random::randomNumbers[randomNumIndex++] % 3;
+        }
 
         bool32 createdZDoor{};
         // randomChoice of 2 means the room is blocked and has a door going up
@@ -566,6 +584,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                 const i32 absTileX{ (screenX * tiles_Per_Width) + tileX };
                 const i32 absTileY{ (screenY * tiles_Per_Height) + tileY };
 
+                // Door
                 u32 tileValue{ 2 };
                 if (tileX == 0 && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
                     tileValue = blocked_Tile_Value;
@@ -582,18 +601,14 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                     tileValue = blocked_Tile_Value;
                 }
 
-                if (tileX == 10 && tileY == 6) {
-                    if (doorUp) {
-                        tileValue = 4;
-                    }
-                    if (doorDown) {
-                        tileValue = 5;
-                    }
-                }
-
                 if (tileValue == blocked_Tile_Value) {
                     const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
                     ++wallsAdded;
+                } else if (createdZDoor) {
+                    if (tileX == 10 && tileY == 6) {
+                        AddStair(gameState, absTileX, absTileY, doorDown ? absTileZ - 1 : absTileZ);
+                        ++stairsAdded;
+                    }
                 }
             }
         }
@@ -627,9 +642,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         }
     }
 
-    if (wallsAdded > 0) {
-        PRINT_I32("Walls added: ", wallsAdded);
-    }
+    PRINT_I32("Walls added: ", wallsAdded);
+    PRINT_I32("Stairs added: ", stairsAdded);
 
     const i32 cameraTileX{ screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2) };
     const i32 cameraTileY{ screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2) };
@@ -881,6 +895,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 controlled->dSword.x = 1.0f;
             }
 
+            /// Debug code
+            if (hm_input::ActionJustPressed(&buttons->right)) {
+                if (hm_input::ActionPressed(&buttons->ctrl)) {
+                    gameState->showCollisionBox = !gameState->showCollisionBox;
+                }
+            }
+
             // The separation of handling input and moving the player is not yet clear
             //MoveEntity(gameState, controllingEntity, controllerIndex, inputButtons,
             //           acceleration, delta);
@@ -994,6 +1015,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         case EntityType::WALL: {
             // Tree bitmaps
             PushBitmap(&pieceGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
+        } break;
+
+        case EntityType::STAIRWELL: {
+            PushBitmap(&pieceGroup, &gameState->stairwell, Vec2{}, 0, Vec2{ 37, 37 });
         } break;
 
         case EntityType::HERO: {
@@ -1179,10 +1204,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // Debug collision box
-            //DrawRectangle(screenBuff, leftTop,
-            //              leftTop + entityWidthHeight * gameState->metersToPixels // *0.95f
-            //              ,
-            //              r, g, b);
+            if (gameState->showCollisionBox) {
+                DrawRectangle(screenBuff, leftTop,
+                              leftTop + entityWidthHeight * gameState->metersToPixels // *0.95f
+                              ,
+                              r, g, b);
+            }
         }
     }
 

@@ -830,6 +830,9 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             case VK_SHIFT: {
                 hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
             } break;
+            case VK_CONTROL: {
+                hm_input::ProcessInputEvent(&input->playerInputs->ctrl, isDown);
+            } break;
             // Enter
             case VK_RETURN: {
                 hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);

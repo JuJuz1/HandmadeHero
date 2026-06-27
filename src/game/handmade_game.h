@@ -100,6 +100,8 @@ struct GameState {
     LoadedBitmapInfo tree;
     LoadedBitmapInfo shadow;
 
+    LoadedBitmapInfo stairwell;
+
     LoadedBitmapInfo sword;
 
     bool32 startWithAPlayer;
@@ -107,6 +109,9 @@ struct GameState {
     // Must be power of two!
     Array<PairWiseCollisionRule*, 256> collisionRuleHash;
     PairWiseCollisionRule* firstFreeCollisionRule;
+
+    // Debug
+    bool32 showCollisionBox;
 };
 
 // TODO: this should just be a part of the renderer...
