@@ -72,6 +72,11 @@ struct ControlledHero {
     bool32 requestResetSword; // Reset sword pos
 };
 
+enum class PairWiseCollisionRuleFlag {
+    SHOULD_COLLIDE = 1,
+    TEMPORARY,
+};
+
 struct PairWiseCollisionRule {
     bool32 shouldCollide;
     i32 storageIndexA;
@@ -114,6 +119,11 @@ struct GameState {
     bool32 showCollisionBox;
 };
 
+INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
+
+INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
+                               bool32 shouldCollide); // TODO: PairWiseCollisionRuleFlag flags
+
 // TODO: this should just be a part of the renderer...
 struct EntityVisiblePieceGroup {
     GameState* gameState;
@@ -136,10 +146,5 @@ GetLowEntity(GameState* gameState, i32 lowIndex) {
 
     return lowEntity;
 }
-
-INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
-
-INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
-                               bool32 shouldCollide);
 
 #endif // HANDMADE_GAME_H

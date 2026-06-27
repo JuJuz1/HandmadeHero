@@ -97,3 +97,13 @@ AddRadiusTo(Rect3 rect, Vec3 radius) {
 
     return result;
 }
+
+// Doesn't work for rotated rects!
+NODISCARD
+INTERNAL inline bool32
+RectsIntersect(Rect3 a, Rect3 b) {
+    const bool32 result{ !((b.max.x < a.min.x || b.min.x > a.max.x) ||
+                           (b.max.y < a.min.y || b.min.y > a.max.y) ||
+                           (b.max.z < a.min.z || b.min.z > a.max.z)) };
+    return result;
+}

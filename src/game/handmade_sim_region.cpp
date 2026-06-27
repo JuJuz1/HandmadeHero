@@ -364,10 +364,14 @@ ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
 
 NODISCARD
 INTERNAL bool32
-HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
+HandleCollision(GameState* gameState, SimEntity* entity, SimEntity* hitEntity,
+                bool32 wasOverLapping) {
     bool32 stopsOnCollision{};
 
-    if (!(entity->type == EntityType::SWORD)) {
+    if (entity->type == EntityType::SWORD) {
+        AddCollisionRule(gameState, entity->storageIndex, hitEntity->storageIndex, false);
+        stopsOnCollision = false;
+    } else {
         stopsOnCollision = true;
     }
 
@@ -381,6 +385,12 @@ HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
         }
 
         PRINT_I32("Monster hit, curr hp: ", a->hitPointMax);
+    }
+
+    if (a->type == EntityType::HERO && b->type == EntityType::STAIRWELL) {
+        // Allow pass through
+        //AddCollisionRule(gameState, entity->storageIndex, hitEntity->storageIndex, false);
+        stopsOnCollision = false;
     }
 
     return stopsOnCollision;
@@ -440,6 +450,29 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         distanceRemaining = 10000.0f;
     }
 
+    // Initial inclusion test
+    i32 overLappingCount{};
+    Array<SimEntity*, 16> overlappingEntities;
+    {
+        const Rect3 entityRect{ RectCenterDim(entity->pos, entity->dim) };
+        for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
+            SimEntity* testEntity{ &simRegion->entities[highIndex] };
+            if (ShouldCollide(gameState, entity, testEntity)) {
+                Rect3 testEntityRect{ RectCenterDim(testEntity->pos, testEntity->dim) };
+                if (RectsIntersect(entityRect, testEntityRect)) {
+                    if (overLappingCount < overlappingEntities.size) {
+                        //AddCollisionRule(gameState, entity->storageIndex,
+                        //testEntity->storageIndex,
+                        //                 false);
+                        overlappingEntities[overLappingCount++] = testEntity;
+                    } else {
+                        INVALID_CODE_PATH;
+                    }
+                }
+            }
+        }
+    }
+
     constexpr i32 iterationCount{ 4 };
 
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
@@ -459,7 +492,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         Vec3 wallNormal{};
         TestWallResult testWallResult{};
 
-        i32 hitHighEntityIndex{}; // Probably not needed
         SimEntity* hitEntity{};
 
         const Vec3 desiredPos{ entity->pos + playerDelta };
@@ -486,7 +518,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                         tMin = testWallResult.tMin;
                         wallNormal = Vec3{ -1, 0 };
                         //hitWall = true;
-                        hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
                     }
 
@@ -496,7 +527,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                         tMin = testWallResult.tMin;
                         wallNormal = Vec3{ 1, 0 };
                         //hitWall = true;
-                        hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
                     }
 
@@ -507,7 +537,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                         tMin = testWallResult.tMin;
                         wallNormal = Vec3{ 0, -1 };
                         //hitwall = true;
-                        hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
                     }
 
@@ -517,7 +546,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                         tMin = testWallResult.tMin;
                         wallNormal = Vec3{ 0, 1 };
                         //hitwall = true;
-                        hitHighEntityIndex = highIndex;
                         hitEntity = testEntity;
                     }
                 }
@@ -535,14 +563,30 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         if (hitEntity) {
             playerDelta = desiredPos - entity->pos;
 
-            const bool32 stopsOnCollision{ HandleCollision(entity, hitEntity) };
+            i32 overLappingIndex{ overLappingCount };
+            for (i32 i{}; i < overLappingCount; ++i) {
+                if (hitEntity == overlappingEntities[i]) {
+                    overLappingIndex = i;
+                    break;
+                }
+            }
+
+            const bool32 wasOverLapping{ overLappingIndex != overLappingCount };
+            const bool32 stopsOnCollision{ HandleCollision(gameState, entity, hitEntity,
+                                                           wasOverLapping) };
 
             // Slide along
             if (stopsOnCollision) {
                 playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
                 entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
             } else {
-                AddCollisionRule(gameState, entity->storageIndex, hitEntity->storageIndex, false);
+                if (wasOverLapping) {
+                    overlappingEntities[overLappingIndex] = overlappingEntities[--overLappingCount];
+                } else if (overLappingCount < overlappingEntities.size) {
+                    overlappingEntities[overLappingCount++] = hitEntity;
+                } else {
+                    INVALID_CODE_PATH;
+                }
             }
         } else {
             break;
