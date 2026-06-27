@@ -851,7 +851,7 @@ main() {
 
         /// Keyboard input
 
-        hm_input::ClearInputTransitionCounts(gameInput);
+        hm_input::ClearInputTransitionCounts(&gameInput);
 
         hm_sdl::ProcessPendingEvents(&gameInput, &allState);
 

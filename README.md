@@ -25,7 +25,7 @@ Header files include every dependency and declare all functions and operators. T
 
 Global variables which are meant to be modified are prefixed with a "g"
 
-_ is used to postfix a variable, a function or a macro meant to be accessed or called with extra caution (somewhat meaning they are "private" in the object-oriented sense). This is to inform the caller that these are usually internal to the data structure, implementation etc... Prefixing with _ is problematic as these are reserved for standard library definitions and such!
+_ is used to postfix a variable, a function or a macro meant to be accessed or called with extra caution (somewhat meaning they are "private" in the object-oriented sense). This is to inform the caller that these are usually internal to the data structure, implementation etc... Prefixing with _ is problematic as these are reserved for standard library definitions, compiler internals and such!
 
 ...
 
@@ -45,6 +45,8 @@ Supported automatically when modifying game code only! All other files except pl
     - is action just released (last frame the key was held)
 
 ## Building
+
+TODO: Arm cpu support??
 
 ### Windows
 
@@ -141,3 +143,9 @@ Run it:
 ### Using the original art assets
 
 By default the build scripts use placeholder assets I have created. If you wish to use the original art assets obtained by preordering the game, create a folder inside data called "original". Then add test and test2 folders from the downloaded art zip to data/original. The build scripts should automatically detect the existence of data/original and configure HANDMADE_USE_REAL_ASSETS to 1
+
+### CI
+
+Some ideas:
+- Have a test run that just runs the executable for a couple of seconds and verify it doesn't exit for that time
+- In addition supply some input and approximate where the player would be for those inputs?
