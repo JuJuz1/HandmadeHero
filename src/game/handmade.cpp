@@ -765,7 +765,7 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
 }
 
 INTERNAL void
-DrawHitpoints(SimEntity* entity, EntityVisiblePieceGroup* group) {
+DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
     if (entity->hitPointMax >= 1) {
         constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
         constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
@@ -773,7 +773,7 @@ DrawHitpoints(SimEntity* entity, EntityVisiblePieceGroup* group) {
         constexpr Vec2 dPos{ spacingX, 0.0f };
 
         for (i32 i{}; i < entity->hitPointMax; ++i) {
-            HitPoint* hitPoint{ &entity->hitPoints[i] };
+            const HitPoint* hitPoint{ &entity->hitPoints[i] };
             Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
             if (hitPoint->filledAmount == 0) {
                 color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
@@ -1166,7 +1166,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         // Draw pieces
         for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
-            EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
+            const EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
             const Vec2 center{ entityGroundPoint.x + piece->offset.x,
                                entityGroundPoint.y + piece->offset.y + piece->offsetZ +
                                    (entityZ * piece->entityZC) };

@@ -74,13 +74,16 @@ rem other compile options
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
 
 set commonCompilerFlags=/MTd /Od /Zi
+set dllFlags=/LDd
 
 if "%1" == "rel" (
     echo config: RELEASE
     set commonCompilerFlags=/MT /O2
+    set dllFlags=/LD
 ) else if "%1" == "release" (
     echo config: RELEASE
     set commonCompilerFlags=/MT /O2
+    set dllFlags=/LD
 ) else (
     echo config: DEBUG
     set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
@@ -114,7 +117,7 @@ if %useCTime% == 1 (
     ctime.exe -begin win32_handmade.ctm
 )
 
-cl %commonCompilerFlags% ../src/game/handmade.cpp /I ../src /LD /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
+cl %commonCompilerFlags% ../src/game/handmade.cpp /I ../src %dllFlags% /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
