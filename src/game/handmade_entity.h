@@ -8,12 +8,12 @@ IsSet(const SimEntity* simEntity, i32 flag) {
 }
 
 INTERNAL void
-AddFlag(SimEntity* simEntity, i32 flag) {
+AddFlags(SimEntity* simEntity, i32 flag) {
     simEntity->flags |= flag;
 }
 
 INTERNAL void
-ClearFlag(SimEntity* simEntity, i32 flag) {
+ClearFlags(SimEntity* simEntity, i32 flag) {
     simEntity->flags &= ~flag;
 }
 
@@ -21,13 +21,13 @@ GLOBAL constexpr Vec3 invalid_Pos{ 100000.0f, 100000.0f, 100000.0f };
 
 INTERNAL void
 MakeEntityNonSpatial(SimEntity* entity) {
-    AddFlag(entity, SimEntityFlags::NON_SPATIAL);
+    AddFlags(entity, SimEntityFlags::NON_SPATIAL);
     entity->pos = invalid_Pos;
 }
 
 INTERNAL void
 MakeEntitySpatial(SimEntity* entity, Vec3 p, Vec3 dP) {
-    ClearFlag(entity, SimEntityFlags::NON_SPATIAL);
+    ClearFlags(entity, SimEntityFlags::NON_SPATIAL);
     entity->pos = p;
     entity->velocity = dP;
 }

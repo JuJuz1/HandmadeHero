@@ -78,7 +78,7 @@ enum class PairWiseCollisionRuleFlag {
 };
 
 struct PairWiseCollisionRule {
-    bool32 shouldCollide;
+    bool32 canCollide;
     i32 storageIndexA;
     i32 storageIndexB;
     PairWiseCollisionRule* nextInHash;
@@ -122,7 +122,7 @@ struct GameState {
 INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
 
 INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
-                               bool32 shouldCollide); // TODO: PairWiseCollisionRuleFlag flags
+                               bool32 CanCollide); // TODO: PairWiseCollisionRuleFlag flags
 
 // TODO: this should just be a part of the renderer...
 struct EntityVisiblePieceGroup {

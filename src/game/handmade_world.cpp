@@ -136,12 +136,13 @@ MapIntoChunkSpace(const World* world, WorldPosition pos, Vec3 offset) {
 
 NODISCARD
 INTERNAL WorldPosition
-ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ) {
+ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ,
+                              Vec3 additionalOffset = {}) {
     const Vec3 offset{ world->tileSideInMeters * Vec3{ static_cast<f32>(tileX),
                                                        static_cast<f32>(tileY),
                                                        static_cast<f32>(tileZ) } };
     WorldPosition basePos{};
-    const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset) };
+    const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset + additionalOffset) };
     ASSERT(IsCanonical(world, result.offset_));
 
     return result;
@@ -297,9 +298,9 @@ ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex, LowEntity* 
 
     if (newPos) {
         lowEntity->pos = *newPos;
-        ClearFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
+        ClearFlags(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
     } else {
         lowEntity->pos = NullWorldPos();
-        AddFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
+        AddFlags(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
     }
 }

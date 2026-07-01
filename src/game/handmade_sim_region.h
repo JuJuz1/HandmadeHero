@@ -28,6 +28,37 @@ enum class EntityType {
     STAIRWELL,
 };
 
+NODISCARD
+INTERNAL const char*
+EntityTypeToStr(EntityType type) {
+    const char* typeStr{};
+    switch (type) {
+    case EntityType::WALL: {
+        typeStr = "Wall";
+    } break;
+    case EntityType::HERO: {
+        typeStr = "Hero";
+    } break;
+    case EntityType::FAMILIAR: {
+        typeStr = "Familiar";
+    } break;
+    case EntityType::MONSTER: {
+        typeStr = "Monstar";
+    } break;
+    case EntityType::SWORD: {
+        typeStr = "Sword";
+    } break;
+    case EntityType::STAIRWELL: {
+        typeStr = "Stairwell";
+    } break;
+    default: {
+        INVALID_CODE_PATH;
+    }
+    }
+
+    return typeStr;
+}
+
 GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };
 
 struct HitPoint {
@@ -48,6 +79,7 @@ struct EntityReference {
 enum SimEntityFlags : u32 {
     COLLIDES = (1 << 0),
     NON_SPATIAL = (1 << 1),
+    MOVEABLE = (1 << 2),
 
     SIMULATING = (1 << 30),
 };

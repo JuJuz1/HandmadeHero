@@ -296,7 +296,7 @@ AddSword(GameState* gameState) {
     lowEntity->sim.dim.y = 0.75f;
     lowEntity->sim.dim.x = 0.3f;
     // TODO: needed?
-    //AddFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
+    AddFlags(&lowEntity->sim, SimEntityFlags::NON_SPATIAL | SimEntityFlags::MOVEABLE);
 
     return sword;
 }
@@ -312,7 +312,7 @@ AddPlayer(GameState* gameState) {
     lowEntity->sim.dim.y = 0.5f;  // 1.4f;
     lowEntity->sim.dim.x = 0.75f; // entity->dimension.y * 0.75f;
 
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     InitHitpoints(lowEntity, 3);
 
@@ -336,15 +336,18 @@ AddPlayer(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    WorldPosition pos{ ChunkPositionFromTilePosition(
+        gameState->world, tileX, tileY, tileZ,
+        Vec3{ 0, 0, gameState->world->tileDepthInMeters * 0.5f }) };
 
     auto stair{ AddLowEntity(gameState, EntityType::STAIRWELL, pos) };
     auto* lowEntity{ stair.lowEntity };
 
-    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
     lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
-    lowEntity->sim.dim.x = gameState->world->tileDepthInMeters;
-    //AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
+    // @Hack
+    lowEntity->sim.dim.x = gameState->world->tileDepthInMeters * 1.2f;
+    //AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return stair;
 }
@@ -359,7 +362,7 @@ AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 
     lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
     lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return wall;
 }
@@ -374,7 +377,7 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 
     lowEntity->sim.dim.y = 0.75f;
     lowEntity->sim.dim.x = 0.6f;
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     InitHitpoints(lowEntity, 5);
 
@@ -391,7 +394,7 @@ AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 
     lowEntity->sim.dim.y = 0.5f;
     lowEntity->sim.dim.x = 1.0f;
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     return familiar;
 }
@@ -732,11 +735,11 @@ ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
 }
 
 INTERNAL void
-AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 shouldCollide) {
+AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 canCollide) {
     PRINT("AddCollisionRule\n");
     PRINT_I32("A: ", storageIndexA);
     PRINT_I32("B: ", storageIndexB);
-    PRINT_I32("Collide: ", shouldCollide);
+    PRINT_I32("Collide: ", canCollide);
 
     if (storageIndexA > storageIndexB) {
         const i32 temp{ storageIndexA };
@@ -774,7 +777,7 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
     if (found) {
         found->storageIndexA = storageIndexA;
         found->storageIndexB = storageIndexB;
-        found->shouldCollide = shouldCollide;
+        found->canCollide = canCollide;
     }
 }
 
@@ -880,6 +883,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     controlled->requestReset = true;
                 }
             }
+
+            // TODO: f to stop familiar follow and shift + f to reset familiar!
 
             // Sword
             if (hm_input::ActionJustPressed(&buttons->actionUp)) {
@@ -1018,7 +1023,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::STAIRWELL: {
-            PushBitmap(&pieceGroup, &gameState->stairwell, Vec2{}, 0, Vec2{ 37, 37 });
+            PushRect(&pieceGroup, Vec2{}, 0, Vec2{ entity->dim.x, entity->dim.y },
+                     Vec4{ 1, 1, 0, 1 });
+            //PushBitmap(&pieceGroup, &gameState->stairwell, Vec2{}, 0, Vec2{ 37, 37 });
         } break;
 
         case EntityType::HERO: {
@@ -1165,7 +1172,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
 
         //if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
-        if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
+        if (!IsSet(entity, SimEntityFlags::NON_SPATIAL) &&
+            IsSet(entity, SimEntityFlags::MOVEABLE)) {
             MoveEntity(gameState, simRegion, entity, moveSpec, ddP, delta);
         }
 
@@ -1218,26 +1226,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
     PRINT_I32("Max index: ", simRegion->maxRecordedEntityVelocityIndex);
 
-    const char* typeStr{};
-    switch (simRegion->maxRecordedEntityVelocityType) {
-    case EntityType::WALL: {
-        typeStr = "Wall";
-    } break;
-    case EntityType::HERO: {
-        typeStr = "Hero";
-    } break;
-    case EntityType::FAMILIAR: {
-        typeStr = "Familiar";
-    } break;
-    case EntityType::MONSTER: {
-        typeStr = "Monstar";
-    } break;
-    case EntityType::SWORD: {
-        typeStr = "Sword";
-    } break;
-    }
-
-    ASSERT(typeStr);
+    const char* typeStr{ EntityTypeToStr(simRegion->maxRecordedEntityVelocityType) };
     PRINT("Max type: ");
     PRINT(typeStr);
     PRINT("\n");
