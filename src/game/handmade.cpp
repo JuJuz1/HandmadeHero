@@ -346,7 +346,7 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
     lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
     // @Hack
-    lowEntity->sim.dim.x = gameState->world->tileDepthInMeters * 1.2f;
+    lowEntity->sim.dim.z = gameState->world->tileDepthInMeters * 1.2f;
     //AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return stair;

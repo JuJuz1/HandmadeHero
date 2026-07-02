@@ -176,7 +176,8 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
                             LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
                             if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL)) {
                                 Vec3 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
-                                if (EntityOverlapsRect(simSpacePos, lowEntity->sim.dim, bounds)) {
+                                if (EntityOverlapsRect(simSpacePos, lowEntity->sim.dim,
+                                                       simRegion->bounds)) {
                                     AddEntityToSimRegion(gameState, simRegion, lowEntity,
                                                          lowEntityIndex, &simSpacePos);
                                     ++movedCount;
