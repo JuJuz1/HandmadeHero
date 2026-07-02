@@ -396,6 +396,8 @@ AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     lowEntity->sim.dim.x = 1.0f;
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
+    lowEntity->sim.followingHero = true;
+
     return familiar;
 }
 
@@ -884,7 +886,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
-            // TODO: f to stop familiar follow and shift + f to reset familiar!
+            if (hm_input::ActionJustPressed(&buttons->F)) {
+                if (hm_input::ActionPressed(&buttons->shift)) {
+                    controlled->requestFamiliarReset = true;
+                } else {
+                    controlled->requestFamiliarStopFollow = true;
+                }
+            }
 
             // Sword
             if (hm_input::ActionJustPressed(&buttons->actionUp)) {
@@ -1093,45 +1101,50 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::FAMILIAR: {
-            SimEntity* closestHero{};
-            constexpr f32 maxDist{ 10.0f };
-            f32 closestHeroDSq{ SquareF32(maxDist) };
+            if (entity->followingHero) {
+                SimEntity* closestHero{};
+                constexpr f32 maxDist{ 10.0f };
+                f32 closestHeroDSq{ SquareF32(maxDist) };
 
-            // TODO: naive solution, BAD
-            SimEntity* testEntity{ simRegion->entities };
-            for (i32 testIndex{}; testIndex < simRegion->entityCount; ++testIndex, ++testEntity) {
-                if (testEntity->type == EntityType::HERO) {
-                    const f32 testDSq{ LengthSq(testEntity->pos - entity->pos) };
-                    if (testDSq < closestHeroDSq) {
-                        closestHero = testEntity;
-                        closestHeroDSq = testDSq;
+                // TODO: naive solution, BAD
+                SimEntity* testEntity{ simRegion->entities };
+                for (i32 testIndex{}; testIndex < simRegion->entityCount;
+                     ++testIndex, ++testEntity) {
+                    if (testEntity->type == EntityType::HERO) {
+                        const f32 testDSq{ LengthSq(testEntity->pos - entity->pos) };
+                        if (testDSq < closestHeroDSq) {
+                            closestHero = testEntity;
+                            closestHeroDSq = testDSq;
+                            // Updated every frame we find the hero
+                            closestHero->familiarIndex = closestHero->storageIndex;
+                        }
                     }
                 }
-            }
 
-            const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
-            Vec3 acceleration{};
+                const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
+                Vec3 acceleration{};
 
-            if (closestHero && closestHeroDSq > stopDistSq) {
-                constexpr f32 speed{ 0.5f };
-                const f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
-                acceleration = (closestHero->pos - entity->pos) * oneOverLength;
-                //PRINT_F32("before: closestHeroDSq: ", closestHeroDSq);
-                //PRINT_F32("before: acceleration.x: ", acceleration.x);
-                //PRINT_F32("before: acceleration.y: ", acceleration.y);
-                if (closestHeroDSq > 17.0f) {
-                    acceleration *= 1.75f;
+                if (closestHero && closestHeroDSq > stopDistSq) {
+                    constexpr f32 speed{ 0.5f };
+                    const f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
+                    acceleration = (closestHero->pos - entity->pos) * oneOverLength;
+                    //PRINT_F32("before: closestHeroDSq: ", closestHeroDSq);
+                    //PRINT_F32("before: acceleration.x: ", acceleration.x);
+                    //PRINT_F32("before: acceleration.y: ", acceleration.y);
+                    if (closestHeroDSq > 17.0f) {
+                        acceleration *= 1.75f;
+                    }
+
+                    //PRINT_F32("before: acceleration.x: ", acceleration.x);
+                    //PRINT_F32("before: acceleration.y: ", acceleration.y);
+                    //PRINT("\n");
                 }
 
-                //PRINT_F32("before: acceleration.x: ", acceleration.x);
-                //PRINT_F32("before: acceleration.y: ", acceleration.y);
-                //PRINT("\n");
+                moveSpec.speed = 50.0f;
+                moveSpec.drag = 8.0f;
+
+                ddP = acceleration;
             }
-
-            moveSpec.speed = 50.0f;
-            moveSpec.drag = 8.0f;
-
-            ddP = acceleration;
 
             // Head bob
             constexpr f32 bobSpeed{ 3.5f };

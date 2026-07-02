@@ -826,6 +826,9 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             case 'R': {
                 hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
             } break;
+            case 'F': {
+                hm_input::ProcessInputEvent(&input->playerInputs->F, isDown);
+            } break;
 
             case VK_SHIFT: {
                 hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);

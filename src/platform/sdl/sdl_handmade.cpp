@@ -501,6 +501,9 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             case SDL_SCANCODE_R: {
                 hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
             } break;
+            case SDL_SCANCODE_F: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F, isDown);
+            } break;
 
             case SDL_SCANCODE_LSHIFT:
             case SDL_SCANCODE_RSHIFT: {

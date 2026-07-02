@@ -146,7 +146,7 @@ typedef struct InputButtons {
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[16];
+        Button buttons[17];
 
         struct {
             Button up;
@@ -168,6 +168,7 @@ typedef struct InputButtons {
             Button E;
 
             Button R;
+            Button F;
 
             Button enter;
 

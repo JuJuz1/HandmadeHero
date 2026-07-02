@@ -222,6 +222,8 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         WorldPosition newPos{};
         bool32 doReset{};
         bool32 doResetSword{};
+        bool32 doFamiliarStopFollow{};
+        bool32 doFamiliarReset{};
 
         for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
              ++controlIndex) {
@@ -232,11 +234,29 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
                     //controlled->requestReset = false;
                 } else if (controlled->requestResetSword) {
                     doResetSword = true;
+                } else if (controlled->requestFamiliarStopFollow) {
+                    doFamiliarStopFollow = true;
+                } else if (controlled->requestFamiliarReset) {
+                    doFamiliarReset = true;
                 }
 
                 // TODO: Only 1 hero can request reset, if multiple only the first is processed here
                 break;
             }
+        }
+
+        // TODO: doesn't work by rawdogging as we overwrite these changes when we process the
+        // familiar... figure it out
+        if (doFamiliarStopFollow && stored->sim.familiarIndex) {
+            PRINT_I32("Familiar follow swap: ", stored->sim.familiarIndex);
+            auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
+            familiar->sim.followingHero = !familiar->sim.followingHero;
+        } else if (doFamiliarReset && stored->sim.familiarIndex) {
+            // TODO: use the EntityReference for this instead of rawdogging?
+            auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
+            PRINT_I32("Reset familiar: ", stored->sim.storageIndex);
+            ChangeEntityLocation(world, &gameState->worldArena, familiar->sim.storageIndex,
+                                 familiar, familiar->startingPos);
         }
 
         if (doResetSword) {

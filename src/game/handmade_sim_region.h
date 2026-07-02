@@ -108,6 +108,9 @@ struct SimEntity {
     Array<HitPoint, 16> hitPoints;
 
     EntityReference sword;
+
+    i32 familiarIndex; // Used by hero, saved by familiar of the closest hero
+    bool32 followingHero;
 };
 
 /**
