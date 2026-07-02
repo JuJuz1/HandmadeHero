@@ -462,10 +462,14 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // acceleration <=> ddP
     acceleration *= moveSpec.speed;
 
-    const f32 gravity{ -9.8f };
     // TODO: ordinary differential equations
     acceleration += -moveSpec.drag * entity->velocity;
-    acceleration += Vec3{ 0, 0, gravity };
+
+    const f32 gravity{ -9.8f };
+    if (!IsSet(entity, SimEntityFlags::Z_SUPPORTED)) {
+        acceleration += Vec3{ 0, 0, gravity };
+    }
+
     // v' = at + v
     entity->velocity += acceleration * delta;
 
@@ -620,9 +624,13 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         }
     }
 
-    if (entity->pos.z < ground) {
+    if (entity->pos.z <= ground ||
+        (IsSet(entity, SimEntityFlags::Z_SUPPORTED && entity->velocity.z == 0.0f))) {
         entity->pos.z = ground;
         entity->velocity.z = 0;
+        AddFlags(entity, SimEntityFlags::Z_SUPPORTED);
+    } else {
+        ClearFlags(entity, SimEntityFlags::Z_SUPPORTED);
     }
 
     if (entity->distanceLimit != 0.0f) {

@@ -80,6 +80,7 @@ enum SimEntityFlags : u32 {
     COLLIDES = (1 << 0),
     NON_SPATIAL = (1 << 1),
     MOVEABLE = (1 << 2),
+    Z_SUPPORTED = (1 << 3),
 
     SIMULATING = (1 << 30),
 };

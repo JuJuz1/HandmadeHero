@@ -42,7 +42,9 @@ GLOBAL GameMemory* gMemory;
  * Write the sound data to buff
  */
 INTERNAL void
-OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {}
+OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {
+    UNUSED_PARAMS(gameState, buff);
+}
 
 INTERNAL void
 DrawRectangle(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
@@ -345,8 +347,7 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 
     lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
     lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
-    // @Hack
-    lowEntity->sim.dim.z = gameState->world->tileDepthInMeters * 1.2f;
+    lowEntity->sim.dim.z = gameState->world->tileDepthInMeters;
     //AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return stair;

@@ -71,7 +71,8 @@ if %useCTime% == 1 (
 set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
 
 rem other compile options
-set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4100 /wd4189
+rem /wd4100 unreferenced param
+set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4189 /wd4100
 
 set commonCompilerFlags=/MTd /Od /Zi
 set dllFlags=/LDd
