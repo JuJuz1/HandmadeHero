@@ -346,9 +346,9 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto* lowEntity{ stair.lowEntity };
 
     lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
-    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
+    lowEntity->sim.dim.y = gameState->world->tileSideInMeters * 2;
     lowEntity->sim.dim.z = gameState->world->tileDepthInMeters;
-    //AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return stair;
 }
@@ -611,7 +611,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                     const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
                     ++wallsAdded;
                 } else if (createdZDoor) {
-                    if (tileX == 10 && tileY == 6) {
+                    if (tileX == 12 && tileY == 5) {
                         AddStair(gameState, absTileX, absTileY, doorDown ? absTileZ - 1 : absTileZ);
                         ++stairsAdded;
                     }
@@ -1071,7 +1071,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                     // Sword
                     if (controlled->dSword != Vec3::ZERO) {
-                        SimEntity* sword{ entity->sword.ptr };
+                        auto* sword{ entity->sword.ptr };
                         if (sword && IsSet(sword, SimEntityFlags::NON_SPATIAL)) {
                             PRINT("Used sword!\n");
                             sword->distanceLimit = 6.0f;
@@ -1195,9 +1195,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //    PRINT_F32("Z", entity->z);
         //}
 
-        const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels * entity->pos.x),
-                                      screenCenter.y -
-                                          (gameState->metersToPixels * entity->pos.y) };
+        const f32 zFudge{ 1.0f + 0.1f * entity->pos.z };
+        //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
+        //entity->pos.x),
+        //                              screenCenter.y -
+        //                                  (gameState->metersToPixels * entity->pos.y) };
+        const Vec2 entityGroundPoint{
+            screenCenter.x + (gameState->metersToPixels * entity->pos.x * zFudge),
+            screenCenter.y - (gameState->metersToPixels * entity->pos.y * zFudge)
+        };
         const f32 entityZ{ -entity->pos.z * gameState->metersToPixels };
 
         constexpr f32 r{ 0.5f };
