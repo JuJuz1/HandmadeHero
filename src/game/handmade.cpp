@@ -275,6 +275,15 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     return result;
 }
 
+NODISCARD
+INTERNAL AddLowEntityResult
+AddGroundedEntity(GameState* gameState, EntityType type, WorldPosition pos, Vec3 dim) {
+    auto offsetPos{ MapIntoChunkSpace(gameState->world, pos, Vec3{ 0, 0, dim.z * 0.5f }) };
+    auto entity{ AddLowEntity(gameState, type, offsetPos) };
+    entity.lowEntity->sim.dim = dim;
+    return entity;
+}
+
 INTERNAL void
 InitHitpoints(LowEntity* lowEntity, i32 hitPointCount) {
     ASSERT(hitPointCount < lowEntity->sim.hitPoints.size);
@@ -297,6 +306,7 @@ AddSword(GameState* gameState) {
 
     lowEntity->sim.dim.y = 0.75f;
     lowEntity->sim.dim.x = 0.3f;
+    lowEntity->sim.dim.z = 0.1f;
     // TODO: needed?
     AddFlags(&lowEntity->sim, SimEntityFlags::NON_SPATIAL | SimEntityFlags::MOVEABLE);
 
@@ -306,13 +316,11 @@ AddSword(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
-    WorldPosition pos{ gameState->cameraPos };
-    auto player{ AddLowEntity(gameState, EntityType::HERO, pos) };
+    const Vec3 dim{ 1.0f, 0.5f, 1.2f };
+    auto pos{ gameState->cameraPos };
+    auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos, dim) };
     auto* lowEntity{ player.lowEntity };
     PRINT_I32("New player: ", player.lowIndex);
-
-    lowEntity->sim.dim.y = 0.5f;  // 1.4f;
-    lowEntity->sim.dim.x = 0.75f; // entity->dimension.y * 0.75f;
 
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
@@ -338,16 +346,12 @@ AddPlayer(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(
-        gameState->world, tileX, tileY, tileZ,
-        Vec3{ 0, 0, gameState->world->tileDepthInMeters * 0.5f }) };
-
-    auto stair{ AddLowEntity(gameState, EntityType::STAIRWELL, pos) };
+    const Vec3 dim{ gameState->world->tileSideInMeters, gameState->world->tileSideInMeters * 2.0f,
+                    gameState->world->tileDepthInMeters };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto stair{ AddGroundedEntity(gameState, EntityType::STAIRWELL, pos, dim) };
     auto* lowEntity{ stair.lowEntity };
 
-    lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
-    lowEntity->sim.dim.y = gameState->world->tileSideInMeters * 2;
-    lowEntity->sim.dim.z = gameState->world->tileDepthInMeters;
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return stair;
@@ -356,13 +360,12 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
-
-    auto wall{ AddLowEntity(gameState, EntityType::WALL, pos) };
+    const Vec3 dim{ gameState->world->tileSideInMeters, gameState->world->tileSideInMeters,
+                    gameState->world->tileDepthInMeters };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto wall{ AddGroundedEntity(gameState, EntityType::WALL, pos, dim) };
     auto* lowEntity{ wall.lowEntity };
 
-    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
-    lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return wall;
@@ -371,13 +374,11 @@ AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    const Vec3 dim{ 1.0f, 0.5f, 0.5f };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto monster{ AddGroundedEntity(gameState, EntityType::MONSTER, pos, dim) };
 
-    auto monster{ AddLowEntity(gameState, EntityType::MONSTER, pos) };
     auto* lowEntity{ monster.lowEntity };
-
-    lowEntity->sim.dim.y = 0.75f;
-    lowEntity->sim.dim.x = 0.6f;
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     InitHitpoints(lowEntity, 5);
@@ -388,13 +389,11 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    const Vec3 dim{ 1.0f, 0.5f, 0.5f };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto familiar{ AddGroundedEntity(gameState, EntityType::FAMILIAR, pos, dim) };
 
-    auto familiar{ AddLowEntity(gameState, EntityType::FAMILIAR, pos) };
     auto* lowEntity{ familiar.lowEntity };
-
-    lowEntity->sim.dim.y = 0.5f;
-    lowEntity->sim.dim.x = 1.0f;
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     lowEntity->sim.followingHero = true;
@@ -532,7 +531,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
-    InitializeWorld(world, 1.4f);
+    InitializeWorld(world, 1.4f, 3.0f);
 
     u32 randomNumIndex{};
 
@@ -611,7 +610,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                     const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
                     ++wallsAdded;
                 } else if (createdZDoor) {
-                    if (tileX == 12 && tileY == 5) {
+                    if (tileX == 10 && tileY == 5) {
                         AddStair(gameState, absTileX, absTileY, doorDown ? absTileZ - 1 : absTileZ);
                         ++stairsAdded;
                     }
@@ -660,7 +659,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Add other entities
 
-    AddMonster(gameState, cameraTileX + 2, cameraTileY, cameraTileZ);
+    AddMonster(gameState, cameraTileX + 4, cameraTileY, cameraTileZ);
 
     //constexpr i32 familiarCount{ 1 }; // 10
 
@@ -947,10 +946,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
     constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
     constexpr i32 tileSpanZ{ 1 };
-    const Rect3 cameraBounds{ RectCenterDim(Vec3{}, Vec3{ static_cast<f32>(tileSpanX),
-                                                          static_cast<f32>(tileSpanY),
-                                                          static_cast<f32>(tileSpanZ) } *
-                                                        gameState->world->tileSideInMeters) };
+    const Rect3 cameraBounds{ RectCenterDim(Vec3{}, gameState->world->tileSideInMeters *
+                                                        Vec3{ static_cast<f32>(tileSpanX),
+                                                              static_cast<f32>(tileSpanY),
+                                                              static_cast<f32>(tileSpanZ) }) };
 
     MemoryArena simArena;
     InitializeArena(&simArena, memory->transientStorage, memory->transientStorageSize);

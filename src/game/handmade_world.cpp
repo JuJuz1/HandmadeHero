@@ -20,13 +20,13 @@ IsValidWorldPos(WorldPosition pos) {
 }
 
 INTERNAL void
-InitializeWorld(World* world, f32 tileSideInMeters) {
+InitializeWorld(World* world, f32 tileSideInMeters, f32 tileDepthInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
     world->tileSideInMeters = tileSideInMeters;
 
     world->chunkDimInMeters = Vec3{ tileSideInMeters * tiles_Per_Chunk,
-                                    tileSideInMeters * tiles_Per_Chunk, tileSideInMeters };
-    world->tileDepthInMeters = tileSideInMeters;
+                                    tileSideInMeters * tiles_Per_Chunk, tileDepthInMeters };
+    world->tileDepthInMeters = tileDepthInMeters;
     world->firstFree = nullptr;
 
     for (i32 tileChunkIndex{}; tileChunkIndex < world->worldChunkHash.size; ++tileChunkIndex) {
@@ -138,9 +138,10 @@ NODISCARD
 INTERNAL WorldPosition
 ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ,
                               Vec3 additionalOffset = {}) {
-    const Vec3 offset{ world->tileSideInMeters * Vec3{ static_cast<f32>(tileX),
-                                                       static_cast<f32>(tileY),
-                                                       static_cast<f32>(tileZ) } };
+    const Vec3 tileDim{ world->tileSideInMeters, world->tileSideInMeters,
+                        world->tileDepthInMeters };
+    const Vec3 offset{ tileDim * Vec3{ static_cast<f32>(tileX), static_cast<f32>(tileY),
+                                       static_cast<f32>(tileZ) } };
     WorldPosition basePos{};
     const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset + additionalOffset) };
     ASSERT(IsCanonical(world, result.offset_));

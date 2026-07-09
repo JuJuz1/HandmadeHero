@@ -157,9 +157,11 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
         AddRadiusTo(simRegion->updatableBounds, Vec3{ safetyMargin, safetyMargin, safetyMarginZ });
 
     const WorldPosition minChunk{ MapIntoChunkSpace(
-        world, origin, Vec3{ bounds.min.x, bounds.min.y, bounds.min.z }) };
+        world, origin,
+        Vec3{ simRegion->bounds.min.x, simRegion->bounds.min.y, simRegion->bounds.min.z }) };
     const WorldPosition maxChunk{ MapIntoChunkSpace(
-        world, origin, Vec3{ bounds.max.x, bounds.max.y, bounds.max.z }) };
+        world, origin,
+        Vec3{ simRegion->bounds.max.x, simRegion->bounds.max.y, simRegion->bounds.max.z }) };
 
     i32 movedCount{};
 
@@ -334,7 +336,7 @@ INTERNAL TestWallResult
 TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 tMin, f32 minY,
          f32 maxY) {
     // TODO: this should be moved elsewhere and not be in playerDelta space
-    constexpr f32 tEps{ 0.0001f };
+    constexpr f32 tEps{ 0.001f };
     TestWallResult result{};
     f32 newTMin{ tMin };
 
@@ -552,6 +554,10 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                     const Vec3 maxCorner{ minkowskiDiameter * 0.5f };
 
                     const Vec3 relPos{ entity->pos - testEntity->pos };
+                    // TODO: inclusive test on the max end?
+                    if ((relPos.z < minCorner.z) && (relPos.z > maxCorner.z)) {
+                        break;
+                    }
 
                     // Test all four "walls", used for other entities as well
 
