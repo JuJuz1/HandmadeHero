@@ -983,7 +983,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     PRINT_F32("Camera pos offset X: ", gameState->cameraPos.offset_.y);
     PRINT_F32("Camera pos offset Y: ", gameState->cameraPos.offset_.x);
-
 #endif
 
     /// Background
@@ -1204,6 +1203,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             screenCenter.x + (gameState->metersToPixels * entity->pos.x * zFudge),
             screenCenter.y - (gameState->metersToPixels * entity->pos.y * zFudge)
         };
+
         const f32 entityZ{ -entity->pos.z * gameState->metersToPixels };
 
         constexpr f32 r{ 0.5f };

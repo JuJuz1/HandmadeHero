@@ -359,7 +359,7 @@ CanCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     bool32 result{};
 
     if (a == b) {
-        return result;
+        return false;
     }
 
     if (a->storageIndex > b->storageIndex) {
@@ -444,16 +444,16 @@ HandleOverlap(GameState* gameState, SimEntity* mover, SimEntity* region, f32 del
 NODISCARD
 INTERNAL bool32
 SpeculativeCollide(SimEntity* mover, SimEntity* region) {
-    bool32 result{};
+    bool32 result{ true };
     if (region->type == EntityType::STAIRWELL) {
         const Rect3 regionRect{ RectCenterDim(region->pos, region->dim) };
         const Vec3 bary{ Clamp01(GetBarycentric(regionRect, mover->pos)) };
 
         const f32 ground{ Lerp(regionRect.min.z, regionRect.max.z, bary.y) };
         const f32 stepHeight{ 0.1f };
-        if (AbsF32(mover->pos.z - ground) > stepHeight) {
-            result = true;
-        }
+        // TODO: why these values?
+        result =
+            (AbsF32(mover->pos.z - ground) > stepHeight) || ((bary.y > 0.1f) && (bary.y < 0.9f));
     }
 
     return result;
