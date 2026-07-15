@@ -248,7 +248,8 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         }
 
         // TODO: doesn't work by rawdogging as we overwrite these changes when we process the
-        // familiar... figure it out
+        // familiar... figure it out, probably using the references like with the sword
+        // the system is not fully fletched out yet so prolly best to wait on it!
         if (doFamiliarStopFollow && stored->sim.familiarIndex) {
             PRINT_I32("Familiar follow swap: ", stored->sim.familiarIndex);
             auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
@@ -261,6 +262,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
                                  familiar, familiar->startingPos);
         }
 
+        // These do work!
         if (doResetSword) {
             PRINT_I32("Reset sword: ", stored->sim.sword.index);
             auto* sword{ GetLowEntity(gameState, stored->sim.sword.index) };
@@ -436,10 +438,7 @@ NODISCARD
 INTERNAL void
 HandleOverlap(GameState* gameState, SimEntity* mover, SimEntity* region, f32 delta, f32* ground) {
     if (region->type == EntityType::STAIRWELL) {
-        const Rect3 regionRect{ RectCenterDim(region->pos, region->dim) };
-        const Vec3 bary{ Clamp01(GetBarycentric(regionRect, mover->pos)) };
-
-        *ground = Lerp(regionRect.min.z, regionRect.max.z, bary.y);
+        *ground = GetStairGround(region, GetEntityGroundPoint(mover));
     }
 }
 
@@ -448,14 +447,14 @@ INTERNAL bool32
 SpeculativeCollide(SimEntity* mover, SimEntity* region) {
     bool32 result{ true };
     if (region->type == EntityType::STAIRWELL) {
-        const Rect3 regionRect{ RectCenterDim(region->pos, region->dim) };
-        const Vec3 bary{ Clamp01(GetBarycentric(regionRect, mover->pos)) };
-
-        const f32 ground{ Lerp(regionRect.min.z, regionRect.max.z, bary.y) };
-        const f32 stepHeight{ 0.1f };
-        // TODO: why these values?
-        result =
-            (AbsF32(mover->pos.z - ground) > stepHeight) || ((bary.y > 0.1f) && (bary.y < 0.9f));
+        const f32 ground{ GetStairGround(region, GetEntityGroundPoint(mover)) };
+        constexpr f32 stepHeight{ 0.1f };
+#if 0
+        result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight) ||
+                 ((bary.y > 0.1f) && (bary.y < 0.9f));
+#else
+        result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight);
+#endif
     }
 
     return result;
@@ -555,7 +554,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
 
                     const Vec3 relPos{ entity->pos - testEntity->pos };
                     // TODO: inclusive test on the max end?
-                    if ((relPos.z < minCorner.z) && (relPos.z > maxCorner.z)) {
+                    if ((relPos.z < minCorner.z) && (relPos.z >= maxCorner.z)) {
                         break;
                     }
 
@@ -661,6 +660,9 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
             }
         }
     }
+
+    // Move the ground to the entity's position
+    ground += entity->pos.z - GetEntityGroundPoint(entity).z;
 
     if (entity->pos.z <= ground ||
         (IsSet(entity, SimEntityFlags::Z_SUPPORTED) && entity->velocity.z == 0.0f)) {

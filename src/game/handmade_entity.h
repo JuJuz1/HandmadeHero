@@ -32,4 +32,23 @@ MakeEntitySpatial(SimEntity* entity, Vec3 p, Vec3 dP) {
     entity->velocity = dP;
 }
 
+NODISCARD
+INTERNAL Vec3
+GetEntityGroundPoint(SimEntity* entity) {
+    const Vec3 result{ entity->pos + Vec3{ 0, 0, -entity->dim.z * 0.5f } };
+    return result;
+}
+
+NODISCARD
+INTERNAL f32
+GetStairGround(SimEntity* entity, Vec3 atGroundPoint) {
+    ASSERT(entity->type == EntityType::STAIRWELL);
+
+    const Rect3 regionRect{ RectCenterDim(entity->pos, entity->dim) };
+    const Vec3 bary{ Clamp01(GetBarycentric(regionRect, atGroundPoint)) };
+    const f32 result{ regionRect.min.z + (bary.y * entity->walkableHeight) };
+
+    return result;
+}
+
 #endif // HANDMADE_ENTITY_H

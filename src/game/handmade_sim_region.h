@@ -112,6 +112,9 @@ struct SimEntity {
 
     i32 familiarIndex; // Used by hero, saved by familiar of the closest hero
     bool32 followingHero;
+
+    // For stairwells only...
+    f32 walkableHeight;
 };
 
 /**

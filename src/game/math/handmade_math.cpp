@@ -28,7 +28,6 @@ NODISCARD
 INTERNAL f32
 SafeRatio0(f32 numerator, f32 divisor) {
     const f32 result{ SafeRatioN(numerator, divisor, 0.0f) };
-
     return result;
 }
 
@@ -36,7 +35,6 @@ NODISCARD
 INTERNAL f32
 SafeRatio1(f32 numerator, f32 divisor) {
     const f32 result{ SafeRatioN(numerator, divisor, 1.0f) };
-
     return result;
 }
 
@@ -54,19 +52,19 @@ GetBarycentric(Rect3 rect, Vec3 p) {
 
 NODISCARD
 INTERNAL f32
-Lerp(f32 a, f32 b, f32 t) {
+Lerp(f32 a, f32 t, f32 b) {
     const f32 result{ ((1 - t) * a) + (t * b) };
     return result;
 }
 
 NODISCARD
 INTERNAL f32
-Clamp(f32 min, f32 max, f32 value) {
+Clamp(f32 min, f32 value, f32 max) {
     f32 result{ value };
 
-    if (value < min) {
+    if (result < min) {
         result = min;
-    } else if (value > max) {
+    } else if (result > max) {
         result = max;
     }
 

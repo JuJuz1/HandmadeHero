@@ -317,8 +317,8 @@ NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
     const Vec3 dim{ 1.0f, 0.5f, 1.2f };
-    auto pos{ gameState->cameraPos };
-    auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos, dim) };
+    const auto pos{ gameState->cameraPos };
+    const auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos, dim) };
     auto* lowEntity{ player.lowEntity };
     PRINT_I32("New player: ", player.lowIndex);
 
@@ -347,12 +347,13 @@ NODISCARD
 INTERNAL AddLowEntityResult
 AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     const Vec3 dim{ gameState->world->tileSideInMeters, gameState->world->tileSideInMeters * 2.0f,
-                    gameState->world->tileDepthInMeters };
+                    gameState->world->tileDepthInMeters * 1.1f };
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
     auto stair{ AddGroundedEntity(gameState, EntityType::STAIRWELL, pos, dim) };
     auto* lowEntity{ stair.lowEntity };
 
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    lowEntity->sim.walkableHeight = gameState->world->tileDepthInMeters;
 
     return stair;
 }
@@ -396,7 +397,8 @@ AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto* lowEntity{ familiar.lowEntity };
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
-    lowEntity->sim.followingHero = true;
+    // TODO: change to true when we get the stop follow to work
+    lowEntity->sim.followingHero = false;
 
     return familiar;
 }
@@ -689,7 +691,7 @@ PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset,
 
     piece->bitmap = bitmap;
     piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
-    piece->offsetZ = group->gameState->metersToPixels * offsetZ;
+    piece->offsetZ = offsetZ;
     piece->entityZC = entityZC;
 
     piece->dimension = dimension;
@@ -1012,7 +1014,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         pieceGroup.pieceCount = 0;
 
         // TODO: This is wrong, compute after update
-        f32 shadowAlpha{ 1.0f - 0.5f * entity->pos.z };
+        f32 shadowAlpha{ 1.0f - 0.5f * (entity->pos.z - entity->dim.z) };
         if (shadowAlpha < 0) {
             shadowAlpha = 0.0f;
         }
@@ -1031,7 +1033,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         case EntityType::STAIRWELL: {
             PushRect(&pieceGroup, Vec2{}, 0, Vec2{ entity->dim.x, entity->dim.y },
-                     Vec4{ 1, 1, 0, 1 });
+                     Vec4{ 1, 1, 0, 1 }, 0.0f);
+            PushRect(&pieceGroup, Vec2{}, entity->dim.z, Vec2{ entity->dim.x, entity->dim.y },
+                     Vec4{ 1, 0.5f, 0, 1 }, 0.0f);
             //PushBitmap(&pieceGroup, &gameState->stairwell, Vec2{}, 0, Vec2{ 37, 37 });
         } break;
 
@@ -1193,35 +1197,30 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //    PRINT_F32("Z", entity->z);
         //}
 
-        const f32 zFudge{ 1.0f + 0.1f * entity->pos.z };
-        //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
-        //entity->pos.x),
-        //                              screenCenter.y -
-        //                                  (gameState->metersToPixels * entity->pos.y) };
-        const Vec2 entityGroundPoint{
-            screenCenter.x + (gameState->metersToPixels * entity->pos.x * zFudge),
-            screenCenter.y - (gameState->metersToPixels * entity->pos.y * zFudge)
-        };
-
-        const f32 entityZ{ -entity->pos.z * gameState->metersToPixels };
-
-        constexpr f32 r{ 0.5f };
-        constexpr f32 g{ 0.1f };
-        constexpr f32 b{ 0.5f };
-
-        const Vec2 leftTop{
-            entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->dim.x),
-            entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->dim.y)
-        };
-
-        const Vec2 entityWidthHeight{ entity->dim.x, entity->dim.y };
-
         // Draw pieces
         for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
             const EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
+
+            const Vec3 entityBasePos{ GetEntityGroundPoint(entity) };
+            const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
+
+            //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
+            //entity->pos.x),
+            //                              screenCenter.y -
+            //                                  (gameState->metersToPixels * entity->pos.y) };
+            const Vec2 entityGroundPoint{
+                screenCenter.x + (gameState->metersToPixels * entityBasePos.x * zFudge),
+                screenCenter.y - (gameState->metersToPixels * entityBasePos.y * zFudge)
+            };
+
+            const f32 entityZ{ -entityBasePos.z * gameState->metersToPixels };
+
+            const Vec2 entityWidthHeight{ entity->dim.x, entity->dim.y };
             const Vec2 center{ entityGroundPoint.x + piece->offset.x,
-                               entityGroundPoint.y + piece->offset.y + piece->offsetZ +
+                               entityGroundPoint.y + piece->offset.y +
+                                   //(gameState->metersToPixels * piece->offsetZ) +
                                    (entityZ * piece->entityZC) };
+
             if (piece->bitmap) {
                 DrawBitmap(screenBuff, piece->bitmap, center.x, center.y, piece->a);
             } else {
@@ -1232,10 +1231,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Debug collision box
             if (gameState->showCollisionBox) {
+                const Vec2 leftTop{
+                    entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->dim.x),
+                    entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->dim.y)
+                };
+
                 DrawRectangle(screenBuff, leftTop,
                               leftTop + entityWidthHeight * gameState->metersToPixels // *0.95f
                               ,
-                              r, g, b);
+                              0.5f, 0.1f, 0.5f);
             }
         }
     }
