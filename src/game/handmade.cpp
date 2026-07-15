@@ -1032,10 +1032,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::STAIRWELL: {
-            PushRect(&pieceGroup, Vec2{}, 0, Vec2{ entity->dim.x, entity->dim.y },
-                     Vec4{ 1, 1, 0, 1 }, 0.0f);
-            PushRect(&pieceGroup, Vec2{}, entity->dim.z, Vec2{ entity->dim.x, entity->dim.y },
-                     Vec4{ 1, 0.5f, 0, 1 }, 0.0f);
+            PushRect(&pieceGroup, Vec2{}, 0, entity->dim.xy, Vec4{ 1, 1, 0, 1 }, 0.0f);
+            PushRect(&pieceGroup, Vec2{}, entity->dim.z, entity->dim.xy, Vec4{ 1, 0.5f, 0, 1 },
+                     0.0f);
             //PushBitmap(&pieceGroup, &gameState->stairwell, Vec2{}, 0, Vec2{ 37, 37 });
         } break;
 
@@ -1257,7 +1256,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     WorldPosition worldOrigin{};
     const Vec3 diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
-    DrawRectangle(screenBuff, Vec2{ diff.x, diff.y }, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
+    DrawRectangle(screenBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
 
     EndSim(simRegion, gameState);
 }

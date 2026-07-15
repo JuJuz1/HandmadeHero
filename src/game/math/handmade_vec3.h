@@ -11,6 +11,22 @@ struct Vec3 {
             f32 z;
         };
 
+        struct {
+            f32 r;
+            f32 g;
+            f32 b;
+        };
+
+        struct {
+            Vec2 xy;
+            f32 ignored0;
+        };
+
+        struct {
+            Vec2 yz;
+            f32 ignored1;
+        };
+
         f32 e[3];
     };
 
