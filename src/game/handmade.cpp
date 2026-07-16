@@ -913,7 +913,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             /// Debug code
             if (hm_input::ActionJustPressed(&buttons->right)) {
                 if (hm_input::ActionPressed(&buttons->ctrl)) {
-                    gameState->showCollisionBox = !gameState->showCollisionBox;
+                    gameState->showCollisionBoxes = !gameState->showCollisionBoxes;
                 }
             }
 
@@ -1229,7 +1229,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // Debug collision box
-            if (gameState->showCollisionBox) {
+            if (gameState->showCollisionBoxes) {
                 const Vec2 leftTop{
                     entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->dim.x),
                     entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->dim.y)

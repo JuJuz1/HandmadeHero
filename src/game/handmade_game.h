@@ -118,13 +118,8 @@ struct GameState {
     PairWiseCollisionRule* firstFreeCollisionRule;
 
     // Debug
-    bool32 showCollisionBox;
+    bool32 showCollisionBoxes;
 };
-
-INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
-
-INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
-                               bool32 CanCollide); // TODO: PairWiseCollisionRuleFlag flags
 
 // TODO: this should just be a part of the renderer...
 struct EntityVisiblePieceGroup {
@@ -134,6 +129,11 @@ struct EntityVisiblePieceGroup {
 };
 
 /// Here we can put functions which many other files need to call ///
+
+INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
+
+INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
+                               bool32 CanCollide); // TODO: PairWiseCollisionRuleFlag flags
 
 NODISCARD
 INTERNAL LowEntity*
