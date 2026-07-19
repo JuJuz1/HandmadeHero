@@ -146,7 +146,7 @@ typedef struct InputButtons {
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[17];
+        Button buttons[28];
 
         struct {
             Button up;
@@ -169,11 +169,23 @@ typedef struct InputButtons {
 
             Button R;
             Button F;
+            Button Z;
 
             Button enter;
 
-            // All new buttons have to be above this
-            Button Z;
+            Button F1;
+            Button F2;
+            Button F3;
+            Button F4;
+            Button F5;
+            Button F6;
+            Button F7;
+            Button F8;
+            Button F9;
+            Button F10;
+
+            // All new buttons must be above this
+            Button terminator;
         };
     };
 } InputButtons;

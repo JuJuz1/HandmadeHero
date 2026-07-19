@@ -842,8 +842,8 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             } break;
 
             case VK_F4: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F4, isDown);
                 if (isDown) {
-                    OutputDebugStringA("VK_F4\n");
                     if (altPressed) {
                         gIsGameRunning = false;
                     }
@@ -909,6 +909,35 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 hm_input::ProcessInputEvent(&input->playerInputs->Z, isDown);
             } break;
 #endif
+
+            // F4 processed above
+            case VK_F1: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F1, isDown);
+            } break;
+            case VK_F2: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F2, isDown);
+            } break;
+            case VK_F3: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F3, isDown);
+            } break;
+            case VK_F5: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F5, isDown);
+            } break;
+            case VK_F6: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F6, isDown);
+            } break;
+            case VK_F7: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F7, isDown);
+            } break;
+            case VK_F8: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F8, isDown);
+            } break;
+            case VK_F9: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F9, isDown);
+            } break;
+            case VK_F10: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F10, isDown);
+            } break;
 
             default: {
                 if (isDown) {
