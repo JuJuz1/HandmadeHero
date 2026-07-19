@@ -563,6 +563,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Changed to false after initializing one player
     gameState->startWithAPlayer = true;
+    gameState->allowUnlimitedJumps = true;
 
     LoadArtAssets(threadContext, gameState, memory);
 
@@ -901,8 +902,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Jump
             if (ActionJustPressed(&buttons->space)) {
-                if (controlled->dZ == 0.0f) {
-                    controlled->dZ = 3.0f;
+                if (ActionPressed(&buttons->ctrl)) {
+                    gameState->allowUnlimitedJumps = !gameState->allowUnlimitedJumps;
+                    if (gameState->allowUnlimitedJumps) {
+                        PRINT("Unlimited jumps!\n");
+                    } else {
+                        PRINT("No multiple jumps!\n");
+                    }
+                } else {
+                    if (controlled->dZ == 0.0f) {
+                        controlled->dZ = 3.0f;
+                    }
                 }
             }
 
@@ -943,7 +953,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 controlled->dSword.x = 1.0f;
             }
 
-            /// Debug code
+            // @Debug
             if (ActionJustPressed(&buttons->right)) {
                 if (ActionPressed(&buttons->ctrl)) {
                     gameState->showCollisionBoxes = !gameState->showCollisionBoxes;
@@ -1087,8 +1097,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     //}
 
                     // Don't allow jumping if not on ground
-                    if (controlled->dZ != 0.0f && entity->pos.z == 0.0f) {
-                        entity->velocity.z = controlled->dZ;
+                    // We don't touch anything here because MoveEntity handles all the flags
+                    // when doing the simulation
+                    // A plain read is sufficient here
+                    if (controlled->dZ != 0.0f) {
+                        if (IsSet(entity, SimEntityFlags::Z_SUPPORTED) ||
+                            gameState->allowUnlimitedJumps) { // && entity->pos.z == 0.0f
+                            entity->velocity.z = controlled->dZ;
+                        }
                     }
 
                     moveSpec.speed = 30.0f;
@@ -1277,7 +1293,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
-    /// Debug
+    // @Debug
 #if 0
     PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
     PRINT_I32("Max index: ", simRegion->maxRecordedEntityVelocityIndex);

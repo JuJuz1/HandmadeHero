@@ -127,6 +127,7 @@ struct GameState {
 
     // @Debug
     bool32 showCollisionBoxes;
+    bool32 allowUnlimitedJumps;
 };
 
 // TODO: this should just be a part of the renderer...
