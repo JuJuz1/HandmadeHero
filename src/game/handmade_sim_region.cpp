@@ -100,9 +100,9 @@ AddEntityToSimRegion_(GameState* gameState, SimRegion* simRegion, LowEntity* src
 
 NODISCARD
 INTERNAL bool32
-EntityOverlapsRect(Vec3 p, Vec3 dim, Rect3 rect) {
-    const Rect3 grown{ AddRadiusTo(rect, 0.5f * dim) };
-    const bool32 result{ IsInsideRectangle(grown, p) };
+EntityOverlapsRect(Vec3 pos, SimEntityCollisionVolume volume, Rect3 rect) {
+    const Rect3 grown{ AddRadiusTo(rect, 0.5f * volume.dim) };
+    const bool32 result{ IsInsideRectangle(grown, pos + volume.offsetPos) };
     return result;
 }
 
@@ -115,7 +115,8 @@ AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
     if (dest) {
         if (simPos) {
             dest->pos = *simPos;
-            dest->updatable = EntityOverlapsRect(dest->pos, dest->dim, simRegion->updatableBounds);
+            dest->updatable = EntityOverlapsRect(dest->pos, dest->collision->totalVolume,
+                                                 simRegion->updatableBounds);
         } else {
             dest->pos = GetSimSpacePos(simRegion, src);
         }
@@ -178,7 +179,8 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
                             LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
                             if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL)) {
                                 Vec3 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
-                                if (EntityOverlapsRect(simSpacePos, lowEntity->sim.dim,
+                                if (EntityOverlapsRect(simSpacePos,
+                                                       lowEntity->sim.collision->totalVolume,
                                                        simRegion->bounds)) {
                                     AddEntityToSimRegion(gameState, simRegion, lowEntity,
                                                          lowEntityIndex, &simSpacePos);
@@ -482,7 +484,9 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     acceleration *= moveSpec.speed;
 
     // TODO: ordinary differential equations
-    acceleration += -moveSpec.drag * entity->velocity;
+    Vec3 drag{ -moveSpec.drag * entity->velocity };
+    drag.z = 0;
+    acceleration += drag;
 
     const f32 gravity{ -9.8f };
     if (!IsSet(entity, SimEntityFlags::Z_SUPPORTED)) {
@@ -500,7 +504,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     const f32 velocitySq{ LengthSq(entity->velocity) };
     ASSERT(velocitySq <= SquareF32(simRegion->maxEntityVelocity));
 
-    // Debug code
+    // @Debug
     if (velocitySq > simRegion->maxRecordedEntityVelocitySq) {
         simRegion->maxRecordedEntityVelocitySq = velocitySq;
         simRegion->maxRecordedEntityVelocityIndex = entity->storageIndex;
@@ -545,69 +549,84 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
                 SimEntity* testEntity{ &simRegion->entities[highIndex] };
                 if (CanCollide(gameState, entity, testEntity)) {
-                    const Vec3 minkowskiDiameter{ testEntity->dim.x + entity->dim.x,
-                                                  testEntity->dim.y + entity->dim.y,
-                                                  testEntity->dim.z + entity->dim.z };
+                    for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount;
+                         ++volumeIndex) {
+                        for (i32 testVolumeIndex{};
+                             testVolumeIndex < testEntity->collision->volumeCount;
+                             ++testVolumeIndex) {
+                            auto* volume{ &entity->collision->volumes[volumeIndex] };
+                            auto* testVolume{ &testEntity->collision->volumes[testVolumeIndex] };
 
-                    const Vec3 minCorner{ minkowskiDiameter * -0.5f };
-                    const Vec3 maxCorner{ minkowskiDiameter * 0.5f };
+                            const Vec3 minkowskiDiameter{ testVolume->dim.x + volume->dim.x,
+                                                          testVolume->dim.y + volume->dim.y,
+                                                          testVolume->dim.z + volume->dim.z };
 
-                    const Vec3 relPos{ entity->pos - testEntity->pos };
-                    // TODO: inclusive test on the max end?
-                    if ((relPos.z < minCorner.z) && (relPos.z >= maxCorner.z)) {
-                        break;
-                    }
+                            const Vec3 minCorner{ -minkowskiDiameter * 0.5f };
+                            const Vec3 maxCorner{ minkowskiDiameter * 0.5f };
 
-                    // Test all four "walls", used for other entities as well
+                            const Vec3 relPos{ (entity->pos + volume->offsetPos) -
+                                               (testEntity->pos + testVolume->offsetPos) };
+                            // TODO: inclusive test on the max end?
+                            if ((relPos.z < minCorner.z) || (relPos.z >= maxCorner.z)) {
+                                continue;
+                            }
 
-                    Vec3 testWallNormal{};
-                    SimEntity* testHitEntity{};
-                    f32 testTMin{ tMin };
+                            // Test all four "walls", used for other entities as well
 
-                    // x
-                    testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                              playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                    if (testWallResult.hit) {
-                        testTMin = testWallResult.tMin;
-                        testWallNormal = Vec3{ -1, 0 };
-                        //hitWall = true;
-                        testHitEntity = testEntity;
-                    }
+                            Vec3 testWallNormal{};
+                            SimEntity* testHitEntity{};
+                            f32 testTMin{ tMin };
 
-                    testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                              playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                    if (testWallResult.hit) {
-                        testTMin = testWallResult.tMin;
-                        testWallNormal = Vec3{ 1, 0 };
-                        //hitWall = true;
-                        testHitEntity = testEntity;
-                    }
+                            // x
+                            testWallResult =
+                                TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                         playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ -1, 0 };
+                                //hitWall = true;
+                                testHitEntity = testEntity;
+                            }
 
-                    // y
-                    testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                              playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                    if (testWallResult.hit) {
-                        testTMin = testWallResult.tMin;
-                        testWallNormal = Vec3{ 0, -1 };
-                        //hitwall = true;
-                        testHitEntity = testEntity;
-                    }
+                            testWallResult =
+                                TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                         playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ 1, 0 };
+                                //hitWall = true;
+                                testHitEntity = testEntity;
+                            }
 
-                    testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                              playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                    if (testWallResult.hit) {
-                        testTMin = testWallResult.tMin;
-                        testWallNormal = Vec3{ 0, 1 };
-                        //hitwall = true;
-                        testHitEntity = testEntity;
-                    }
+                            // y
+                            testWallResult =
+                                TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                         playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ 0, -1 };
+                                //hitwall = true;
+                                testHitEntity = testEntity;
+                            }
 
-                    if (testHitEntity) {
-                        const Vec3 testP{ entity->pos + (playerDelta * testTMin) };
-                        if (SpeculativeCollide(entity, testEntity)) {
-                            tMin = testTMin;
-                            wallNormal = testWallNormal;
-                            hitEntity = testHitEntity;
+                            testWallResult =
+                                TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                         playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ 0, 1 };
+                                //hitwall = true;
+                                testHitEntity = testEntity;
+                            }
+
+                            if (testHitEntity) {
+                                const Vec3 testP{ entity->pos + (playerDelta * testTMin) };
+                                if (SpeculativeCollide(entity, testEntity)) {
+                                    tMin = testTMin;
+                                    wallNormal = testWallNormal;
+                                    hitEntity = testHitEntity;
+                                }
+                            }
                         }
                     }
                 }
@@ -649,11 +668,15 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // For debug
     i32 overLappingCount{};
     {
-        const Rect3 entityRect{ RectCenterDim(entity->pos, entity->dim) };
+        const Rect3 entityRect{ RectCenterDim(entity->pos +
+                                                  entity->collision->totalVolume.offsetPos,
+                                              entity->collision->totalVolume.dim) };
         for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
             SimEntity* testEntity{ &simRegion->entities[highIndex] };
             if (CanOverlap(gameState, entity, testEntity)) {
-                Rect3 testEntityRect{ RectCenterDim(testEntity->pos, testEntity->dim) };
+                Rect3 testEntityRect{ RectCenterDim(
+                    testEntity->pos + testEntity->collision->totalVolume.offsetPos,
+                    testEntity->collision->totalVolume.dim) };
                 if (RectsIntersect(entityRect, testEntityRect)) {
                     HandleOverlap(gameState, entity, testEntity, delta, &ground);
                 }

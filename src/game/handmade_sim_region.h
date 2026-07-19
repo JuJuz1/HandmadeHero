@@ -85,6 +85,19 @@ enum SimEntityFlags : u32 {
     SIMULATING = (1 << 30),
 };
 
+struct SimEntityCollisionVolume {
+    Vec3 dim;
+    Vec3 offsetPos;
+};
+
+struct SimEntityCollisionVolumeGroup {
+    SimEntityCollisionVolume totalVolume;
+    SimEntityCollisionVolume* volumes;
+    // Volume count is expected to be greater than 0 if the entity has any volume
+    // We could also specify that when volumeCount is 0 we only use the totalVolume
+    i32 volumeCount;
+};
+
 // Simulated (high)
 struct SimEntity {
     // NOTE: these are only for the sim region
@@ -94,10 +107,11 @@ struct SimEntity {
     EntityType type;
     i32 flags;
 
-    Vec3 dim;
-
     Vec3 pos; // NOTE: This is now already relative to the camera center
     Vec3 velocity;
+
+    SimEntityCollisionVolumeGroup* collision;
+    //Vec3 dim;
 
     f32 distanceLimit; // For every entity a max limit
 
@@ -114,6 +128,7 @@ struct SimEntity {
     bool32 followingHero;
 
     // For stairwells only...
+    Vec2 walkableDim;
     f32 walkableHeight;
 };
 

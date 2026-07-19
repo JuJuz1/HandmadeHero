@@ -117,7 +117,15 @@ struct GameState {
     Array<PairWiseCollisionRule*, 256> collisionRuleHash;
     PairWiseCollisionRule* firstFreeCollisionRule;
 
-    // Debug
+    SimEntityCollisionVolumeGroup* nullCollision;
+    SimEntityCollisionVolumeGroup* swordCollision;
+    SimEntityCollisionVolumeGroup* stairwellCollision;
+    SimEntityCollisionVolumeGroup* heroCollision;
+    SimEntityCollisionVolumeGroup* monsterCollision;
+    SimEntityCollisionVolumeGroup* familiarCollision;
+    SimEntityCollisionVolumeGroup* wallCollision;
+
+    // @Debug
     bool32 showCollisionBoxes;
 };
 

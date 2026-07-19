@@ -35,7 +35,8 @@ MakeEntitySpatial(SimEntity* entity, Vec3 p, Vec3 dP) {
 NODISCARD
 INTERNAL Vec3
 GetEntityGroundPoint(SimEntity* entity) {
-    const Vec3 result{ entity->pos + Vec3{ 0, 0, -entity->dim.z * 0.5f } };
+    const Vec3 result{ entity->pos };
+
     return result;
 }
 
@@ -44,9 +45,9 @@ INTERNAL f32
 GetStairGround(SimEntity* entity, Vec3 atGroundPoint) {
     ASSERT(entity->type == EntityType::STAIRWELL);
 
-    const Rect3 regionRect{ RectCenterDim(entity->pos, entity->dim) };
-    const Vec3 bary{ Clamp01(GetBarycentric(regionRect, atGroundPoint)) };
-    const f32 result{ regionRect.min.z + (bary.y * entity->walkableHeight) };
+    const Rect2 regionRect{ RectCenterDim(entity->pos.xy, entity->walkableDim) };
+    const Vec2 bary{ Clamp01(GetBarycentric(regionRect, atGroundPoint.xy)) };
+    const f32 result{ entity->pos.z + (bary.y * entity->walkableHeight) };
 
     return result;
 }

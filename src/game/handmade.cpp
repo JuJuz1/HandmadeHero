@@ -265,8 +265,9 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     // No need for this maybe
     *lowEntity = LowEntity{};
     lowEntity->sim.type = type;
-    lowEntity->pos = NullWorldPos();
+    lowEntity->sim.collision = gameState->nullCollision;
     lowEntity->startingPos = pos;
+    lowEntity->pos = NullWorldPos();
 
     ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, pos);
 
@@ -277,10 +278,10 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
 
 NODISCARD
 INTERNAL AddLowEntityResult
-AddGroundedEntity(GameState* gameState, EntityType type, WorldPosition pos, Vec3 dim) {
-    auto offsetPos{ MapIntoChunkSpace(gameState->world, pos, Vec3{ 0, 0, dim.z * 0.5f }) };
-    auto entity{ AddLowEntity(gameState, type, offsetPos) };
-    entity.lowEntity->sim.dim = dim;
+AddGroundedEntity(GameState* gameState, EntityType type, WorldPosition pos,
+                  SimEntityCollisionVolumeGroup* collision) {
+    auto entity{ AddLowEntity(gameState, type, pos) };
+    entity.lowEntity->sim.collision = collision;
     return entity;
 }
 
@@ -304,9 +305,7 @@ AddSword(GameState* gameState) {
 
     PRINT_I32("New sword: ", sword.lowIndex);
 
-    lowEntity->sim.dim.y = 0.75f;
-    lowEntity->sim.dim.x = 0.3f;
-    lowEntity->sim.dim.z = 0.1f;
+    lowEntity->sim.collision = gameState->swordCollision;
     // TODO: needed?
     AddFlags(&lowEntity->sim, SimEntityFlags::NON_SPATIAL | SimEntityFlags::MOVEABLE);
 
@@ -316,9 +315,9 @@ AddSword(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
-    const Vec3 dim{ 1.0f, 0.5f, 1.2f };
     const auto pos{ gameState->cameraPos };
-    const auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos, dim) };
+    const auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos,
+                                         gameState->heroCollision) };
     auto* lowEntity{ player.lowEntity };
     PRINT_I32("New player: ", player.lowIndex);
 
@@ -346,13 +345,13 @@ AddPlayer(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    const Vec3 dim{ gameState->world->tileSideInMeters, gameState->world->tileSideInMeters * 2.0f,
-                    gameState->world->tileDepthInMeters * 1.1f };
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
-    auto stair{ AddGroundedEntity(gameState, EntityType::STAIRWELL, pos, dim) };
+    auto stair{ AddGroundedEntity(gameState, EntityType::STAIRWELL, pos,
+                                  gameState->stairwellCollision) };
     auto* lowEntity{ stair.lowEntity };
 
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    lowEntity->sim.walkableDim = lowEntity->sim.collision->totalVolume.dim.xy;
     lowEntity->sim.walkableHeight = gameState->world->tileDepthInMeters;
 
     return stair;
@@ -361,10 +360,8 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    const Vec3 dim{ gameState->world->tileSideInMeters, gameState->world->tileSideInMeters,
-                    gameState->world->tileDepthInMeters };
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
-    auto wall{ AddGroundedEntity(gameState, EntityType::WALL, pos, dim) };
+    auto wall{ AddGroundedEntity(gameState, EntityType::WALL, pos, gameState->wallCollision) };
     auto* lowEntity{ wall.lowEntity };
 
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
@@ -375,9 +372,9 @@ AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    const Vec3 dim{ 1.0f, 0.5f, 0.5f };
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
-    auto monster{ AddGroundedEntity(gameState, EntityType::MONSTER, pos, dim) };
+    auto monster{ AddGroundedEntity(gameState, EntityType::MONSTER, pos,
+                                    gameState->monsterCollision) };
 
     auto* lowEntity{ monster.lowEntity };
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
@@ -390,9 +387,9 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    const Vec3 dim{ 1.0f, 0.5f, 0.5f };
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
-    auto familiar{ AddGroundedEntity(gameState, EntityType::FAMILIAR, pos, dim) };
+    auto familiar{ AddGroundedEntity(gameState, EntityType::FAMILIAR, pos,
+                                     gameState->familiarCollision) };
 
     auto* lowEntity{ familiar.lowEntity };
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
@@ -512,21 +509,33 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 #endif
 }
 
+NODISCARD
+INTERNAL SimEntityCollisionVolumeGroup*
+MakeSimpleCollision(GameState* gameState, f32 dimX, f32 dimY, f32 dimZ) {
+    auto* collision{ PushSize(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
+    collision->volumeCount = 1;
+    collision->volumes = PushArray(&gameState->worldArena, 1, SimEntityCollisionVolume);
+    collision->totalVolume.dim = Vec3{ dimX, dimY, dimZ };
+    collision->totalVolume.offsetPos = Vec3{ 0, 0, 0.5f * dimZ };
+    collision->volumes[0] = collision->totalVolume;
+
+    return collision;
+}
+
+NODISCARD
+INTERNAL SimEntityCollisionVolumeGroup*
+MakeNullCollision(GameState* gameState) {
+    auto* collision{ PushSize(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
+    collision->volumeCount = 0;
+    collision->volumes = nullptr;
+    collision->totalVolume.offsetPos = {};
+    // Negative?
+    collision->totalVolume.dim = {};
+    return collision;
+}
+
 INTERNAL void
 InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
-    // TODO: maybe make platform set this
-    memory->isInitialized = true;
-
-    // NOTE: reserve slot 0 for null entity
-    // TODO: consider removing if there is no use case as this has caused a bit of problems with
-    // all sorts of stuff
-    AddLowEntity(gameState, EntityType::NON_EXISTENT, NullWorldPos());
-
-    // Changed to false after initializing one player
-    gameState->startWithAPlayer = true;
-
-    LoadArtAssets(threadContext, gameState, memory);
-
     InitializeArena(&gameState->worldArena,
                     static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
                     memory->permanentStorageSize - sizeof(GameState));
@@ -534,6 +543,28 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
     InitializeWorld(world, 1.4f, 3.0f);
+
+    // NOTE: reserve slot 0 for null entity
+    // TODO: consider removing if there is no use case as this has caused a bit of problems with
+    // all sorts of stuff
+    AddLowEntity(gameState, EntityType::NON_EXISTENT, NullWorldPos());
+
+    gameState->nullCollision = MakeNullCollision(gameState);
+    gameState->swordCollision = MakeSimpleCollision(gameState, 0.3f, 0.75f, 0.1f);
+    gameState->stairwellCollision = MakeSimpleCollision(
+        gameState, gameState->world->tileSideInMeters, gameState->world->tileSideInMeters * 2.0f,
+        gameState->world->tileDepthInMeters * 1.1f);
+    gameState->monsterCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
+    gameState->familiarCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
+    gameState->heroCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
+    gameState->wallCollision = MakeSimpleCollision(gameState, gameState->world->tileSideInMeters,
+                                                   gameState->world->tileSideInMeters,
+                                                   gameState->world->tileDepthInMeters);
+
+    // Changed to false after initializing one player
+    gameState->startWithAPlayer = true;
+
+    LoadArtAssets(threadContext, gameState, memory);
 
     u32 randomNumIndex{};
 
@@ -681,6 +712,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     //WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
     //                                                       cameraTileZ) };
     //SetCamera(gameState, cameraPos);
+
+    // TODO: maybe make platform set this
+    memory->isInitialized = true;
 }
 
 INTERNAL void
@@ -811,7 +845,7 @@ DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
-    ASSERT(&input->playerInputs[0].Z - &input->playerInputs[0].buttons[0] ==
+    ASSERT(&input->playerInputs[0].terminator - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
     ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==
            ARRAY_COUNT(input->mouseButtons.buttons) - 1);
@@ -825,16 +859,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitializeGameState(threadContext, gameState, memory);
     }
 
-    World* world{ gameState->world };
-
-    const f32 delta{ input->frameDeltaTime };
-
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
-        const InputButtons* buttons{ &input->playerInputs[controllerIndex] };
+        // Why are we namespacing if we end up doing this...
+        using namespace hm_input;
+
+        const auto* buttons{ &input->playerInputs[controllerIndex] };
         auto* controlled{ &gameState->controlledHeroes[controllerIndex] };
         if (controlled->entityIndex == 0) {
-            if (hm_input::ActionJustPressed(&buttons->enter) || gameState->startWithAPlayer) {
+            if (ActionJustPressed(&buttons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
                     gameState->startWithAPlayer = false;
                 }
@@ -853,43 +886,43 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Need to check the type as we have the null entity...
             //if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
-            if (hm_input::ActionPressed(&buttons->up)) {
+            if (ActionPressed(&buttons->up)) {
                 controlled->ddP.y = 1.0f;
             }
-            if (hm_input::ActionPressed(&buttons->down)) {
+            if (ActionPressed(&buttons->down)) {
                 controlled->ddP.y = -1.0f;
             }
-            if (hm_input::ActionPressed(&buttons->left)) {
+            if (ActionPressed(&buttons->left)) {
                 controlled->ddP.x = -1.0f;
             }
-            if (hm_input::ActionPressed(&buttons->right)) {
+            if (ActionPressed(&buttons->right)) {
                 controlled->ddP.x = 1.0f;
             }
 
             // Jump
-            if (hm_input::ActionJustPressed(&buttons->space)) {
+            if (ActionJustPressed(&buttons->space)) {
                 if (controlled->dZ == 0.0f) {
                     controlled->dZ = 3.0f;
                 }
             }
 
             // Sprint
-            if (hm_input::ActionPressed(&buttons->shift)) {
+            if (ActionPressed(&buttons->shift)) {
                 controlled->sprint = true;
             }
 
             // Reset position if we get stuck
-            if (hm_input::ActionJustPressed(&buttons->R)) {
+            if (ActionJustPressed(&buttons->R)) {
                 // Shift means resetting the sword
-                if (hm_input::ActionPressed(&buttons->shift)) {
+                if (ActionPressed(&buttons->shift)) {
                     controlled->requestResetSword = true;
                 } else {
                     controlled->requestReset = true;
                 }
             }
 
-            if (hm_input::ActionJustPressed(&buttons->F)) {
-                if (hm_input::ActionPressed(&buttons->shift)) {
+            if (ActionJustPressed(&buttons->F)) {
+                if (ActionPressed(&buttons->shift)) {
                     controlled->requestFamiliarReset = true;
                 } else {
                     controlled->requestFamiliarStopFollow = true;
@@ -897,22 +930,22 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // Sword
-            if (hm_input::ActionJustPressed(&buttons->actionUp)) {
+            if (ActionJustPressed(&buttons->actionUp)) {
                 controlled->dSword.y = 1.0f;
             }
-            if (hm_input::ActionJustPressed(&buttons->actionDown)) {
+            if (ActionJustPressed(&buttons->actionDown)) {
                 controlled->dSword.y = -1.0f;
             }
-            if (hm_input::ActionJustPressed(&buttons->actionLeft)) {
+            if (ActionJustPressed(&buttons->actionLeft)) {
                 controlled->dSword.x = -1.0f;
             }
-            if (hm_input::ActionJustPressed(&buttons->actionRight)) {
+            if (ActionJustPressed(&buttons->actionRight)) {
                 controlled->dSword.x = 1.0f;
             }
 
             /// Debug code
-            if (hm_input::ActionJustPressed(&buttons->right)) {
-                if (hm_input::ActionPressed(&buttons->ctrl)) {
+            if (ActionJustPressed(&buttons->right)) {
+                if (ActionPressed(&buttons->ctrl)) {
                     gameState->showCollisionBoxes = !gameState->showCollisionBoxes;
                 }
             }
@@ -925,8 +958,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             // Only the first player can do certain operations
             // Switching z index
             //if (controllerIndex == 0) {
-            //    if (hm_input::ActionJustPressed(&inputButtons->Z)) {
-            //        if (hm_input::ActionPressed(&inputButtons->shift)) {
+            //    if (ActionJustPressed(&inputButtons->Z)) {
+            //        if (ActionPressed(&inputButtons->shift)) {
             //            controllingEntity.low->pos.chunkZ =
             //                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, -1);
             //        } else {
@@ -939,11 +972,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
+    const f32 delta{ input->frameDeltaTime };
+
+    const World* world{ gameState->world };
+
     // IMPORTANT: This now determines the actual pixel size of the tiles!
     constexpr i32 tileSideInPixels{ 60 };
     gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
-
-    // Simulate regions
 
     constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
     constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
@@ -995,9 +1030,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                   0.5f, 0.5f, 0.5f);
 #endif
 
-    // Drawing entities
-
-    const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
+    /// Drawing and processing entities
 
     // Every entity has its own one of these
     EntityVisiblePieceGroup pieceGroup;
@@ -1014,7 +1047,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         pieceGroup.pieceCount = 0;
 
         // TODO: This is wrong, compute after update
-        f32 shadowAlpha{ 1.0f - 0.5f * (entity->pos.z - entity->dim.z) };
+        f32 shadowAlpha{ 1.0f - (0.5f * entity->pos.z) };
         if (shadowAlpha < 0) {
             shadowAlpha = 0.0f;
         }
@@ -1032,10 +1065,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::STAIRWELL: {
-            PushRect(&pieceGroup, Vec2{}, 0, entity->dim.xy, Vec4{ 1, 1, 0, 1 }, 0.0f);
-            PushRect(&pieceGroup, Vec2{}, entity->dim.z, entity->dim.xy, Vec4{ 1, 0.5f, 0, 1 },
-                     0.0f);
-            //PushBitmap(&pieceGroup, &gameState->stairwell, Vec2{}, 0, Vec2{ 37, 37 });
+            PushRect(&pieceGroup, Vec2{}, 0, entity->walkableDim, Vec4{ 1, 1, 0, 1 }, 0.0f);
+            PushRect(&pieceGroup, Vec2{}, entity->walkableHeight, entity->walkableDim,
+                     Vec4{ 1, 0.5f, 0, 1 }, 0.0f);
         } break;
 
         case EntityType::HERO: {
@@ -1203,6 +1235,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Vec3 entityBasePos{ GetEntityGroundPoint(entity) };
             const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
 
+            const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
+
             //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
             //entity->pos.x),
             //                              screenCenter.y -
@@ -1214,7 +1248,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             const f32 entityZ{ -entityBasePos.z * gameState->metersToPixels };
 
-            const Vec2 entityWidthHeight{ entity->dim.x, entity->dim.y };
             const Vec2 center{ entityGroundPoint.x + piece->offset.x,
                                entityGroundPoint.y + piece->offset.y +
                                    //(gameState->metersToPixels * piece->offsetZ) +
@@ -1230,13 +1263,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Debug collision box
             if (gameState->showCollisionBoxes) {
-                const Vec2 leftTop{
-                    entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->dim.x),
-                    entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->dim.y)
-                };
+                const Vec2 leftTop{ entityGroundPoint.x - (0.5f * gameState->metersToPixels *
+                                                           entity->collision->totalVolume.dim.x),
+                                    entityGroundPoint.y - (0.5f * gameState->metersToPixels *
+                                                           entity->collision->totalVolume.dim.y) };
 
                 DrawRectangle(screenBuff, leftTop,
-                              leftTop + entityWidthHeight * gameState->metersToPixels // *0.95f
+                              leftTop + entity->collision->totalVolume.dim.xy *
+                                            gameState->metersToPixels // *0.95f
                               ,
                               0.5f, 0.1f, 0.5f);
             }

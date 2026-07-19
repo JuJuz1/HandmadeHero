@@ -3,6 +3,9 @@
 
 namespace hm_input {
 
+/**
+ * Used in the platform layer to register key presses
+ */
 INTERNAL void
 ProcessInputEvent(Button* button, bool32 isDown) {
     if (button->endedDown != isDown) {
@@ -11,6 +14,9 @@ ProcessInputEvent(Button* button, bool32 isDown) {
     }
 }
 
+/**
+ * Used at the start of every frame in the platform layer to clear input
+ */
 INTERNAL void
 ClearInputTransitionCounts(Input* gameInput) {
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput->playerInputs);

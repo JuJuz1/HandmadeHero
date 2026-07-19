@@ -39,6 +39,17 @@ SafeRatio1(f32 numerator, f32 divisor) {
 }
 
 NODISCARD
+INTERNAL Vec2
+GetBarycentric(Rect2 rect, Vec2 p) {
+    Vec2 result;
+
+    result.x = SafeRatio0(p.x - rect.min.x, rect.max.x - rect.min.x);
+    result.y = SafeRatio0(p.y - rect.min.y, rect.max.y - rect.min.y);
+
+    return result;
+}
+
+NODISCARD
 INTERNAL Vec3
 GetBarycentric(Rect3 rect, Vec3 p) {
     Vec3 result;
@@ -75,6 +86,17 @@ NODISCARD
 INTERNAL f32
 Clamp01(f32 value) {
     const f32 result{ Clamp(0.0f, value, 1.0f) };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec2
+Clamp01(Vec2 value) {
+    Vec2 result;
+
+    result.x = Clamp01(value.x);
+    result.y = Clamp01(value.y);
+
     return result;
 }
 
