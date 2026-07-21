@@ -124,6 +124,7 @@ struct GameState {
     SimEntityCollisionVolumeGroup* monsterCollision;
     SimEntityCollisionVolumeGroup* familiarCollision;
     SimEntityCollisionVolumeGroup* wallCollision;
+    SimEntityCollisionVolumeGroup* standardRoomCollision;
 
     // @Debug
     bool32 showCollisionBoxes;

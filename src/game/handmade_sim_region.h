@@ -20,6 +20,8 @@ struct MoveSpec {
 enum class EntityType {
     NON_EXISTENT = 0,
 
+    SPACE,
+
     WALL,
     HERO,
     FAMILIAR,
@@ -77,10 +79,12 @@ struct EntityReference {
 };
 
 enum SimEntityFlags : u32 {
+    // TODO: cleanup these, collides and z_supported are probably unnecessary
     COLLIDES = (1 << 0),
     NON_SPATIAL = (1 << 1),
     MOVEABLE = (1 << 2),
     Z_SUPPORTED = (1 << 3),
+    TRAVERSABLE = (1 << 4),
 
     SIMULATING = (1 << 30),
 };

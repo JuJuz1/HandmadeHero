@@ -83,7 +83,7 @@ AddEntityToSimRegion_(GameState* gameState, SimRegion* simRegion, LowEntity* src
                 *entity = src->sim;
                 LoadEntityReference(gameState, simRegion, &entity->sword);
 
-                // Debug code
+                // @Debug
                 ASSERT(!IsSet(&src->sim, SimEntityFlags::SIMULATING));
                 AddFlags(&src->sim, SimEntityFlags::SIMULATING);
             }
@@ -106,7 +106,7 @@ EntityOverlapsRect(Vec3 pos, SimEntityCollisionVolume volume, Rect3 rect) {
     return result;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL SimEntity*
 AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src, i32 lowIndex,
                      Vec3* simPos) {
@@ -364,7 +364,7 @@ INTERNAL bool32
 CanCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     bool32 result{};
 
-    if (a == b) {
+    if (a == b || !(IsSet(a, SimEntityFlags::COLLIDES) && IsSet(b, SimEntityFlags::COLLIDES))) {
         return false;
     }
 
@@ -475,7 +475,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         }
     }
 
-    // Other player faster for debug
+    // @Debug other player faster
     //if (controllerIndex != 0) {
     //    acceleration *= 1.5f;
     //}
@@ -665,7 +665,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // so we need a solid concept of ground levels
     f32 ground{};
 
-    // For debug
+    // @Debug
     i32 overLappingCount{};
     {
         const Rect3 entityRect{ RectCenterDim(entity->pos +

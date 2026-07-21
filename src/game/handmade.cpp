@@ -254,7 +254,7 @@ struct AddLowEntityResult {
 /**
  * Adds an entity to the low entity array
  */
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     ASSERT(gameState->lowEntityCount < gameState->lowEntities.size);
@@ -262,7 +262,7 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     const i32 entityIndex{ gameState->lowEntityCount++ };
     auto* lowEntity{ &gameState->lowEntities[entityIndex] };
 
-    // No need for this maybe
+    // TODO: No need to clear maybe
     *lowEntity = LowEntity{};
     lowEntity->sim.type = type;
     lowEntity->sim.collision = gameState->nullCollision;
@@ -342,7 +342,7 @@ AddPlayer(GameState* gameState) {
     return player;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
@@ -357,7 +357,7 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     return stair;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
@@ -369,7 +369,7 @@ AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     return wall;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
@@ -384,7 +384,7 @@ AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     return monster;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
     auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
@@ -534,6 +534,16 @@ MakeNullCollision(GameState* gameState) {
     return collision;
 }
 
+INTERNAL AddLowEntityResult
+AddStandardRoom(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) {
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, absTileX, absTileY, absTileZ) };
+    auto entity{ AddGroundedEntity(gameState, EntityType::SPACE, pos,
+                                   gameState->standardRoomCollision) };
+    AddFlags(&entity.lowEntity->sim, SimEntityFlags::TRAVERSABLE);
+
+    return entity;
+}
+
 INTERNAL void
 InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
     InitializeArena(&gameState->worldArena,
@@ -560,6 +570,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gameState->wallCollision = MakeSimpleCollision(gameState, gameState->world->tileSideInMeters,
                                                    gameState->world->tileSideInMeters,
                                                    gameState->world->tileDepthInMeters);
+    gameState->standardRoomCollision =
+        MakeSimpleCollision(gameState, gameState->world->tileSideInMeters * tiles_Per_Width,
+                            gameState->world->tileSideInMeters * tiles_Per_Height,
+                            gameState->world->tileDepthInMeters * 0.9f);
 
     // Changed to false after initializing one player
     gameState->startWithAPlayer = true;
@@ -617,6 +631,11 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         } else {
             doorTop = true;
         }
+
+#if 1
+        AddStandardRoom(gameState, (screenX * tiles_Per_Width) + (tiles_Per_Width / 2),
+                        (screenY * tiles_Per_Height) + (tiles_Per_Height / 2), absTileZ);
+#endif
 
         for (i32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
             for (i32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
@@ -745,9 +764,27 @@ PushBitmap(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset
 }
 
 INTERNAL void
-PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dimension, Vec4 color,
+PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
          f32 entityZC = 1.0f) {
-    PushPiece(group, 0, offset, offsetZ, Vec2{}, dimension, color, entityZC);
+    PushPiece(group, nullptr, offset, offsetZ, Vec2{}, dim, color, entityZC);
+}
+
+INTERNAL void
+PushRectOutline(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
+                f32 entityZC = 1.0f) {
+    const f32 thickness{ 0.1f };
+
+    // Top bottom
+    PushPiece(group, 0, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
+              color, entityZC);
+    PushPiece(group, 0, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
+              color, entityZC);
+
+    // Left right
+    PushPiece(group, 0, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
+              color, entityZC);
+    PushPiece(group, 0, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
+              color, entityZC);
 }
 
 INTERNAL void
@@ -1003,7 +1040,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     auto* simRegion{ BeginSim(gameState, &simArena, gameState->world, gameState->cameraPos,
                               cameraBounds, delta) };
 
-    /// Debug printing
+    // @Debug printing
 
 #if 0
     const auto player{ GetLowEntity(gameState, gameState->cameraFollowingEntityIndex) };
@@ -1229,6 +1266,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             PushBitmap(&pieceGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
         } break;
 
+        case EntityType::SPACE: {
+            for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
+                const auto* volume{ &entity->collision->volumes[volumeIndex] };
+                PushRectOutline(&pieceGroup, volume->offsetPos.xy, 0, volume->dim.xy,
+                                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
+            }
+        } break;
+
         default: {
             INVALID_CODE_PATH;
         } break;
@@ -1277,18 +1322,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                               piece->b);
             }
 
-            // Debug collision box
+            // @Debug collision box
             if (gameState->showCollisionBoxes) {
-                const Vec2 leftTop{ entityGroundPoint.x - (0.5f * gameState->metersToPixels *
-                                                           entity->collision->totalVolume.dim.x),
-                                    entityGroundPoint.y - (0.5f * gameState->metersToPixels *
-                                                           entity->collision->totalVolume.dim.y) };
+                // Don't draw for room space as it blocks the whole screen
+                if (entity->type != EntityType::SPACE) {
+                    const Vec2 leftTop{
+                        entityGroundPoint.x - (0.5f * gameState->metersToPixels *
+                                               entity->collision->totalVolume.dim.x),
+                        entityGroundPoint.y - (0.5f * gameState->metersToPixels *
+                                               entity->collision->totalVolume.dim.y)
+                    };
 
-                DrawRectangle(screenBuff, leftTop,
-                              leftTop + entity->collision->totalVolume.dim.xy *
-                                            gameState->metersToPixels // *0.95f
-                              ,
-                              0.5f, 0.1f, 0.5f);
+                    DrawRectangle(screenBuff, leftTop,
+                                  leftTop + entity->collision->totalVolume.dim.xy *
+                                                gameState->metersToPixels // *0.95f
+                                  ,
+                                  0.5f, 0.1f, 0.5f);
+                }
             }
         }
     }
