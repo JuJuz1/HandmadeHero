@@ -172,9 +172,4 @@ struct SimRegion {
     Array<SimEntityHash, 4096> hash;
 };
 
-struct TestWallResult {
-    f32 tMin;
-    bool32 hit;
-};
-
 #endif // HANDMADE_SIM_REGION_H

@@ -47,7 +47,7 @@ OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {
 }
 
 INTERNAL void
-DrawRectangle(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
+DrawRect(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
     i32 roundedMinX{ RoundF32ToI32(min.x) };
     i32 roundedMinY{ RoundF32ToI32(min.y) };
     i32 roundedMaxX{ RoundF32ToI32(max.x) };
@@ -1072,9 +1072,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 #if 0
     DrawBitmap(screenBuff, &gameState->background, 0, 0);
 #else
-    DrawRectangle(screenBuff, Vec2{},
-                  Vec2{ static_cast<f32>(screenBuff->width), static_cast<f32>(screenBuff->height) },
-                  0.5f, 0.5f, 0.5f);
+    DrawRect(screenBuff, Vec2{},
+             Vec2{ static_cast<f32>(screenBuff->width), static_cast<f32>(screenBuff->height) },
+             0.5f, 0.5f, 0.5f);
 #endif
 
     /// Drawing and processing entities
@@ -1318,8 +1318,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 DrawBitmap(screenBuff, piece->bitmap, center.x, center.y, piece->a);
             } else {
                 const Vec2 halfDim{ 0.5f * piece->dimension * gameState->metersToPixels };
-                DrawRectangle(screenBuff, center - halfDim, center + halfDim, piece->r, piece->g,
-                              piece->b);
+                DrawRect(screenBuff, center - halfDim, center + halfDim, piece->r, piece->g,
+                         piece->b);
             }
 
             // @Debug collision box
@@ -1333,11 +1333,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                                entity->collision->totalVolume.dim.y)
                     };
 
-                    DrawRectangle(screenBuff, leftTop,
-                                  leftTop + entity->collision->totalVolume.dim.xy *
-                                                gameState->metersToPixels // *0.95f
-                                  ,
-                                  0.5f, 0.1f, 0.5f);
+                    DrawRect(screenBuff, leftTop,
+                             leftTop + entity->collision->totalVolume.dim.xy *
+                                           gameState->metersToPixels // *0.95f
+                             ,
+                             0.5f, 0.1f, 0.5f);
                 }
             }
         }
@@ -1356,7 +1356,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     WorldPosition worldOrigin{};
     const Vec3 diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
-    DrawRectangle(screenBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
+    DrawRect(screenBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
 
     EndSim(simRegion, gameState);
 }
