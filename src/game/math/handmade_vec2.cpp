@@ -134,7 +134,7 @@ Length(Vec2 v) {
 NODISCARD
 INTERNAL inline bool32
 IsNormalized(Vec2 v) {
-    constexpr f32 eps{ 0.001f };
+    const f32 eps{ 0.001f };
     const bool32 result{ AbsF32(LengthSq(v) - 1.0f) < eps };
     return result;
 }

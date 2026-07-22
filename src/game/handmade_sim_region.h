@@ -61,7 +61,7 @@ EntityTypeToStr(EntityType type) {
     return typeStr;
 }
 
-GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };
+GLOBAL const i32 hit_Point_Sub_Count{ 4 };
 
 struct HitPoint {
     i8 flags;

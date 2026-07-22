@@ -30,8 +30,8 @@
 
 #include "handmade_input.h"
 
-GLOBAL constexpr i32 tiles_Per_Width{ 17 };
-GLOBAL constexpr i32 tiles_Per_Height{ 9 };
+GLOBAL const i32 tiles_Per_Width{ 17 };
+GLOBAL const i32 tiles_Per_Height{ 9 };
 
 struct LoadedBitmapInfo {
     u32* pixels;

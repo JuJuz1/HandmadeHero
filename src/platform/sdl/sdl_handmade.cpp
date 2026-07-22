@@ -225,8 +225,8 @@ DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i
         destRect = SDL_Rect{ 0, 0, 2 * screenBuff->width, 2 * screenBuff->height };
         SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     } else {
-        constexpr i32 offsetX{ 50 };
-        constexpr i32 offsetY{ 50 };
+        const i32 offsetX{ 50 };
+        const i32 offsetY{ 50 };
 
         destRect = SDL_Rect{ offsetX, offsetY, screenBuff->width, screenBuff->height };
         SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
@@ -758,8 +758,8 @@ main() {
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO);
 
-    constexpr i32 startingWidth{ 960 };
-    constexpr i32 startingHeight{ 540 };
+    const i32 startingWidth{ 960 };
+    const i32 startingHeight{ 540 };
 
     char name[64]{ "Handmade Hero" };
 #if HANDMADE_INTERNAL

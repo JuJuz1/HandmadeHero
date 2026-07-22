@@ -34,11 +34,11 @@ struct Vec2 {
     NOT_BOUND const Vec2 ZERO;
 };
 
-inline constexpr Vec2 Vec2::LEFT{ -1.0f, 0.0f };
-inline constexpr Vec2 Vec2::RIGHT{ 1.0f, 0.0f };
-inline constexpr Vec2 Vec2::UP{ 0.0f, 1.0f };
-inline constexpr Vec2 Vec2::DOWN{ 0.0f, -1.0f };
-inline constexpr Vec2 Vec2::ZERO{};
+inline const Vec2 Vec2::LEFT{ -1.0f, 0.0f };
+inline const Vec2 Vec2::RIGHT{ 1.0f, 0.0f };
+inline const Vec2 Vec2::UP{ 0.0f, 1.0f };
+inline const Vec2 Vec2::DOWN{ 0.0f, -1.0f };
+inline const Vec2 Vec2::ZERO{};
 
 //NODISCARD
 //INTERNAL inline Vec2 operator-(Vec2 rhs);

@@ -27,6 +27,14 @@ Global variables which are meant to be modified are prefixed with a "g"
 
 _ is used to postfix a variable, a function or a macro meant to be accessed or called with extra caution (somewhat meaning they are "private" in the object-oriented sense). This is to inform the caller that these are usually internal to the data structure, implementation etc... Prefixing with _ is problematic as these are reserved for standard library definitions, compiler internals and such!
 
+Annotations: prefixed with a "@"
+- @Speed
+- @Robustness
+- @Remove -> temporary code for testing and debugging
+- @Debug -> debug code
+
+Documented here so I would remember to use these better!
+
 ...
 
 ## Hot reloading

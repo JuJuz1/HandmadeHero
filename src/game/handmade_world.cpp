@@ -93,7 +93,7 @@ IsCanonical(f32 chunkDim, f32 relPos) {
     // TODO: fix the floating point math to not allow the case above of ==
     //ASSERT(relPos >= -world->chunkSideInMeters * 0.5f && relPos <= world->chunkSideInMeters *
     //0.5f);
-    constexpr f32 eps{ 0.0001f };
+    const f32 eps{ 0.0001f };
     const bool32 result{ relPos >= -((chunkDim * 0.5f) + eps) &&
                          relPos <= ((chunkDim * 0.5f) + eps) };
     return result;

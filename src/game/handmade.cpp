@@ -603,7 +603,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     i32 stairsAdded{};
 
     // How many rooms to create
-    constexpr i32 screenCount{ 50 };
+    const i32 screenCount{ 50 };
 
     // Generating tile values
     for (u32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
@@ -718,7 +718,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     AddMonster(gameState, cameraTileX + 4, cameraTileY, cameraTileZ);
 
-    //constexpr i32 familiarCount{ 1 }; // 10
+    //const i32 familiarCount{ 1 }; // 10
 
     //for (i32 i{}; i < familiarCount; ++i) {
     //    const i32 familiarOffsetX{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 7 };
@@ -864,10 +864,10 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
 INTERNAL void
 DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
     if (entity->hitPointMax >= 1) {
-        constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
-        constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
+        const Vec2 hitPointdimension{ 0.2f, 0.2f };
+        const f32 spacingX{ hitPointdimension.x * 1.5f };
         Vec2 hitPointPos{ -0.5f * (entity->hitPointMax - 1) * spacingX, -0.25f };
-        constexpr Vec2 dPos{ spacingX, 0.0f };
+        const Vec2 dPos{ spacingX, 0.0f };
 
         for (i32 i{}; i < entity->hitPointMax; ++i) {
             const HitPoint* hitPoint{ &entity->hitPoints[i] };
@@ -1028,12 +1028,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const World* world{ gameState->world };
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
-    constexpr i32 tileSideInPixels{ 60 };
+    const i32 tileSideInPixels{ 60 };
     gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
 
-    constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
-    constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
-    constexpr i32 tileSpanZ{ 1 };
+    const i32 tileSpanX{ tiles_Per_Width * 3 };
+    const i32 tileSpanY{ tiles_Per_Height * 3 };
+    const i32 tileSpanZ{ 1 };
     const Rect3 cameraBounds{ RectCenterDim(Vec3{}, gameState->world->tileSideInMeters *
                                                         Vec3{ static_cast<f32>(tileSpanX),
                                                               static_cast<f32>(tileSpanY),
@@ -1194,7 +1194,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         case EntityType::FAMILIAR: {
             if (entity->followingHero) {
                 SimEntity* closestHero{};
-                constexpr f32 maxDist{ 10.0f };
+                const f32 maxDist{ 10.0f };
                 f32 closestHeroDSq{ SquareF32(maxDist) };
 
                 // TODO: naive solution, BAD
@@ -1216,7 +1216,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 Vec3 acceleration{};
 
                 if (closestHero && closestHeroDSq > stopDistSq) {
-                    constexpr f32 speed{ 0.5f };
+                    const f32 speed{ 0.5f };
                     const f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
                     acceleration = (closestHero->pos - entity->pos) * oneOverLength;
                     //PRINT_F32("before: closestHeroDSq: ", closestHeroDSq);
@@ -1238,7 +1238,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // Head bob
-            constexpr f32 bobSpeed{ 3.5f };
+            const f32 bobSpeed{ 3.5f };
             entity->tBob += delta * bobSpeed;
             if (entity->tBob > (2.0f * PI32f)) {
                 entity->tBob -= (2.0f * PI32f);

@@ -283,8 +283,8 @@ DisplayBufferWindow(const HDC deviceContext, // clang-tidy NOLINT
                       screenBuff->width, screenBuff->height, screenBuff->memory, &screenBuff->info,
                       DIB_RGB_COLORS, SRCCOPY);
     } else {
-        constexpr i32 offsetX{ 50 };
-        constexpr i32 offsetY{ 50 };
+        const i32 offsetX{ 50 };
+        const i32 offsetY{ 50 };
 
         // Only clear parts we are not writing to get rid of flickering
         PatBlt(deviceContext, 0, 0, wndWidth, offsetY, BLACKNESS);
@@ -1085,9 +1085,9 @@ WinMain(
     // NOTE: This will not be used if we recap episode 20 audio fixes
     // 3 seems to be enough for monitorHz of 60 (gameUpdateHz 30), 5 for 144
     // NOTE: audio is bugged when using the record and playback
-    constexpr i32 framesOfAudioLatency{ 5 };
+    const i32 framesOfAudioLatency{ 5 };
 
-    constexpr i32 desiredSchedulerMS{ 1 };
+    const i32 desiredSchedulerMS{ 1 };
     const bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
     if (!RegisterClassA(&windowClass)) {
@@ -1108,8 +1108,8 @@ WinMain(
         return 0;
     }
 
-    constexpr i32 startingWidth{ 960 };
-    constexpr i32 startingHeight{ 540 };
+    const i32 startingWidth{ 960 };
+    const i32 startingHeight{ 540 };
     hm_win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     char buf[128];
