@@ -606,7 +606,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     constexpr i32 screenCount{ 50 };
 
     // Generating tile values
-    for (u32 screen{}; screen < screenCount; ++screen) {
+    for (u32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
         ASSERT(randomNumIndex < hm_random::randomNumbers.size);
         u32 randomChoice;
         // Lateral only
@@ -660,7 +660,11 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
                 }
 
                 if (tileValue == blocked_Tile_Value) {
-                    const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
+                    // TODO: @Remove eventually
+                    if (screenIndex == 0) {
+                        const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
+                    }
+
                     ++wallsAdded;
                 } else if (createdZDoor) {
                     if (tileX == 10 && tileY == 5) {

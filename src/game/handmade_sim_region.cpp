@@ -147,7 +147,7 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
 
     // Take into account max velocity of any entity and the delta time!
     const f32 safetyMargin{ simRegion->maxEntityRadius + (simRegion->maxEntityVelocity * delta) };
-    constexpr f32 safetyMarginZ{ 1.0f };
+    const f32 safetyMarginZ{ 1.0f };
 
     simRegion->world = world;
     simRegion->origin = origin;
@@ -428,7 +428,7 @@ SpeculativeCollide(SimEntity* mover, SimEntity* region) {
     bool32 result{ true };
     if (region->type == EntityType::STAIRWELL) {
         const f32 ground{ GetStairGround(region, GetEntityGroundPoint(mover)) };
-        constexpr f32 stepHeight{ 0.1f };
+        const f32 stepHeight{ 0.1f };
 #if 0
         result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight) ||
                  ((bary.y > 0.1f) && (bary.y < 0.9f));
@@ -442,7 +442,7 @@ SpeculativeCollide(SimEntity* mover, SimEntity* region) {
 
 NODISCARD
 INTERNAL bool32
-EntitiesOverlap(SimEntity* entity, SimEntity* testEntity) {
+EntitiesOverlap(SimEntity* entity, SimEntity* testEntity, Vec3 epsEnlargementRegion = {}) {
     bool32 result{};
 
     for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount && !result;
@@ -452,7 +452,9 @@ EntitiesOverlap(SimEntity* entity, SimEntity* testEntity) {
              ++testVolumeIndex) {
             auto* testVolume{ &testEntity->collision->volumes[testVolumeIndex] };
 
-            const Rect3 entityRect{ RectCenterDim(entity->pos + volume->offsetPos, volume->dim) };
+            // Add to which one we want, no difference there
+            const Rect3 entityRect{ RectCenterDim(entity->pos + volume->offsetPos,
+                                                  volume->dim + epsEnlargementRegion) };
             const Rect3 testEntityRect{ RectCenterDim(testEntity->pos + testVolume->offsetPos,
                                                       testVolume->dim) };
             result = RectsIntersect(entityRect, testEntityRect);
@@ -522,7 +524,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         distanceRemaining = 10000.0f;
     }
 
-    constexpr i32 iterationCount{ 4 };
+    const i32 iterationCount{ 4 };
 
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
         const f32 playerDeltaLength{ Length(playerDelta) };
@@ -550,7 +552,14 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
                 SimEntity* testEntity{ &simRegion->entities[highIndex] };
-                if (CanCollide(gameState, entity, testEntity)) {
+
+                // TODO: @Robustness
+                const f32 epsOverlap{ 0.001f };
+                const Vec3 epsOverlapRegion{ Vec3::ONE * epsOverlap };
+
+                if ((IsSet(testEntity, SimEntityFlags::TRAVERSABLE) &&
+                     EntitiesOverlap(entity, testEntity, epsOverlapRegion)) ||
+                    CanCollide(gameState, entity, testEntity)) {
                     for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount;
                          ++volumeIndex) {
                         auto* volume{ &entity->collision->volumes[volumeIndex] };
@@ -574,11 +583,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                             }
 
                             // Test all four "walls", used for other entities as well
-
-                            Vec3 testWallNormal{};
-                            SimEntity* testHitEntity{};
-                            f32 testTMin{ tMin };
-                            f32 testTMax{ tMax };
 
 #if 0
                             // x
@@ -635,39 +639,41 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                 Vec3 normal;
                             };
 
-                            // x
                             TestWallData walls[]{
+                                // x
                                 { minCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
                                   minCorner.y, maxCorner.y, Vec3{ -1, 0, 0 } },
                                 { maxCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
                                   minCorner.y, maxCorner.y, Vec3{ 1, 0, 0 } },
+                                // y
                                 { minCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
-                                  minCorner.y, maxCorner.y, Vec3{ 0, -1, 0 } },
+                                  minCorner.x, maxCorner.x, Vec3{ 0, -1, 0 } },
                                 { maxCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
-                                  minCorner.y, maxCorner.y, Vec3{ 0, -1, 0 } }
+                                  minCorner.x, maxCorner.x, Vec3{ 0, 1, 0 } }
                             };
 
+                            Vec3 testWallNormal{};
+                            SimEntity* testHitEntity{};
+                            f32 testTMin{ tMin };
+                            f32 testTMax{ tMax };
+
                             if (IsSet(testEntity, SimEntityFlags::TRAVERSABLE)) {
-                                if (1) {
-                                    for (i32 wallIndex{}; wallIndex < ARRAY_COUNT(walls);
-                                         ++wallIndex) {
-                                        TestWallData* wall{ &walls[wallIndex] };
+                                for (i32 wallIndex{}; wallIndex < ARRAY_COUNT(walls); ++wallIndex) {
+                                    TestWallData* wall{ &walls[wallIndex] };
 
-                                        constexpr f32 tEps{ 0.001f };
-                                        f32 newTMax{ tMax };
+                                    const f32 tEps{ 0.001f };
+                                    f32 newTMax{ tMax };
 
-                                        if (wall->deltaX != 0.0f) {
-                                            const f32 tResult{ (wall->x - wall->relX) /
-                                                               wall->deltaX };
-                                            const f32 newY{ wall->relY + (tResult * wall->deltaY) };
-                                            if (tResult >= 0.0f && tMax < tResult) {
-                                                if (newY >= wall->minY && newY <= wall->maxY) {
-                                                    newTMax = tResult;
-                                                    testTMax = newTMax;
+                                    if (wall->deltaX != 0.0f) {
+                                        const f32 tResult{ (wall->x - wall->relX) / wall->deltaX };
+                                        const f32 newY{ wall->relY + (tResult * wall->deltaY) };
+                                        if (tResult >= 0.0f && tMax < tResult) {
+                                            if (newY >= wall->minY && newY <= wall->maxY) {
+                                                newTMax = MAX(0.0f, tResult - tEps);
+                                                testTMax = newTMax;
 
-                                                    testWallNormal = wall->normal;
-                                                    testHitEntity = testEntity;
-                                                }
+                                                testWallNormal = wall->normal;
+                                                testHitEntity = testEntity;
                                             }
                                         }
                                     }
@@ -682,7 +688,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                 for (i32 wallIndex{}; wallIndex < ARRAY_COUNT(walls); ++wallIndex) {
                                     TestWallData* wall{ &walls[wallIndex] };
 
-                                    constexpr f32 tEps{ 0.001f };
+                                    const f32 tEps{ 0.001f };
                                     f32 newTMin{ tMin };
 
                                     if (wall->deltaX != 0.0f) {
@@ -705,8 +711,8 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                     if (SpeculativeCollide(entity, testEntity)) {
                                         tMin = testTMin;
                                         wallNormalMin = testWallNormal;
+                                        hitEntityMin = testHitEntity;
                                     }
-                                    hitEntityMin = testHitEntity;
                                 }
                             }
                         }
@@ -730,8 +736,8 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
             wallNormal = wallNormalMax;
         }
 
-        entity->pos += playerDelta * tMin;
-        distanceRemaining -= playerDeltaLength * tMin;
+        entity->pos += playerDelta * tStop;
+        distanceRemaining -= playerDeltaLength * tStop;
         distanceRemaining = MAX(distanceRemaining, 0.0f); // Do this just for safety?
         // This is sometimes hit when the sword is reset
         //ASSERT(distanceRemaining >= 0);
@@ -753,8 +759,8 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
 
     // Handle events based on overlapping
     // Imagine like walking on lava, we want to affect movement and other stuff most likely!
-    // Previously we added every overlapping entity to a overlap array and used that at the end
-    // of this function to do stuff
+    // Previously we added every overlapping entity to a overlap array and used that at the
+    // end of this function to do stuff
 
     // TODO: this is based on the camera position...
     // so we need a solid concept of ground levels
@@ -764,7 +770,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     i32 overLappingCount{};
 
     {
-
         for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
             SimEntity* testEntity{ &simRegion->entities[highIndex] };
             // Simple code :)
@@ -792,7 +797,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
 
     // Delta independent friction using exponential decay: e^(-kt)
     //if (hitWall) {
-    //    constexpr f32 frictionModifier{ 2.0f };
+    //    const f32 frictionModifier{ 2.0f };
     //    const f32 friction{ ExpF32(-frictionModifier * delta) };
     //    entity->velocity *= friction;
     //}

@@ -39,9 +39,11 @@ struct Vec3 {
     inline Vec3& operator/=(f32 scalar);
 
     NOT_BOUND const Vec3 ZERO;
+    NOT_BOUND const Vec3 ONE;
 };
 
 inline constexpr Vec3 Vec3::ZERO{};
+inline constexpr Vec3 Vec3::ONE{ 1, 1, 1 };
 
 //NODISCARD
 //INTERNAL inline Vec3 operator-(Vec3 rhs);
