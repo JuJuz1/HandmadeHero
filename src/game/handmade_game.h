@@ -102,6 +102,10 @@ struct GameState {
 
     Array<ControlledHero, ARRAY_COUNT(Input::playerInputs)> controlledHeroes;
 
+    Array<LoadedBitmapInfo, 2> grassBitmaps;
+    Array<LoadedBitmapInfo, 4> stoneBitmaps;
+    Array<LoadedBitmapInfo, 3> tuftBitmaps;
+
     Array<HeroBitmaps, 4> heroBitmaps;
     LoadedBitmapInfo background;
     LoadedBitmapInfo tree;

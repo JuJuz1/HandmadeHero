@@ -166,14 +166,16 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
             }
         }
     } else {
-        PRINT("Couldn't load bmp!\n");
+        PRINT("Couldn't load bmp: ");
+        PRINT(filename);
+        PRINT("\n");
     }
 
     return result;
 }
 
 INTERNAL void
-DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
+DrawBitmap(OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
            f32 CAlpha = 1.0f) {
     // TODO: never have this case? use a placeholder instead?
     if (!bitmap->pixels) {
@@ -413,6 +415,27 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     // TODO: This should really be a runtime property...
 #if HANDMADE_USE_REAL_ASSETS
+    gameState->grassBitmaps[0] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/grass00.bmp");
+    gameState->grassBitmaps[1] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/grass01.bmp");
+
+    gameState->stoneBitmaps[0] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground00.bmp");
+    gameState->stoneBitmaps[1] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground01.bmp");
+    gameState->stoneBitmaps[2] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground02.bmp");
+    gameState->stoneBitmaps[3] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground03.bmp");
+
+    gameState->tuftBitmaps[0] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tuft00.bmp");
+    gameState->tuftBitmaps[1] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tuft01.bmp");
+    gameState->tuftBitmaps[2] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tuft02.bmp");
+
     gameState->background =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_background.bmp");
 
@@ -606,7 +629,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     const i32 screenCount{ 50 };
 
     // Generating tile values
-    for (u32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
+    for (i32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
         ASSERT(randomNumIndex < hm_random::randomNumbers.size);
         u32 randomChoice;
         // Lateral only
@@ -883,6 +906,51 @@ DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
     }
 }
 
+INTERNAL void
+DrawTestGround(GameState* gameState, OffScreenBuffer* screenBuff) {
+    using namespace hm_random;
+
+    u32 minValue{ UINT32_MAX };
+    u32 maxValue{};
+    for (u32 numIndex{}; numIndex < randomNumbers.size; ++numIndex) {
+        minValue = MIN(minValue, randomNumbers[numIndex]);
+        maxValue = MAX(maxValue, randomNumbers[numIndex]);
+    }
+
+    // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
+    const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
+    u32 randomNumIndex{};
+    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+        ASSERT(randomNumIndex < randomNumbers.size);
+
+        LoadedBitmapInfo* stamp;
+        if (randomNumbers[randomNumIndex++] % 2) {
+            stamp = &gameState->grassBitmaps[randomNumbers[randomNumIndex++] %
+                                             ARRAY_COUNT(gameState->grassBitmaps)];
+        } else if (randomNumbers[randomNumIndex++] % 3) {
+            stamp = &gameState->stoneBitmaps[randomNumbers[randomNumIndex++] %
+                                             ARRAY_COUNT(gameState->stoneBitmaps)];
+        } else {
+            stamp = &gameState->tuftBitmaps[randomNumbers[randomNumIndex++] %
+                                            ARRAY_COUNT(gameState->tuftBitmaps)];
+        }
+
+        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+        // Normalize to [-1, 1] via f(x) = 2x - 1
+        const Vec2 offset{ 2.0f * (static_cast<f32>(randomNumbers[randomNumIndex++]) /
+                                   static_cast<f32>(maxValue)) -
+                               1,
+                           2.0f * (static_cast<f32>(randomNumbers[randomNumIndex++]) /
+                                   static_cast<f32>(maxValue)) -
+                               1 };
+
+        const f32 radius{ 5.0f };
+        const Vec2 pos{ screenCenter + (gameState->metersToPixels * offset * radius) -
+                        bitmapCenter };
+        DrawBitmap(screenBuff, stamp, pos.x, pos.y);
+    }
+}
+
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
@@ -1080,6 +1148,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
              Vec2{ static_cast<f32>(screenBuff->width), static_cast<f32>(screenBuff->height) },
              0.5f, 0.5f, 0.5f);
 #endif
+
+    DrawTestGround(gameState, screenBuff);
 
     /// Drawing and processing entities
 

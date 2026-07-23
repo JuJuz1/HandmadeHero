@@ -220,10 +220,10 @@ typedef struct Input {
 /// Services that the game provides to the platform layer ///
 
 // clang-format off
-#define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, const SoundOutputBuffer* soundBuff)
+#define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, SoundOutputBuffer* soundBuff)
 typedef GET_SOUND_SAMPLES(get_sound_samples);
 
-#define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
+#define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, OffScreenBuffer* screenBuff, Input* input)
 typedef UPDATE_AND_RENDER(update_and_render);
 // clang-format on
 
