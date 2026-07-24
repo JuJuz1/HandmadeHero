@@ -5,6 +5,10 @@
 
 #include "handmade_array.h"
 
+// Computed from the table
+#define MAX_RANDOM_NUMBER 0x05f5c21f
+#define MIN_RANDOM_NUMBER 0x000025a0
+
 namespace hm_random {
 
 // https://www.random.org/integers/?mode=advanced
@@ -525,5 +529,72 @@ GLOBAL const Array<u32, 4096> randomNumbers{
 };
 
 } //namespace hm_random
+
+struct RandomSeries {
+    i32 index;
+};
+
+NODISCARD
+INTERNAL inline RandomSeries
+Seed(u32 seed) {
+    RandomSeries series{};
+
+    series.index = seed % hm_random::randomNumbers.size;
+
+    return series;
+}
+
+NODISCARD
+INTERNAL inline u32
+NextRandomU32(RandomSeries* series) {
+    const u32 result{ hm_random::randomNumbers[series->index++] };
+    if (series->index > hm_random::randomNumbers.size) {
+        series->index = 0;
+    }
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline u32
+RandomChoice(RandomSeries* series, i32 choiceCount) {
+    ASSERT(choiceCount >= 0);
+    const u32 result{ NextRandomU32(series) % choiceCount };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline f32
+RandomUnilateral(RandomSeries* series) {
+    // TODO: See if the optimizer does anything different here as we precompute the divisor
+    // vs. just doing result = NextRandomU32(series) / MAX_RANDOM_NUMBER
+    const f32 divisor{ 1.0f / MAX_RANDOM_NUMBER };
+    const f32 result{ NextRandomU32(series) * divisor };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline f32
+RandomBilateral(RandomSeries* series) {
+    const f32 result{ (RandomUnilateral(series) * 2.0f) - 1.0f };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline f32
+RandomRange(RandomSeries* series, f32 min, f32 max) {
+    //const f32 range{ max - min };
+    //const f32 result{ min + RandomUnilateral(series) * range };
+    const f32 result{ Lerp(min, RandomUnilateral(series), max) };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline i32
+RandomRange(RandomSeries* series, i32 min, i32 max) {
+    const i32 range{ max - min + 1 }; // Inclusive at the end
+    const i32 result{ min + (static_cast<i32>(NextRandomU32(series)) % range) };
+    return result;
+}
 
 #endif // HANDMADE_RANDOM_H

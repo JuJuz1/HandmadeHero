@@ -604,7 +604,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     LoadArtAssets(threadContext, gameState, memory);
 
-    u32 randomNumIndex{};
+    // TODO: store in GameState?
+    RandomSeries series{ Seed(1234) };
 
     bool32 doorLeft{};
     bool32 doorRight{};
@@ -630,26 +631,25 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Generating tile values
     for (i32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
-        ASSERT(randomNumIndex < hm_random::randomNumbers.size);
-        u32 randomChoice;
+        u32 doorDirection;
         // Lateral only
         if (doorUp || doorDown) {
-            randomChoice = hm_random::randomNumbers[randomNumIndex++] % 2;
+            doorDirection = RandomChoice(&series, 2);
         } else {
-            randomChoice = hm_random::randomNumbers[randomNumIndex++] % 3;
+            doorDirection = RandomChoice(&series, 3);
         }
 
         bool32 createdZDoor{};
-        // randomChoice of 2 means the room is blocked and has a door going up
+        // doorDirection of 2 means the room is blocked and has a door going up
         // Atm this logic means we can only have 2 layers (z of 0 or 1)
-        if (randomChoice == 2) {
+        if (doorDirection == 2) {
             createdZDoor = true;
             if (absTileZ == screenBaseZ) {
                 doorUp = true;
             } else {
                 doorDown = true;
             }
-        } else if (randomChoice == 1) {
+        } else if (doorDirection == 1) {
             doorRight = true;
         } else {
             doorTop = true;
@@ -712,7 +712,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
             doorDown = false;
         }
 
-        if (randomChoice == 2) {
+        if (doorDirection == 2) {
             if (absTileZ == screenBaseZ) {
                 absTileZ += 1;
             } else {
@@ -720,7 +720,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
             }
         }
         // Advance screens if we didn't make a vertical floor (door)
-        else if (randomChoice == 1) {
+        else if (doorDirection == 1) {
             ++screenX;
         } else {
             ++screenY;
@@ -741,18 +741,18 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     AddMonster(gameState, cameraTileX + 4, cameraTileY, cameraTileZ);
 
-    //const i32 familiarCount{ 1 }; // 10
+    const i32 familiarCount{ 1 }; // 10
 
-    //for (i32 i{}; i < familiarCount; ++i) {
-    //    const i32 familiarOffsetX{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 7 };
-    //    const i32 familiarOffsetY{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 3 };
-    //    if (familiarOffsetX && familiarOffsetY) {
-    //        AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
-    //                    cameraTileZ);
-    //    }
-    //}
+    for (i32 i{}; i < familiarCount; ++i) {
+        const i32 familiarOffsetX{ RandomRange(&series, -7, 7) };
+        const i32 familiarOffsetY{ RandomRange(&series, -3, 1) };
+        if (familiarOffsetX && familiarOffsetY) {
+            AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
+                        cameraTileZ);
+        }
+    }
 
-    AddFamiliar(gameState, cameraTileX - 2, cameraTileY + 1, cameraTileZ);
+    //AddFamiliar(gameState, cameraTileX - 2, cameraTileY + 1, cameraTileZ);
 
     // Atm SetCamera has to be called at the end if there is no player at the start
     // This is because we don't call SetCamera after this function if there is no player
@@ -910,6 +910,8 @@ INTERNAL void
 DrawTestGround(GameState* gameState, OffScreenBuffer* screenBuff) {
     using namespace hm_random;
 
+    RandomSeries series{ Seed(1234) };
+
     u32 minValue{ UINT32_MAX };
     u32 maxValue{};
     for (u32 numIndex{}; numIndex < randomNumbers.size; ++numIndex) {
@@ -919,30 +921,37 @@ DrawTestGround(GameState* gameState, OffScreenBuffer* screenBuff) {
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
+
     u32 randomNumIndex{};
     for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
         ASSERT(randomNumIndex < randomNumbers.size);
 
         LoadedBitmapInfo* stamp;
-        if (randomNumbers[randomNumIndex++] % 2) {
-            stamp = &gameState->grassBitmaps[randomNumbers[randomNumIndex++] %
-                                             ARRAY_COUNT(gameState->grassBitmaps)];
-        } else if (randomNumbers[randomNumIndex++] % 3) {
-            stamp = &gameState->stoneBitmaps[randomNumbers[randomNumIndex++] %
-                                             ARRAY_COUNT(gameState->stoneBitmaps)];
+        if (RandomChoice(&series, 2)) {
+            stamp = &gameState->grassBitmaps[RandomChoice(&series, gameState->grassBitmaps.size)];
         } else {
-            stamp = &gameState->tuftBitmaps[randomNumbers[randomNumIndex++] %
-                                            ARRAY_COUNT(gameState->tuftBitmaps)];
+            stamp = &gameState->stoneBitmaps[RandomChoice(&series, gameState->stoneBitmaps.size)];
         }
 
         const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
         // Normalize to [-1, 1] via f(x) = 2x - 1
-        const Vec2 offset{ 2.0f * (static_cast<f32>(randomNumbers[randomNumIndex++]) /
-                                   static_cast<f32>(maxValue)) -
-                               1,
-                           2.0f * (static_cast<f32>(randomNumbers[randomNumIndex++]) /
-                                   static_cast<f32>(maxValue)) -
-                               1 };
+        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
+
+        const f32 radius{ 5.0f };
+        const Vec2 pos{ screenCenter + (gameState->metersToPixels * offset * radius) -
+                        bitmapCenter };
+        DrawBitmap(screenBuff, stamp, pos.x, pos.y);
+    }
+
+    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+        ASSERT(randomNumIndex < randomNumbers.size);
+
+        LoadedBitmapInfo* stamp;
+        stamp = &gameState->tuftBitmaps[RandomChoice(&series, gameState->tuftBitmaps.size)];
+
+        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+        // Normalize to [-1, 1] via f(x) = 2x - 1
+        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
 
         const f32 radius{ 5.0f };
         const Vec2 pos{ screenCenter + (gameState->metersToPixels * offset * radius) -
@@ -1343,8 +1352,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         case EntityType::SPACE: {
             for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
                 const auto* volume{ &entity->collision->volumes[volumeIndex] };
-                PushRectOutline(&pieceGroup, volume->offsetPos.xy, 0, volume->dim.xy,
-                                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
+                //PushRectOutline(&pieceGroup, volume->offsetPos.xy, 0, volume->dim.xy,
+                //                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
             }
         } break;
 
