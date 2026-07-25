@@ -979,7 +979,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: this macro depends on the order of the buttons inside InputButtons
     ASSERT(&input->playerInputs[0].terminator - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
-    ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==
+    ASSERT(&input->mouseButtons.terminator - &input->mouseButtons.buttons[0] ==
            ARRAY_COUNT(input->mouseButtons.buttons) - 1);
 
     // TODO: Find another way preferrably
@@ -993,6 +993,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     if (!memory->isInitialized) {
         InitializeGameState(threadContext, gameState, memory);
     }
+
+    // Had a bug earlier with this not being initialized yet
+    // Should probably assert a bunch more everywhere
+    ASSERT(gameState->metersToPixels != 0.0f);
 
     const World* world{ gameState->world };
 

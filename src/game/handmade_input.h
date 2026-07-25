@@ -19,6 +19,7 @@ ProcessInputEvent(Button* button, bool32 isDown) {
  */
 INTERNAL void
 ClearInputTransitionCounts(Input* gameInput) {
+    // TODO: mouse buttons?
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput->playerInputs);
          ++controllerIndex) {
         for (i32 i{}; i < ARRAY_COUNT(gameInput->playerInputs[0].buttons); ++i) {

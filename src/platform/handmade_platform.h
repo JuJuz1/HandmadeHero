@@ -191,7 +191,7 @@ typedef struct InputButtons {
 
 typedef struct MouseButtons {
     union {
-        Button buttons[5];
+        Button buttons[6];
 
         struct {
             Button left;
@@ -201,6 +201,8 @@ typedef struct MouseButtons {
             // Side buttons
             Button x1; // Closer
             Button x2; // Further
+
+            Button terminator;
         };
     };
 } MouseButtons;
