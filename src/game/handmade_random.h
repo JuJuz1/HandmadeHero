@@ -12,7 +12,7 @@
 namespace hm_random {
 
 // https://www.random.org/integers/?mode=advanced
-// Random numbers to generate the tile values from
+// Rand numbers to generate the tile values from
 GLOBAL const Array<u32, 4096> randomNumbers{
     0x4f0143b, 0x3402005, 0x26f2b01, 0x22796b6, 0x57343bb, 0x2d9954e, 0x06f9425, 0x1789180,
     0x57d8fab, 0x5365d9c, 0x0e9ec55, 0x2a623e0, 0x366e05d, 0x3759f45, 0x1b4d151, 0x35a5411,
@@ -530,14 +530,14 @@ GLOBAL const Array<u32, 4096> randomNumbers{
 
 } //namespace hm_random
 
-struct RandomSeries {
+struct RandSeries {
     i32 index;
 };
 
 NODISCARD
-INTERNAL inline RandomSeries
-RandomSeed(u32 seed) {
-    RandomSeries series{};
+INTERNAL inline RandSeries
+RandSeed(u32 seed) {
+    RandSeries series{};
 
     series.index = seed % hm_random::randomNumbers.size;
 
@@ -546,7 +546,7 @@ RandomSeed(u32 seed) {
 
 NODISCARD
 INTERNAL inline u32
-NextRandomU32(RandomSeries* series) {
+NextRandU32(RandSeries* series) {
     const u32 result{ hm_random::randomNumbers[series->index++] };
     if (series->index >= hm_random::randomNumbers.size) {
         series->index = 0;
@@ -557,43 +557,43 @@ NextRandomU32(RandomSeries* series) {
 
 NODISCARD
 INTERNAL inline u32
-RandomChoice(RandomSeries* series, i32 choiceCount) {
+RandChoice(RandSeries* series, i32 choiceCount) {
     ASSERT(choiceCount >= 0);
-    const u32 result{ NextRandomU32(series) % choiceCount };
+    const u32 result{ NextRandU32(series) % choiceCount };
     return result;
 }
 
 NODISCARD
 INTERNAL inline f32
-RandomUnilateral(RandomSeries* series) {
+RandUnilateral(RandSeries* series) {
     // TODO: See if the optimizer does anything different here as we precompute the divisor
-    // vs. just doing result = NextRandomU32(series) / MAX_RANDOM_NUMBER
+    // vs. just doing result = NextRandU32(series) / MAX_RANDOM_NUMBER
     const f32 divisor{ 1.0f / static_cast<f32>(MAX_RANDOM_NUMBER) };
-    const f32 result{ NextRandomU32(series) * divisor };
+    const f32 result{ NextRandU32(series) * divisor };
     return result;
 }
 
 NODISCARD
 INTERNAL inline f32
-RandomBilateral(RandomSeries* series) {
-    const f32 result{ (RandomUnilateral(series) * 2.0f) - 1.0f };
+RandBilateral(RandSeries* series) {
+    const f32 result{ (RandUnilateral(series) * 2.0f) - 1.0f };
     return result;
 }
 
 NODISCARD
 INTERNAL inline f32
-RandomRange(RandomSeries* series, f32 min, f32 max) {
+RandRange(RandSeries* series, f32 min, f32 max) {
     //const f32 range{ max - min };
-    //const f32 result{ min + RandomUnilateral(series) * range };
-    const f32 result{ Lerp(min, RandomUnilateral(series), max) };
+    //const f32 result{ min + RandUnilateral(series) * range };
+    const f32 result{ Lerp(min, RandUnilateral(series), max) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline i32
-RandomRange(RandomSeries* series, i32 min, i32 max) {
+RandRange(RandSeries* series, i32 min, i32 max) {
     const i32 range{ max - min + 1 }; // Inclusive at the end
-    const i32 result{ min + (static_cast<i32>(NextRandomU32(series)) % range) };
+    const i32 result{ min + (static_cast<i32>(NextRandU32(series)) % range) };
     return result;
 }
 

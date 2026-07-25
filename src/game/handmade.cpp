@@ -617,22 +617,22 @@ INTERNAL void
 DrawTestGround(GameState* gameState, LoadedBitmapInfo* buff) {
     using namespace hm_random;
 
-    RandomSeries series{ RandomSeed(1234) };
+    RandSeries series{ RandSeed(1234) };
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
 
     for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
         LoadedBitmapInfo* stamp;
-        if (RandomChoice(&series, 2)) {
-            stamp = &gameState->grassBitmaps[RandomChoice(&series, gameState->grassBitmaps.size)];
+        if (RandChoice(&series, 2)) {
+            stamp = &gameState->grassBitmaps[RandChoice(&series, gameState->grassBitmaps.size)];
         } else {
-            stamp = &gameState->stoneBitmaps[RandomChoice(&series, gameState->stoneBitmaps.size)];
+            stamp = &gameState->stoneBitmaps[RandChoice(&series, gameState->stoneBitmaps.size)];
         }
 
         const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
         // Normalize to [-1, 1] via f(x) = 2x - 1
-        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
+        const Vec2 offset{ RandBilateral(&series), RandBilateral(&series) };
 
         const f32 radius{ 5.0f };
         const Vec2 pos{ screenCenter + (offset * gameState->metersToPixels * radius) -
@@ -642,10 +642,10 @@ DrawTestGround(GameState* gameState, LoadedBitmapInfo* buff) {
 
     for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
         LoadedBitmapInfo* stamp;
-        stamp = &gameState->tuftBitmaps[RandomChoice(&series, gameState->tuftBitmaps.size)];
+        stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
 
         const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
+        const Vec2 offset{ RandBilateral(&series), RandBilateral(&series) };
 
         const f32 radius{ 5.0f };
         const Vec2 pos{ screenCenter + (offset * gameState->metersToPixels * radius) -
@@ -838,7 +838,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     LoadArtAssets(threadContext, gameState, memory);
 
     // TODO: store in GameState?
-    RandomSeries series{ RandomSeed(1234) };
+    RandSeries series{ RandSeed(1234) };
 
     bool32 doorLeft{};
     bool32 doorRight{};
@@ -867,9 +867,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         u32 doorDirection;
         // Lateral only
         if (doorUp || doorDown) {
-            doorDirection = RandomChoice(&series, 2);
+            doorDirection = RandChoice(&series, 2);
         } else {
-            doorDirection = RandomChoice(&series, 3);
+            doorDirection = RandChoice(&series, 3);
         }
 
         bool32 createdZDoor{};
@@ -977,8 +977,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     const i32 familiarCount{ 1 }; // 10
 
     for (i32 i{}; i < familiarCount; ++i) {
-        const i32 familiarOffsetX{ RandomRange(&series, -7, 7) };
-        const i32 familiarOffsetY{ RandomRange(&series, -3, 1) };
+        const i32 familiarOffsetX{ RandRange(&series, -7, 7) };
+        const i32 familiarOffsetY{ RandRange(&series, -3, 1) };
         if (familiarOffsetX && familiarOffsetY) {
             AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
                         cameraTileZ);
