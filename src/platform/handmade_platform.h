@@ -71,17 +71,9 @@ typedef struct DEBUGFileReadResult {
 } DEBUGFileReadResult;
 
 // clang-format off
-#define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* message)
+// TODO: our own versions?
+#define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* format, ...)
 typedef DEBUG_PRINT(debug_print);
-
-#define DEBUG_PRINT_I32(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
-typedef DEBUG_PRINT_I32(debug_print_i32);
-
-#define DEBUG_PRINT_U32(name) void name(ThreadContext* threadContext, const char* valueName, u32 value)
-typedef DEBUG_PRINT_U32(debug_print_u32);
-
-#define DEBUG_PRINT_F32(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
-typedef DEBUG_PRINT_F32(debug_print_f32);
 
 #define DEBUG_FREE_FILE_MEMORY(name) void name(ThreadContext* threadContext, void* memory)
 typedef DEBUG_FREE_FILE_MEMORY(debug_free_file_memory);
@@ -96,9 +88,6 @@ typedef DEBUG_WRITE_FILE(debug_write_file);
 // Exported functions for the game
 typedef struct PlatformExports {
     debug_print* DEBUGPrint;
-    debug_print_i32* DEBUGPrintInt;
-    debug_print_u32* DEBUGPrintUInt;
-    debug_print_f32* DEBUGPrintFloat;
 
     debug_free_file_memory* DEBUGFreeFileMemory;
     debug_read_file* DEBUGReadFile;

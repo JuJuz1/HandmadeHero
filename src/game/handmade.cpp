@@ -26,11 +26,7 @@ GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
 // TODO: think of a better way!
-#define PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
-#define PRINT_I32(message, value) (*gMemory->exports.DEBUGPrintInt)(gThreadContext, message, value)
-#define PRINT_U32(message, value) (*gMemory->exports.DEBUGPrintUInt)(gThreadContext, message, value)
-#define PRINT_F32(message, value)                                                                  \
-    (*gMemory->exports.DEBUGPrintFloat)(gThreadContext, message, value)
+#define PRINT(format, ...) (*gMemory->exports.DEBUGPrint)(gThreadContext, format, __VA_ARGS__)
 
 // clang-format off
 #include "game/handmade_world.cpp"
@@ -336,7 +332,7 @@ AddSword(GameState* gameState) {
     auto sword{ AddLowEntity(gameState, EntityType::SWORD, NullWorldPos()) };
     auto* lowEntity{ sword.lowEntity };
 
-    PRINT_I32("New sword: ", sword.lowIndex);
+    PRINT("New sword: %d\n", sword.lowIndex);
 
     lowEntity->sim.collision = gameState->swordCollision;
     // TODO: needed?
@@ -352,7 +348,7 @@ AddPlayer(GameState* gameState) {
     const auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos,
                                          gameState->heroCollision) };
     auto* lowEntity{ player.lowEntity };
-    PRINT_I32("New player: ", player.lowIndex);
+    PRINT("New player: %d\n", player.lowIndex);
 
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
@@ -706,8 +702,7 @@ PushRectOutline(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 d
 
 INTERNAL void
 ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
-    PRINT("ClearCollisionRulesFor\n");
-    PRINT_I32("Index: ", storageIndex);
+    PRINT("ClearCollisionRulesFor, index: %d\n", storageIndex);
 
     // @Speed
     // TODO: better way to remove collision rather than walking through the whole map!
@@ -729,10 +724,7 @@ ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
 
 INTERNAL void
 AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 canCollide) {
-    PRINT("AddCollisionRule\n");
-    PRINT_I32("A: ", storageIndexA);
-    PRINT_I32("B: ", storageIndexB);
-    PRINT_I32("Collide: ", canCollide);
+    PRINT("AddCollisionRule A: %d, B: %d, collide: %d\n", storageIndexA, storageIndexB, canCollide);
 
     if (storageIndexA > storageIndexB) {
         const i32 temp{ storageIndexA };
@@ -960,8 +952,8 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
         }
     }
 
-    PRINT_I32("Walls added: ", wallsAdded);
-    PRINT_I32("Stairs added: ", stairsAdded);
+    PRINT("Walls added: %d\n", wallsAdded);
+    PRINT("Stairs added: %d\n", stairsAdded);
 
     const i32 cameraTileX{ screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2) };
     const i32 cameraTileY{ screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2) };
@@ -1481,7 +1473,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // @Debug
 #if 0
     PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
-    PRINT_I32("Max index: ", simRegion->maxRecordedEntityVelocityIndex);
+    PRINT("Max index: ", simRegion->maxRecordedEntityVelocityIndex);
 
     const char* typeStr{ EntityTypeToStr(simRegion->maxRecordedEntityVelocityType) };
     PRINT("Max type: ");

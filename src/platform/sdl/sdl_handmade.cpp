@@ -50,43 +50,18 @@ INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    printf("%s", message);
-}
+    char buffer[1024];
 
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%d\n", valueName, value);
-}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%u\n", valueName, value);
-}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%f\n", valueName, value);
+    va_list args;
+    va_start(args, format);
+    vprintf_s(format, args);
+    va_end(args);
 }
 
 #else
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {}
 
 #endif // HANDMADE_INTERNAL
 
@@ -827,9 +802,6 @@ main() {
     }
 
     // Platform exports
-    gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
-    gameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
     gameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
 
     gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;

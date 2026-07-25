@@ -195,7 +195,7 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
     }
 
     //if (movedCount > 0) {
-    //    PRINT_I32("Entities moved to sim: ", movedCount);
+    //    PRINT("Entities moved to sim: ", movedCount);
     //}
 
     return simRegion;
@@ -253,20 +253,20 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         // familiar... figure it out, probably using the references like with the sword
         // the system is not fully fletched out yet so prolly best to wait on it!
         if (doFamiliarStopFollow && stored->sim.familiarIndex) {
-            PRINT_I32("Familiar follow swap: ", stored->sim.familiarIndex);
+            PRINT("Familiar follow swap: %d\n", stored->sim.familiarIndex);
             auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
             familiar->sim.followingHero = !familiar->sim.followingHero;
         } else if (doFamiliarReset && stored->sim.familiarIndex) {
             // TODO: use the EntityReference for this instead of rawdogging?
             auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
-            PRINT_I32("Reset familiar: ", stored->sim.storageIndex);
+            PRINT("Reset familiar: %d\n", stored->sim.storageIndex);
             ChangeEntityLocation(world, &gameState->worldArena, familiar->sim.storageIndex,
                                  familiar, familiar->startingPos);
         }
 
         // These do work!
         if (doResetSword) {
-            PRINT_I32("Reset sword: ", stored->sim.sword.index);
+            PRINT("Reset sword: %d\n", stored->sim.sword.index);
             auto* sword{ GetLowEntity(gameState, stored->sim.sword.index) };
             // TODO: sometimes hit assert inside MoveEntity because distanceRemaining is below 0
             // TODO: @Hack do we even have to do this?
@@ -280,7 +280,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         }
 
         if (doReset) {
-            PRINT_I32("Reset: ", entity->storageIndex);
+            PRINT("Reset: %d\n", entity->storageIndex);
             newPos = stored->startingPos;
             stored->sim.velocity = {};
         } else {
@@ -332,7 +332,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
     }
 
     //if (movedCount > 0) {
-    //    PRINT_I32("Entities moved to back to low: ", movedCount);
+    //    PRINT("Entities moved to back to low: ", movedCount);
     //}
 }
 
@@ -394,7 +394,7 @@ HandleCollision(GameState* gameState, SimEntity* entity, SimEntity* hitEntity) {
             --a->hitPointMax;
         }
 
-        PRINT_I32("Monster hit, curr hp: ", a->hitPointMax);
+        PRINT("Monster hit, curr hp: %d\n", a->hitPointMax);
     }
 
     return stopsOnCollision;

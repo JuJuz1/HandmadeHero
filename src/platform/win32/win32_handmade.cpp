@@ -76,57 +76,26 @@ namespace hm_platform_export {
 
 #if HANDMADE_INTERNAL
 
-// TODO: make these more generic (and allow variadic arguments?)
-// and much safer...
+// TODO: eventually replace with our own solution?
+// if we really find that necessary...
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    char buf[128];
-    sprintf_s(buf, "%s", message);
-    OutputDebugStringA(buf);
-}
+    char buffer[1024];
 
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {
-    UNUSED_PARAMS(threadContext);
+    va_list args;
+    va_start(args, format);
+    _vsnprintf_s(buffer, sizeof(buffer), format, args);
+    va_end(args);
 
-    char buf[64];
-    sprintf_s(buf, "%s%d\n", valueName, value);
-    OutputDebugStringA(buf);
-}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {
-    UNUSED_PARAMS(threadContext);
-
-    char buf[64];
-    sprintf_s(buf, "%s%u\n", valueName, value);
-    OutputDebugStringA(buf);
-}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {
-    UNUSED_PARAMS(threadContext);
-
-    char buf[64];
-    sprintf_s(buf, "%s%f\n", valueName, value);
-    OutputDebugStringA(buf);
+    OutputDebugStringA(buffer);
 }
 
 #else
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {}
 
 #endif
 
@@ -1180,9 +1149,6 @@ WinMain(
     }
 
     // Platform exports
-    gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
-    gameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
     gameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
 
     gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
