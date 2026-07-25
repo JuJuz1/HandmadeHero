@@ -47,7 +47,7 @@ OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {
 }
 
 INTERNAL void
-DrawRect(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
+DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
     i32 roundedMinX{ RoundF32ToI32(min.x) };
     i32 roundedMinY{ RoundF32ToI32(min.y) };
     i32 roundedMaxX{ RoundF32ToI32(max.x) };
@@ -60,20 +60,19 @@ DrawRect(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f3
         roundedMinY = 0;
     }
 
-    if (roundedMaxX > screenBuff->width) {
-        roundedMaxX = screenBuff->width;
+    if (roundedMaxX > buff->width) {
+        roundedMaxX = buff->width;
     }
-    if (roundedMaxY > screenBuff->height) {
-        roundedMaxY = screenBuff->height;
+    if (roundedMaxY > buff->height) {
+        roundedMaxY = buff->height;
     }
 
     // AA RR GG BB
     const i32 color{ (RoundF32ToI32(r * 255.0f) << 16) | (RoundF32ToI32(g * 255.0f) << 8) |
                      (RoundF32ToI32(b * 255.0f) << 0) };
 
-    u8* memory{ static_cast<u8*>(screenBuff->memory) };
-    u8* row{ memory + (roundedMinX * screenBuff->bytesPerPixel) +
-             (roundedMinY * screenBuff->pitch) };
+    u8* memory{ static_cast<u8*>(buff->memory) };
+    u8* row{ memory + (roundedMinX * bitmap_Bytes_Per_Pixel) + (roundedMinY * buff->pitch) };
 
     for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
         // Not including fill pixel
@@ -82,7 +81,7 @@ DrawRect(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f3
             *pixel++ = color;
         }
 
-        row += screenBuff->pitch;
+        row += buff->pitch;
     }
 }
 
@@ -126,7 +125,7 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         u32* pixels{ reinterpret_cast<u32*>(static_cast<u8*>(readFileResult.content) +
                                             bitMapHeader->bitMapOffset) };
 
-        result.pixels = pixels;
+        result.memory = pixels;
         result.width = bitMapHeader->width;
         result.height = bitMapHeader->height;
 
@@ -171,14 +170,17 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         PRINT("\n");
     }
 
+    result.pitch = -result.width * bitmap_Bytes_Per_Pixel;
+    result.memory = static_cast<u8*>(result.memory) - (result.pitch * (result.height - 1));
+
     return result;
 }
 
 INTERNAL void
-DrawBitmap(OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
+DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
            f32 CAlpha = 1.0f) {
     // TODO: never have this case? use a placeholder instead?
-    if (!bitmap->pixels) {
+    if (!bitmap->memory) {
         return;
     }
 
@@ -199,24 +201,22 @@ DrawBitmap(OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos
         roundedMinY = 0;
     }
 
-    if (roundedMaxX > screenBuff->width) {
-        roundedMaxX = screenBuff->width;
+    if (roundedMaxX > buff->width) {
+        roundedMaxX = buff->width;
     }
-    if (roundedMaxY > screenBuff->height) {
-        roundedMaxY = screenBuff->height;
+    if (roundedMaxY > buff->height) {
+        roundedMaxY = buff->height;
     }
 
     // Start from the last row (top row of the image) as the bitmap is stored bottom up
-    u32* srcRow{ bitmap->pixels + (bitmap->width * (bitmap->height - 1)) };
-    // Handle offsets to fix top and left side clipping
-    srcRow += -(bitmap->width * srcOffsetY) + srcOffsetX;
-
-    u8* destRow{ static_cast<u8*>(screenBuff->memory) + (roundedMinY * screenBuff->pitch) +
-                 (roundedMinX * screenBuff->bytesPerPixel) };
+    u8* srcRow{ static_cast<u8*>(bitmap->memory) + (srcOffsetY * bitmap->pitch) +
+                (srcOffsetX * bitmap_Bytes_Per_Pixel) };
+    u8* destRow{ static_cast<u8*>(buff->memory) + (roundedMinY * buff->pitch) +
+                 (roundedMinX * bitmap_Bytes_Per_Pixel) };
 
     for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
         u32* dest{ reinterpret_cast<u32*>(destRow) };
-        u32* src{ srcRow };
+        u32* src{ reinterpret_cast<u32*>(srcRow) };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
             f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
             alpha *= CAlpha;
@@ -225,16 +225,19 @@ DrawBitmap(OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos
             const f32 srcGreen{ static_cast<f32>((*src >> 8) & 0xFF) };
             const f32 srcBlue{ static_cast<f32>((*src >> 0) & 0xFF) };
 
+            const f32 destAlpha{ static_cast<f32>((*dest >> 24) & 0xFF) };
             const f32 destRed{ static_cast<f32>((*dest >> 16) & 0xFF) };
             const f32 destGreen{ static_cast<f32>((*dest >> 8) & 0xFF) };
             const f32 destBlue{ static_cast<f32>((*dest >> 0) & 0xFF) };
 
             // Linear blend
+            const f32 resultAlpha{ MAX(destAlpha, 255.0f * alpha) };
             const f32 resultRed{ ((1.0f - alpha) * destRed) + (alpha * srcRed) };
             const f32 resultGreen{ ((1.0f - alpha) * destGreen) + (alpha * srcGreen) };
             const f32 resultBlue{ ((1.0f - alpha) * destBlue) + (alpha * srcBlue) };
 
-            *dest = { (TruncateF32ToU32(resultRed + 0.5f) << 16) |
+            *dest = { (TruncateF32ToU32(resultAlpha + 0.5f) << 24) |
+                      (TruncateF32ToU32(resultRed + 0.5f) << 16) |
                       (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
                       (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
 
@@ -242,9 +245,9 @@ DrawBitmap(OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos
             ++src;
         }
 
-        destRow += screenBuff->pitch;
+        destRow += buff->pitch;
         // Move to the start of the above row
-        srcRow += -bitmap->width;
+        srcRow += bitmap->pitch;
     }
 }
 
@@ -567,6 +570,204 @@ AddStandardRoom(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) 
     return entity;
 }
 
+NODISCARD
+INTERNAL LoadedBitmapInfo
+MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height) {
+    LoadedBitmapInfo result{};
+
+    result.width = width;
+    result.height = height;
+    result.pitch = width * bitmap_Bytes_Per_Pixel;
+    const i32 totalSize{ width * height * bitmap_Bytes_Per_Pixel };
+    result.memory = PushSize_(arena, totalSize);
+    ZeroMem(result.memory, totalSize);
+
+    return result;
+}
+
+INTERNAL void
+DrawTestGround(GameState* gameState, LoadedBitmapInfo* buff) {
+    using namespace hm_random;
+
+    RandomSeries series{ RandomSeed(1234) };
+
+    // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
+    const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
+
+    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+        LoadedBitmapInfo* stamp;
+        if (RandomChoice(&series, 2)) {
+            stamp = &gameState->grassBitmaps[RandomChoice(&series, gameState->grassBitmaps.size)];
+        } else {
+            stamp = &gameState->stoneBitmaps[RandomChoice(&series, gameState->stoneBitmaps.size)];
+        }
+
+        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+        // Normalize to [-1, 1] via f(x) = 2x - 1
+        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
+
+        const f32 radius{ 5.0f };
+        const Vec2 pos{ screenCenter + (offset * gameState->metersToPixels * radius) -
+                        bitmapCenter };
+        DrawBitmap(buff, stamp, pos.x, pos.y);
+    }
+
+    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+        LoadedBitmapInfo* stamp;
+        stamp = &gameState->tuftBitmaps[RandomChoice(&series, gameState->tuftBitmaps.size)];
+
+        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
+
+        const f32 radius{ 5.0f };
+        const Vec2 pos{ screenCenter + (offset * gameState->metersToPixels * radius) -
+                        bitmapCenter };
+        DrawBitmap(buff, stamp, pos.x, pos.y);
+    }
+}
+
+INTERNAL void
+PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
+          Vec2 align, Vec2 dimension, Vec4 color, f32 entityZC = 1.0f) {
+    ASSERT(group->pieceCount < group->pieces.size);
+    EntityVisiblePiece* piece{ &group->pieces[group->pieceCount++] };
+
+    piece->bitmap = bitmap;
+    piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
+    piece->offsetZ = offsetZ;
+    piece->entityZC = entityZC;
+
+    piece->dimension = dimension;
+
+    piece->r = color.r;
+    piece->g = color.g;
+    piece->b = color.b;
+    piece->a = color.a;
+}
+
+INTERNAL void
+PushBitmap(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
+           Vec2 align, f32 alpha = 1.0f, f32 entityZC = 1.0f) {
+    PushPiece(group, bitmap, offset, offsetZ, align, Vec2{}, Vec4{ 1.0f, 1.0f, 1.0f, alpha },
+              entityZC);
+}
+
+INTERNAL void
+PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
+         f32 entityZC = 1.0f) {
+    PushPiece(group, nullptr, offset, offsetZ, Vec2{}, dim, color, entityZC);
+}
+
+INTERNAL void
+PushRectOutline(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
+                f32 entityZC = 1.0f) {
+    const f32 thickness{ 0.1f };
+
+    // Top bottom
+    PushPiece(group, 0, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
+              color, entityZC);
+    PushPiece(group, 0, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
+              color, entityZC);
+
+    // Left right
+    PushPiece(group, 0, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
+              color, entityZC);
+    PushPiece(group, 0, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
+              color, entityZC);
+}
+
+INTERNAL void
+ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
+    PRINT("ClearCollisionRulesFor\n");
+    PRINT_I32("Index: ", storageIndex);
+
+    // @Speed
+    // TODO: better way to remove collision rather than walking through the whole map!
+    // Storing A,B and B,A would allow easy removal, see ep 70 for full explanation
+    for (i32 hashBucket{}; hashBucket < gameState->collisionRuleHash.size; ++hashBucket) {
+        for (auto** rule{ &gameState->collisionRuleHash[hashBucket] }; *rule;) {
+            if ((*rule)->storageIndexA == storageIndex || (*rule)->storageIndexB == storageIndex) {
+                auto* removedRule{ *rule };
+                *rule = (*rule)->nextInHash;
+
+                removedRule->nextInHash = gameState->firstFreeCollisionRule;
+                gameState->firstFreeCollisionRule = removedRule;
+            } else {
+                rule = &(*rule)->nextInHash;
+            }
+        }
+    }
+}
+
+INTERNAL void
+AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 canCollide) {
+    PRINT("AddCollisionRule\n");
+    PRINT_I32("A: ", storageIndexA);
+    PRINT_I32("B: ", storageIndexB);
+    PRINT_I32("Collide: ", canCollide);
+
+    if (storageIndexA > storageIndexB) {
+        const i32 temp{ storageIndexA };
+        storageIndexA = storageIndexB;
+        storageIndexB = temp;
+    }
+
+    PairWiseCollisionRule* found{};
+    // TODO: Better hash func
+    const i32 hashBucket{ static_cast<i32>(storageIndexA &
+                                           (gameState->collisionRuleHash.size - 1)) };
+    for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
+        if (rule->storageIndexA == storageIndexA && rule->storageIndexB == storageIndexB) {
+            found = rule;
+            break;
+        }
+    }
+
+    if (!found) {
+        found = gameState->firstFreeCollisionRule;
+        if (found) {
+            gameState->firstFreeCollisionRule = found->nextInHash;
+        } else {
+            // Push to head always
+            found = PushSize(&gameState->worldArena, PairWiseCollisionRule);
+        }
+
+        found->nextInHash = gameState->collisionRuleHash[hashBucket];
+        gameState->collisionRuleHash[hashBucket] = found;
+    }
+
+    ASSERT(found);
+    // Out of memory handling?
+    // Update if found earlier
+    if (found) {
+        found->storageIndexA = storageIndexA;
+        found->storageIndexB = storageIndexB;
+        found->canCollide = canCollide;
+    }
+}
+
+INTERNAL void
+DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
+    if (entity->hitPointMax >= 1) {
+        const Vec2 hitPointdimension{ 0.2f, 0.2f };
+        const f32 spacingX{ hitPointdimension.x * 1.5f };
+        Vec2 hitPointPos{ -0.5f * (entity->hitPointMax - 1) * spacingX, -0.25f };
+        const Vec2 dPos{ spacingX, 0.0f };
+
+        for (i32 i{}; i < entity->hitPointMax; ++i) {
+            const HitPoint* hitPoint{ &entity->hitPoints[i] };
+            Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
+            if (hitPoint->filledAmount == 0) {
+                color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
+            }
+
+            // TODO: Height
+            PushRect(group, hitPointPos, 0, hitPointdimension, color, 0.0f);
+            hitPointPos += dPos;
+        }
+    }
+}
+
 INTERNAL void
 InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
     InitializeArena(&gameState->worldArena,
@@ -576,6 +777,10 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
     InitializeWorld(world, 1.4f, 3.0f);
+
+    // IMPORTANT: This now determines the actual pixel size of the tiles!
+    const i32 tileSideInPixels{ 60 };
+    gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
 
     // NOTE: reserve slot 0 for null entity
     // TODO: consider removing if there is no use case as this has caused a bit of problems with
@@ -605,7 +810,7 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     LoadArtAssets(threadContext, gameState, memory);
 
     // TODO: store in GameState?
-    RandomSeries series{ Seed(1234) };
+    RandomSeries series{ RandomSeed(1234) };
 
     bool32 doorLeft{};
     bool32 doorRight{};
@@ -760,204 +965,12 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     //                                                       cameraTileZ) };
     //SetCamera(gameState, cameraPos);
 
+    // Cache the ground buff
+    gameState->groundBuff = MakeEmptyBitmap(&gameState->worldArena, 512, 512);
+    DrawTestGround(gameState, &gameState->groundBuff);
+
     // TODO: maybe make platform set this
     memory->isInitialized = true;
-}
-
-INTERNAL void
-PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
-          Vec2 align, Vec2 dimension, Vec4 color, f32 entityZC = 1.0f) {
-    ASSERT(group->pieceCount < group->pieces.size);
-    EntityVisiblePiece* piece{ &group->pieces[group->pieceCount++] };
-
-    piece->bitmap = bitmap;
-    piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
-    piece->offsetZ = offsetZ;
-    piece->entityZC = entityZC;
-
-    piece->dimension = dimension;
-
-    piece->r = color.r;
-    piece->g = color.g;
-    piece->b = color.b;
-    piece->a = color.a;
-}
-
-INTERNAL void
-PushBitmap(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
-           Vec2 align, f32 alpha = 1.0f, f32 entityZC = 1.0f) {
-    PushPiece(group, bitmap, offset, offsetZ, align, Vec2{}, Vec4{ 1.0f, 1.0f, 1.0f, alpha },
-              entityZC);
-}
-
-INTERNAL void
-PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
-         f32 entityZC = 1.0f) {
-    PushPiece(group, nullptr, offset, offsetZ, Vec2{}, dim, color, entityZC);
-}
-
-INTERNAL void
-PushRectOutline(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
-                f32 entityZC = 1.0f) {
-    const f32 thickness{ 0.1f };
-
-    // Top bottom
-    PushPiece(group, 0, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
-              color, entityZC);
-    PushPiece(group, 0, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
-              color, entityZC);
-
-    // Left right
-    PushPiece(group, 0, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
-              color, entityZC);
-    PushPiece(group, 0, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
-              color, entityZC);
-}
-
-INTERNAL void
-ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
-    PRINT("ClearCollisionRulesFor\n");
-    PRINT_I32("Index: ", storageIndex);
-
-    // @Speed
-    // TODO: better way to remove collision rather than walking through the whole map!
-    // Storing A,B and B,A would allow easy removal, see ep 70 for full explanation
-    for (i32 hashBucket{}; hashBucket < gameState->collisionRuleHash.size; ++hashBucket) {
-        for (auto** rule{ &gameState->collisionRuleHash[hashBucket] }; *rule;) {
-            if ((*rule)->storageIndexA == storageIndex || (*rule)->storageIndexB == storageIndex) {
-                auto* removedRule{ *rule };
-                *rule = (*rule)->nextInHash;
-
-                removedRule->nextInHash = gameState->firstFreeCollisionRule;
-                gameState->firstFreeCollisionRule = removedRule;
-            } else {
-                rule = &(*rule)->nextInHash;
-            }
-        }
-    }
-}
-
-INTERNAL void
-AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 canCollide) {
-    PRINT("AddCollisionRule\n");
-    PRINT_I32("A: ", storageIndexA);
-    PRINT_I32("B: ", storageIndexB);
-    PRINT_I32("Collide: ", canCollide);
-
-    if (storageIndexA > storageIndexB) {
-        const i32 temp{ storageIndexA };
-        storageIndexA = storageIndexB;
-        storageIndexB = temp;
-    }
-
-    PairWiseCollisionRule* found{};
-    // TODO: Better hash func
-    const i32 hashBucket{ static_cast<i32>(storageIndexA &
-                                           (gameState->collisionRuleHash.size - 1)) };
-    for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
-        if (rule->storageIndexA == storageIndexA && rule->storageIndexB == storageIndexB) {
-            found = rule;
-            break;
-        }
-    }
-
-    if (!found) {
-        found = gameState->firstFreeCollisionRule;
-        if (found) {
-            gameState->firstFreeCollisionRule = found->nextInHash;
-        } else {
-            // Push to head always
-            found = PushSize(&gameState->worldArena, PairWiseCollisionRule);
-        }
-
-        found->nextInHash = gameState->collisionRuleHash[hashBucket];
-        gameState->collisionRuleHash[hashBucket] = found;
-    }
-
-    ASSERT(found);
-    // Out of memory handling?
-    // Update if found earlier
-    if (found) {
-        found->storageIndexA = storageIndexA;
-        found->storageIndexB = storageIndexB;
-        found->canCollide = canCollide;
-    }
-}
-
-INTERNAL void
-DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
-    if (entity->hitPointMax >= 1) {
-        const Vec2 hitPointdimension{ 0.2f, 0.2f };
-        const f32 spacingX{ hitPointdimension.x * 1.5f };
-        Vec2 hitPointPos{ -0.5f * (entity->hitPointMax - 1) * spacingX, -0.25f };
-        const Vec2 dPos{ spacingX, 0.0f };
-
-        for (i32 i{}; i < entity->hitPointMax; ++i) {
-            const HitPoint* hitPoint{ &entity->hitPoints[i] };
-            Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
-            if (hitPoint->filledAmount == 0) {
-                color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
-            }
-
-            // TODO: Height
-            PushRect(group, hitPointPos, 0, hitPointdimension, color, 0.0f);
-            hitPointPos += dPos;
-        }
-    }
-}
-
-INTERNAL void
-DrawTestGround(GameState* gameState, OffScreenBuffer* screenBuff) {
-    using namespace hm_random;
-
-    RandomSeries series{ Seed(1234) };
-
-    u32 minValue{ UINT32_MAX };
-    u32 maxValue{};
-    for (u32 numIndex{}; numIndex < randomNumbers.size; ++numIndex) {
-        minValue = MIN(minValue, randomNumbers[numIndex]);
-        maxValue = MAX(maxValue, randomNumbers[numIndex]);
-    }
-
-    // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
-    const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
-
-    u32 randomNumIndex{};
-    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
-        ASSERT(randomNumIndex < randomNumbers.size);
-
-        LoadedBitmapInfo* stamp;
-        if (RandomChoice(&series, 2)) {
-            stamp = &gameState->grassBitmaps[RandomChoice(&series, gameState->grassBitmaps.size)];
-        } else {
-            stamp = &gameState->stoneBitmaps[RandomChoice(&series, gameState->stoneBitmaps.size)];
-        }
-
-        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-        // Normalize to [-1, 1] via f(x) = 2x - 1
-        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
-
-        const f32 radius{ 5.0f };
-        const Vec2 pos{ screenCenter + (gameState->metersToPixels * offset * radius) -
-                        bitmapCenter };
-        DrawBitmap(screenBuff, stamp, pos.x, pos.y);
-    }
-
-    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
-        ASSERT(randomNumIndex < randomNumbers.size);
-
-        LoadedBitmapInfo* stamp;
-        stamp = &gameState->tuftBitmaps[RandomChoice(&series, gameState->tuftBitmaps.size)];
-
-        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-        // Normalize to [-1, 1] via f(x) = 2x - 1
-        const Vec2 offset{ RandomBilateral(&series), RandomBilateral(&series) };
-
-        const f32 radius{ 5.0f };
-        const Vec2 pos{ screenCenter + (gameState->metersToPixels * offset * radius) -
-                        bitmapCenter };
-        DrawBitmap(screenBuff, stamp, pos.x, pos.y);
-    }
 }
 
 // NOTE: use extern "C" to avoid name mangling
@@ -973,10 +986,15 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     gThreadContext = threadContext;
     gMemory = memory;
 
+    const f32 delta{ input->frameDeltaTime };
+
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
+
     if (!memory->isInitialized) {
         InitializeGameState(threadContext, gameState, memory);
     }
+
+    const World* world{ gameState->world };
 
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
@@ -1100,14 +1118,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
-    const f32 delta{ input->frameDeltaTime };
-
-    const World* world{ gameState->world };
-
-    // IMPORTANT: This now determines the actual pixel size of the tiles!
-    const i32 tileSideInPixels{ 60 };
-    gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
-
     const i32 tileSpanX{ tiles_Per_Width * 3 };
     const i32 tileSpanY{ tiles_Per_Height * 3 };
     const i32 tileSpanZ{ 1 };
@@ -1149,16 +1159,26 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT_F32("Camera pos offset Y: ", gameState->cameraPos.offset_.x);
 #endif
 
-    /// Background
-#if 0
-    DrawBitmap(screenBuff, &gameState->background, 0, 0);
-#else
-    DrawRect(screenBuff, Vec2{},
-             Vec2{ static_cast<f32>(screenBuff->width), static_cast<f32>(screenBuff->height) },
-             0.5f, 0.5f, 0.5f);
-#endif
+    // Copy the OS sent screen buff info into our format
+    LoadedBitmapInfo drawBuff_{};
+    LoadedBitmapInfo* drawBuff{ &drawBuff_ };
+    drawBuff->width = screenBuff->width;
+    drawBuff->height = screenBuff->height;
+    drawBuff->pitch = screenBuff->pitch;
+    drawBuff->memory = screenBuff->memory;
 
-    DrawTestGround(gameState, screenBuff);
+    /// Background
+
+    //#if 0
+    //DrawBitmap(drawBuff, &gameState->background, 0, 0);
+    //#else
+    DrawRect(drawBuff, Vec2{},
+             Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 0.5f,
+             0.5f, 0.5f);
+    //#endif
+
+    DrawBitmap(drawBuff, &gameState->groundBuff, 0, 0);
+    //DrawTestGround(gameState, drawBuff);
 
     /// Drawing and processing entities
 
@@ -1379,7 +1399,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Vec3 entityBasePos{ GetEntityGroundPoint(entity) };
             const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
 
-            const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
+            const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
             //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
             //entity->pos.x),
@@ -1398,10 +1418,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                    (entityZ * piece->entityZC) };
 
             if (piece->bitmap) {
-                DrawBitmap(screenBuff, piece->bitmap, center.x, center.y, piece->a);
+                DrawBitmap(drawBuff, piece->bitmap, center.x, center.y, piece->a);
             } else {
                 const Vec2 halfDim{ 0.5f * piece->dimension * gameState->metersToPixels };
-                DrawRect(screenBuff, center - halfDim, center + halfDim, piece->r, piece->g,
+                DrawRect(drawBuff, center - halfDim, center + halfDim, piece->r, piece->g,
                          piece->b);
             }
 
@@ -1416,7 +1436,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                                entity->collision->totalVolume.dim.y)
                     };
 
-                    DrawRect(screenBuff, leftTop,
+                    DrawRect(drawBuff, leftTop,
                              leftTop + entity->collision->totalVolume.dim.xy *
                                            gameState->metersToPixels // *0.95f
                              ,
@@ -1439,7 +1459,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     WorldPosition worldOrigin{};
     const Vec3 diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
-    DrawRect(screenBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
+    DrawRect(drawBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
 
     EndSim(simRegion, gameState);
 }

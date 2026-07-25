@@ -536,7 +536,7 @@ struct RandomSeries {
 
 NODISCARD
 INTERNAL inline RandomSeries
-Seed(u32 seed) {
+RandomSeed(u32 seed) {
     RandomSeries series{};
 
     series.index = seed % hm_random::randomNumbers.size;
@@ -548,7 +548,7 @@ NODISCARD
 INTERNAL inline u32
 NextRandomU32(RandomSeries* series) {
     const u32 result{ hm_random::randomNumbers[series->index++] };
-    if (series->index > hm_random::randomNumbers.size) {
+    if (series->index >= hm_random::randomNumbers.size) {
         series->index = 0;
     }
 
@@ -568,7 +568,7 @@ INTERNAL inline f32
 RandomUnilateral(RandomSeries* series) {
     // TODO: See if the optimizer does anything different here as we precompute the divisor
     // vs. just doing result = NextRandomU32(series) / MAX_RANDOM_NUMBER
-    const f32 divisor{ 1.0f / MAX_RANDOM_NUMBER };
+    const f32 divisor{ 1.0f / static_cast<f32>(MAX_RANDOM_NUMBER) };
     const f32 result{ NextRandomU32(series) * divisor };
     return result;
 }

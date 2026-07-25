@@ -17,6 +17,7 @@ PushSize_(MemoryArena* arena, memory_index size) {
     return result;
 }
 
+// TODO: provide a better interface!!!
 #define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
 #define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
 #define ZeroSize(instance) ZeroMem(&(instance), sizeof(instance))

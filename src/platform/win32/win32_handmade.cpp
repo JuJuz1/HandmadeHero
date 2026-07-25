@@ -1310,7 +1310,6 @@ WinMain(
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
         screenBuff.height = gScreenBuff.height;
-        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
         if (allState.recordingIndex != hm_win32::replay_Buffer_Not_Recording) {

@@ -898,7 +898,6 @@ main() {
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
         screenBuff.height = gScreenBuff.height;
-        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
         if (allState.recordingIndex != hm_sdl::replay_Buffer_Not_Recording) {

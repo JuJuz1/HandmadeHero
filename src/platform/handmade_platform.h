@@ -123,7 +123,6 @@ typedef struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
-    i32 bytesPerPixel;
     i32 pitch;
 } OffScreenBuffer;
 

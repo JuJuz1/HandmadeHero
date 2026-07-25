@@ -33,10 +33,13 @@
 GLOBAL const i32 tiles_Per_Width{ 17 };
 GLOBAL const i32 tiles_Per_Height{ 9 };
 
+GLOBAL const i32 bitmap_Bytes_Per_Pixel{ 4 };
+
 struct LoadedBitmapInfo {
-    u32* pixels;
+    void* memory;
     i32 width;
     i32 height;
+    i32 pitch;
 };
 
 struct HeroBitmaps {
@@ -114,6 +117,8 @@ struct GameState {
     LoadedBitmapInfo stairwell;
 
     LoadedBitmapInfo sword;
+
+    LoadedBitmapInfo groundBuff;
 
     bool32 startWithAPlayer;
 
