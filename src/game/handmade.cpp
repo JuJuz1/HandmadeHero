@@ -152,19 +152,44 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         ASSERT(blueShift.found);
         ASSERT(alphaShift.found);
 
-        u32* srcDest{ pixels };
+        const i32 redShiftDown{ static_cast<i32>(redShift.index) };
+        const i32 greenShiftDown{ static_cast<i32>(greenShift.index) };
+        const i32 blueShiftDown{ static_cast<i32>(blueShift.index) };
+        const i32 alphaShiftDown{ static_cast<i32>(alphaShift.index) };
 
+        u32* srcDest{ pixels };
         for (i32 y{}; y < bitMapHeader->height; ++y) {
             for (i32 x{}; x < bitMapHeader->width; ++x) {
-                const u32 C{ *srcDest };
-                // TODO: episode 52, use rotateleft and right?
-                *srcDest++ = ((((C >> alphaShift.index) & 0xFF) << 24) |
-                              (((C >> redShift.index) & 0xFF) << 16) |
-                              (((C >> greenShift.index) & 0xFF) << 8) |
-                              (((C >> blueShift.index) & 0xFF) << 0));
+                const u32 color{ *srcDest };
+
+                f32 r{ static_cast<f32>((color & redMask) >> redShiftDown) };
+                f32 g{ static_cast<f32>((color & greenMask) >> greenShiftDown) };
+                f32 b{ static_cast<f32>((color & blueMask) >> blueShiftDown) };
+                const f32 a{ static_cast<f32>((color & alphaMask) >> alphaShiftDown) };
+                const f32 an{ a / 255.0f };
+
+#if 1
+                r = r * an;
+                g = g * an;
+                b = b * an;
+#endif
+
+// TODO: episode 52, use rotateleft and right?
+#if 0
+                *srcDest++ = ((((color >> alphaShift.index) & 0xFF) << 24) |
+                              (((color >> redShift.index) & 0xFF) << 16) |
+                              (((color >> greenShift.index) & 0xFF) << 8) |
+                              (((color >> blueShift.index) & 0xFF) << 0));
+#else
+                // Premultiplied alpha
+                *srcDest++ =
+                    ((static_cast<u32>(a + 0.5f) << 24) | (static_cast<u32>(r + 0.5f) << 16) |
+                     (static_cast<u32>(g + 0.5f) << 8) | (static_cast<u32>(b + 0.5f) << 0));
+#endif
             }
         }
     } else {
+        // ... cumbersome
         PRINT("Couldn't load bmp: ");
         PRINT(filename);
         PRINT("\n");
@@ -218,23 +243,26 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
         u32* dest{ reinterpret_cast<u32*>(destRow) };
         u32* src{ reinterpret_cast<u32*>(srcRow) };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
-            alpha *= CAlpha;
+            const f32 srcAlpha{ static_cast<f32>((*src >> 24) & 0xFF) };
+            const f32 srcRelAlpha{ (srcAlpha / 255.0f) * CAlpha };
 
-            const f32 srcRed{ static_cast<f32>((*src >> 16) & 0xFF) };
-            const f32 srcGreen{ static_cast<f32>((*src >> 8) & 0xFF) };
-            const f32 srcBlue{ static_cast<f32>((*src >> 0) & 0xFF) };
+            const f32 srcRed{ CAlpha * static_cast<f32>((*src >> 16) & 0xFF) };
+            const f32 srcGreen{ CAlpha * static_cast<f32>((*src >> 8) & 0xFF) };
+            const f32 srcBlue{ CAlpha * static_cast<f32>((*src >> 0) & 0xFF) };
 
             const f32 destAlpha{ static_cast<f32>((*dest >> 24) & 0xFF) };
+            const f32 destRelAlpha{ destAlpha / 255.0f };
+
             const f32 destRed{ static_cast<f32>((*dest >> 16) & 0xFF) };
             const f32 destGreen{ static_cast<f32>((*dest >> 8) & 0xFF) };
             const f32 destBlue{ static_cast<f32>((*dest >> 0) & 0xFF) };
 
-            // Linear blend
-            const f32 resultAlpha{ MAX(destAlpha, 255.0f * alpha) };
-            const f32 resultRed{ ((1.0f - alpha) * destRed) + (alpha * srcRed) };
-            const f32 resultGreen{ ((1.0f - alpha) * destGreen) + (alpha * srcGreen) };
-            const f32 resultBlue{ ((1.0f - alpha) * destBlue) + (alpha * srcBlue) };
+            const f32 invRelAlpha{ 1.0f - srcRelAlpha };
+            const f32 resultAlpha{ 255.0f *
+                                   (srcRelAlpha + destRelAlpha - (srcRelAlpha * destRelAlpha)) };
+            const f32 resultRed{ (invRelAlpha * destRed) + srcRed };
+            const f32 resultGreen{ (invRelAlpha * destGreen) + srcGreen };
+            const f32 resultBlue{ (invRelAlpha * destBlue) + srcBlue };
 
             *dest = { (TruncateF32ToU32(resultAlpha + 0.5f) << 24) |
                       (TruncateF32ToU32(resultRed + 0.5f) << 16) |
