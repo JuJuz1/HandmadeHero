@@ -54,7 +54,7 @@ DEBUG_PRINT(DEBUGPrint) {
 
     va_list args;
     va_start(args, format);
-    vprintf_s(format, args);
+    vprintf(format, args);
     va_end(args);
 }
 

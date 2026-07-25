@@ -26,7 +26,8 @@ GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
 // TODO: think of a better way!
-#define PRINT(format, ...) (*gMemory->exports.DEBUGPrint)(gThreadContext, format, __VA_ARGS__)
+// TODO: relies on gnu extension on clang, not perfect but will suffice
+#define PRINT(format, ...) (*gMemory->exports.DEBUGPrint)(gThreadContext, format, ##__VA_ARGS__)
 
 // clang-format off
 #include "game/handmade_world.cpp"
