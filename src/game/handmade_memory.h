@@ -9,7 +9,7 @@ struct MemoryArena {
     memory_index used;
 };
 
-//INTERNAL void InitializeArena(MemoryArena* arena, u8* base, memory_index size);
+//INTERNAL void ArenaInit(MemoryArena* arena, u8* base, memory_index size);
 
 //#define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
 //#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))

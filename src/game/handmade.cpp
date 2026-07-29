@@ -186,10 +186,7 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
             }
         }
     } else {
-        // ... cumbersome
-        PRINT("Couldn't load bmp: ");
-        PRINT(filename);
-        PRINT("\n");
+        PRINT("Couldn't load bmp: %s\n", filename);
     }
 
     result.pitch = -result.width * bitmap_Bytes_Per_Pixel;
@@ -299,7 +296,7 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     lowEntity->startingPos = pos;
     lowEntity->pos = NullWorldPos();
 
-    ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, pos);
+    ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, &pos);
 
     AddLowEntityResult result{ lowEntity, entityIndex };
 
@@ -611,15 +608,22 @@ MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height) {
 }
 
 INTERNAL void
-DrawTestGround(GameState* gameState, LoadedBitmapInfo* buff) {
+DrawGroundChunk(GameState* gameState, LoadedBitmapInfo* buff, const WorldPosition* chunkPos) {
+    ASSERT(chunkPos);
+    ASSERT(IsValidWorldPos(chunkPos));
+
     using namespace hm_random;
 
-    RandSeries series{ RandSeed(1234) };
+    // TODO: better, systemic random generation
+    RandSeries series{ RandSeed((chunkPos->chunkX * 139) + (chunkPos->chunkY * 593) +
+                                (chunkPos->chunkZ * 329)) };
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
-    const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
+    //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
+    const f32 width{ static_cast<f32>(buff->width) };
+    const f32 height{ static_cast<f32>(buff->height) };
 
-    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+    for (i32 grassIndex{}; grassIndex < 1000; ++grassIndex) {
         LoadedBitmapInfo* stamp;
         if (RandChoice(&series, 2)) {
             stamp = &gameState->grassBitmaps[RandChoice(&series, gameState->grassBitmaps.size)];
@@ -629,24 +633,20 @@ DrawTestGround(GameState* gameState, LoadedBitmapInfo* buff) {
 
         const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
         // Normalize to [-1, 1] via f(x) = 2x - 1
-        const Vec2 offset{ RandBilateral(&series), RandBilateral(&series) };
+        const Vec2 offset{ RandUnilateral(&series) * width, RandUnilateral(&series) * height };
+        const Vec2 pos{ offset - bitmapCenter };
 
-        const f32 radius{ 5.0f };
-        const Vec2 pos{ screenCenter + (offset * gameState->metersToPixels * radius) -
-                        bitmapCenter };
         DrawBitmap(buff, stamp, pos.x, pos.y);
     }
 
-    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+    for (i32 grassIndex{}; grassIndex < 1000; ++grassIndex) {
         LoadedBitmapInfo* stamp;
         stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
 
         const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-        const Vec2 offset{ RandBilateral(&series), RandBilateral(&series) };
+        const Vec2 offset{ RandUnilateral(&series) * width, RandUnilateral(&series) * height };
+        const Vec2 pos{ offset - bitmapCenter };
 
-        const f32 radius{ 5.0f };
-        const Vec2 pos{ screenCenter + (offset * gameState->metersToPixels * radius) -
-                        bitmapCenter };
         DrawBitmap(buff, stamp, pos.x, pos.y);
     }
 }
@@ -790,14 +790,15 @@ DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
 }
 
 INTERNAL void
-InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
-    InitializeArena(&gameState->worldArena,
-                    static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
-                    memory->permanentStorageSize - sizeof(GameState));
+InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory,
+              OffScreenBuffer* screenBuff) {
+    ArenaInit(&gameState->worldArena,
+              static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
+              memory->permanentStorageSize - sizeof(GameState));
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
-    InitializeWorld(world, 1.4f, 3.0f);
+    InitWorld(world, 1.4f, 3.0f);
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
     const i32 tileSideInPixels{ 60 };
@@ -857,13 +858,15 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
     // Generating tile values
     for (i32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
-        u32 doorDirection;
+        //u32 doorDirection;
         // Lateral only
-        if (doorUp || doorDown) {
-            doorDirection = RandChoice(&series, 2);
-        } else {
-            doorDirection = RandChoice(&series, 3);
-        }
+        //if (doorUp || doorDown) {
+        //    doorDirection = RandChoice(&series, 2);
+        //} else {
+        //    doorDirection = RandChoice(&series, 3);
+        //}
+        // @Remove
+        u32 doorDirection{ RandChoice(&series, 2) };
 
         bool32 createdZDoor{};
         // doorDirection of 2 means the room is blocked and has a door going up
@@ -910,9 +913,9 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
 
                 if (tileValue == blocked_Tile_Value) {
                     // TODO: @Remove eventually
-                    if (screenIndex == 0) {
-                        const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
-                    }
+                    //if (screenIndex == 0) {
+                    const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
+                    //}
 
                     ++wallsAdded;
                 } else if (createdZDoor) {
@@ -986,9 +989,20 @@ InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemo
     //                                                       cameraTileZ) };
     //SetCamera(gameState, cameraPos);
 
-    // Cache the ground buff
-    gameState->groundBuff = MakeEmptyBitmap(&gameState->worldArena, 512, 512);
-    DrawTestGround(gameState, &gameState->groundBuff);
+    /// Ground buff
+
+    const f32 screenWidth{ static_cast<f32>(screenBuff->width) };
+    const f32 screenHeight{ static_cast<f32>(screenBuff->height) };
+    const f32 maxZScale{ 0.5f };
+    // Scan a bit more than the actual size to allow time for calculations
+    const f32 groundBuffOverScan{ 1.5f };
+    const i32 groundBuffWidth{ RoundF32ToI32(screenWidth * groundBuffOverScan) };
+    const i32 groundBuffHeight{ RoundF32ToI32(screenHeight * groundBuffOverScan) };
+
+    gameState->groundBuff =
+        MakeEmptyBitmap(&gameState->worldArena, groundBuffWidth, groundBuffHeight);
+    gameState->groundBuffPos = gameState->cameraPos;
+    DrawGroundChunk(gameState, &gameState->groundBuff, &gameState->groundBuffPos);
 
     // TODO: maybe make platform set this
     memory->isInitialized = true;
@@ -1012,7 +1026,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
 
     if (!memory->isInitialized) {
-        InitializeGameState(threadContext, gameState, memory);
+        InitGameState(threadContext, gameState, memory, screenBuff);
     }
 
     // Had a bug earlier with this not being initialized yet
@@ -1152,7 +1166,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                                                               static_cast<f32>(tileSpanZ) }) };
 
     MemoryArena simArena;
-    InitializeArena(&simArena, memory->transientStorage, memory->transientStorageSize);
+    ArenaInit(&simArena, memory->transientStorage, memory->transientStorageSize);
     auto* simRegion{ BeginSim(gameState, &simArena, gameState->world, gameState->cameraPos,
                               cameraBounds, delta) };
 
@@ -1202,8 +1216,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
              0.5f, 0.5f);
     //#endif
 
-    DrawBitmap(drawBuff, &gameState->groundBuff, 0, 0);
-    //DrawTestGround(gameState, drawBuff);
+    // Scrolling bitmap buffer
+
+    const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
+    Vec3 groundDelta{ SubtractWorldPos(gameState->world, &gameState->groundBuffPos,
+                                       &gameState->cameraPos) };
+    groundDelta.y = -groundDelta.y;
+    Vec2 ground{ screenCenter.x - (gameState->groundBuff.width * 0.5f),
+                 screenCenter.y - (gameState->groundBuff.height * 0.5f) };
+    ground += groundDelta.xy * gameState->metersToPixels;
+    DrawBitmap(drawBuff, &gameState->groundBuff, ground.x, ground.y);
+    //DrawGroundChunk(gameState, drawBuff);
 
     /// Drawing and processing entities
 
@@ -1423,8 +1446,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             const Vec3 entityBasePos{ GetEntityGroundPoint(entity) };
             const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
-
-            const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
             //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
             //entity->pos.x),

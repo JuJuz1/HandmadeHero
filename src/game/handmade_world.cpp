@@ -14,13 +14,13 @@ NullWorldPos() {
 
 NODISCARD
 INTERNAL bool32
-IsValidWorldPos(WorldPosition pos) {
-    const bool32 result{ pos.chunkX != tile_Chunk_Uninitialized };
+IsValidWorldPos(const WorldPosition* pos) {
+    const bool32 result{ pos->chunkX != tile_Chunk_Uninitialized };
     return result;
 }
 
 INTERNAL void
-InitializeWorld(World* world, f32 tileSideInMeters, f32 tileDepthInMeters) {
+InitWorld(World* world, f32 tileSideInMeters, f32 tileDepthInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
     world->tileSideInMeters = tileSideInMeters;
 
@@ -202,8 +202,8 @@ ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, Wo
                         WorldPosition* newPos) {
     // TODO: should this move entity to high set if it is in camera bounds
 
-    ASSERT(!oldPos || IsValidWorldPos(*oldPos));
-    ASSERT(!newPos || IsValidWorldPos(*newPos));
+    ASSERT(!oldPos || IsValidWorldPos(oldPos));
+    ASSERT(!newPos || IsValidWorldPos(newPos));
 
     if (oldPos && newPos && AreOnSameChunk(world, oldPos, newPos)) {
         // TODO: reset?
@@ -283,16 +283,16 @@ ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, Wo
 
 INTERNAL void
 ChangeEntityLocation(World* world, MemoryArena* arena, i32 lowIndex, LowEntity* lowEntity,
-                     WorldPosition newPosInit) {
+                     WorldPosition* newPosInit) {
     WorldPosition* oldPos{};
     WorldPosition* newPos{};
 
-    if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL) && IsValidWorldPos(lowEntity->pos)) {
+    if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL) && IsValidWorldPos(&lowEntity->pos)) {
         oldPos = &lowEntity->pos;
     }
 
     if (IsValidWorldPos(newPosInit)) {
-        newPos = &newPosInit;
+        newPos = newPosInit;
     }
 
     ChangeEntityLocationRaw(world, arena, lowIndex, oldPos, newPos);

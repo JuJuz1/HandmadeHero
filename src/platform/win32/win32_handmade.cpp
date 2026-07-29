@@ -82,14 +82,14 @@ INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    char buffer[1024];
+    char buff[1024];
 
     va_list args;
     va_start(args, format);
-    _vsnprintf_s(buffer, sizeof(buffer), format, args);
+    _vsnprintf_s(buff, sizeof(buff), format, args);
     va_end(args);
 
-    OutputDebugStringA(buffer);
+    OutputDebugStringA(buff);
 }
 
 #else

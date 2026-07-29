@@ -1,7 +1,7 @@
 #include "handmade_memory.h"
 
 INTERNAL void
-InitializeArena(MemoryArena* arena, void* base, memory_index size) {
+ArenaInit(MemoryArena* arena, void* base, memory_index size) {
     arena->base = static_cast<u8*>(base);
     arena->size = size;
     arena->used = 0;

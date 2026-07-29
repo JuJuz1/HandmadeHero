@@ -50,8 +50,6 @@ INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    char buffer[1024];
-
     va_list args;
     va_start(args, format);
     vprintf(format, args);

@@ -118,6 +118,7 @@ struct GameState {
 
     LoadedBitmapInfo sword;
 
+    WorldPosition groundBuffPos;
     LoadedBitmapInfo groundBuff;
 
     bool32 startWithAPlayer;

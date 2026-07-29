@@ -79,7 +79,7 @@ struct World {
 //NODISCARD
 //INTERNAL bool32 IsValidWorldPos(WorldPosition pos);
 
-//INTERNAL void InitializeWorld(World* world, f32 tileSideInMeters);
+//INTERNAL void InitWorld(World* world, f32 tileSideInMeters);
 
 //NODISCARD
 //INTERNAL WorldChunk* GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ,

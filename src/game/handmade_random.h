@@ -563,6 +563,9 @@ RandChoice(RandSeries* series, i32 choiceCount) {
     return result;
 }
 
+/**
+ * [0, 1]
+ */
 NODISCARD
 INTERNAL inline f32
 RandUnilateral(RandSeries* series) {
@@ -573,6 +576,9 @@ RandUnilateral(RandSeries* series) {
     return result;
 }
 
+/**
+ * [-1, 1]
+ */
 NODISCARD
 INTERNAL inline f32
 RandBilateral(RandSeries* series) {

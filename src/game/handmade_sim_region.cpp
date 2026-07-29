@@ -261,8 +261,10 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
             PRINT("Reset familiar: %d\n", stored->sim.storageIndex);
             ChangeEntityLocation(world, &gameState->worldArena, familiar->sim.storageIndex,
-                                 familiar, familiar->startingPos);
+                                 familiar, &familiar->startingPos);
         }
+
+        auto nullWorldPos{ NullWorldPos() };
 
         // These do work!
         if (doResetSword) {
@@ -276,7 +278,7 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             // These have to be done I guess
             MakeEntityNonSpatial(&sword->sim);
             ChangeEntityLocation(world, &gameState->worldArena, stored->sim.sword.index, sword,
-                                 NullWorldPos());
+                                 &nullWorldPos);
         }
 
         if (doReset) {
@@ -286,10 +288,10 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         } else {
             newPos = !IsSet(entity, SimEntityFlags::NON_SPATIAL)
                          ? MapIntoChunkSpace(world, simRegion->origin, entity->pos)
-                         : NullWorldPos();
+                         : nullWorldPos;
         }
 
-        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, newPos);
+        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, &newPos);
         ++movedCount;
 
         // Camera position
