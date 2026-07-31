@@ -89,11 +89,27 @@ struct PairWiseCollisionRule {
     PairWiseCollisionRule* nextInHash;
 };
 
+struct GroundBuff {
+    // An invalid pos tells use that this ground buffer has not been filled (used yet)
+    WorldPosition pos; // Center of the bitmap!
+    void* memoryBitmap;
+};
+
+struct TransientState {
+    MemoryArena tranArena;
+    i32 groundBuffCount;
+    LoadedBitmapInfo groundBitmapTemplate;
+    GroundBuff* groundBuffs;
+    bool32 isInitialized;
+};
+
 /**
  * The game state!
  */
 struct GameState {
     MemoryArena worldArena;
+    //MemoryArena transientArena;
+
     World* world;
     f32 metersToPixels; // TODO: should this be here?
 
@@ -117,9 +133,6 @@ struct GameState {
     LoadedBitmapInfo stairwell;
 
     LoadedBitmapInfo sword;
-
-    WorldPosition groundBuffPos;
-    LoadedBitmapInfo groundBuff;
 
     bool32 startWithAPlayer;
 

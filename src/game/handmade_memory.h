@@ -7,6 +7,13 @@ struct MemoryArena {
     u8* base;
     memory_index size;
     memory_index used;
+
+    i32 tempCount;
+};
+
+struct TempMemory {
+    MemoryArena* arena;
+    memory_index used;
 };
 
 //INTERNAL void ArenaInit(MemoryArena* arena, u8* base, memory_index size);

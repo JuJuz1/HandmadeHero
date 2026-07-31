@@ -592,9 +592,16 @@ AddStandardRoom(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) 
     return entity;
 }
 
+INTERNAL void
+ClearBitmap(LoadedBitmapInfo* bitmap) {
+    if (bitmap->memory) {
+        ZeroMem(bitmap, bitmap->width * bitmap->height * bitmap_Bytes_Per_Pixel);
+    }
+}
+
 NODISCARD
 INTERNAL LoadedBitmapInfo
-MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height) {
+MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height, bool32 clearToZero = true) {
     LoadedBitmapInfo result{};
 
     result.width = width;
@@ -602,15 +609,22 @@ MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height) {
     result.pitch = width * bitmap_Bytes_Per_Pixel;
     const i32 totalSize{ width * height * bitmap_Bytes_Per_Pixel };
     result.memory = PushSize_(arena, totalSize);
-    ZeroMem(result.memory, totalSize);
+    if (clearToZero) {
+        ClearBitmap(&result);
+    }
 
     return result;
 }
 
 INTERNAL void
-DrawGroundChunk(GameState* gameState, LoadedBitmapInfo* buff, const WorldPosition* chunkPos) {
+FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* groundBuff,
+                const WorldPosition* chunkPos) {
     ASSERT(chunkPos);
     ASSERT(IsValidWorldPos(chunkPos));
+
+    LoadedBitmapInfo templateBuff{ tranState->groundBitmapTemplate };
+    groundBuff->memoryBitmap = templateBuff.memory;
+    groundBuff->pos = *chunkPos;
 
     using namespace hm_random;
 
@@ -620,10 +634,10 @@ DrawGroundChunk(GameState* gameState, LoadedBitmapInfo* buff, const WorldPositio
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
-    const f32 width{ static_cast<f32>(buff->width) };
-    const f32 height{ static_cast<f32>(buff->height) };
+    const f32 width{ static_cast<f32>(templateBuff.width) };
+    const f32 height{ static_cast<f32>(templateBuff.height) };
 
-    for (i32 grassIndex{}; grassIndex < 1000; ++grassIndex) {
+    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
         LoadedBitmapInfo* stamp;
         if (RandChoice(&series, 2)) {
             stamp = &gameState->grassBitmaps[RandChoice(&series, gameState->grassBitmaps.size)];
@@ -636,10 +650,10 @@ DrawGroundChunk(GameState* gameState, LoadedBitmapInfo* buff, const WorldPositio
         const Vec2 offset{ RandUnilateral(&series) * width, RandUnilateral(&series) * height };
         const Vec2 pos{ offset - bitmapCenter };
 
-        DrawBitmap(buff, stamp, pos.x, pos.y);
+        DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
     }
 
-    for (i32 grassIndex{}; grassIndex < 1000; ++grassIndex) {
+    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
         LoadedBitmapInfo* stamp;
         stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
 
@@ -647,7 +661,7 @@ DrawGroundChunk(GameState* gameState, LoadedBitmapInfo* buff, const WorldPositio
         const Vec2 offset{ RandUnilateral(&series) * width, RandUnilateral(&series) * height };
         const Vec2 pos{ offset - bitmapCenter };
 
-        DrawBitmap(buff, stamp, pos.x, pos.y);
+        DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
     }
 }
 
@@ -792,9 +806,12 @@ DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
 INTERNAL void
 InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory,
               OffScreenBuffer* screenBuff) {
+    ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     ArenaInit(&gameState->worldArena,
               static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
               memory->permanentStorageSize - sizeof(GameState));
+    PRINT("GameState size: %d (%.3f mb)\n", sizeof(GameState),
+          sizeof(GameState) / (1024.0f * 1024.0f));
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
@@ -989,28 +1006,12 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     //                                                       cameraTileZ) };
     //SetCamera(gameState, cameraPos);
 
-    /// Ground buff
-
-    const f32 screenWidth{ static_cast<f32>(screenBuff->width) };
-    const f32 screenHeight{ static_cast<f32>(screenBuff->height) };
-    const f32 maxZScale{ 0.5f };
-    // Scan a bit more than the actual size to allow time for calculations
-    const f32 groundBuffOverScan{ 1.5f };
-    const i32 groundBuffWidth{ RoundF32ToI32(screenWidth * groundBuffOverScan) };
-    const i32 groundBuffHeight{ RoundF32ToI32(screenHeight * groundBuffOverScan) };
-
-    gameState->groundBuff =
-        MakeEmptyBitmap(&gameState->worldArena, groundBuffWidth, groundBuffHeight);
-    gameState->groundBuffPos = gameState->cameraPos;
-    DrawGroundChunk(gameState, &gameState->groundBuff, &gameState->groundBuffPos);
-
-    // TODO: maybe make platform set this
+    // TODO: maybe make platform set this?
     memory->isInitialized = true;
 }
 
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
-    ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
     ASSERT(&input->playerInputs[0].terminator - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
@@ -1029,11 +1030,39 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         InitGameState(threadContext, gameState, memory, screenBuff);
     }
 
+    ASSERT(sizeof(TransientState) <= memory->transientStorageSize);
+    TransientState* tranState{ static_cast<TransientState*>(memory->transientStorage) };
+    if (!tranState->isInitialized) {
+        ArenaInit(&tranState->tranArena,
+                  static_cast<u8*>(memory->transientStorage) + sizeof(TransientState),
+                  memory->transientStorageSize - sizeof(TransientState));
+
+        /// Ground buff
+
+        const i32 groundBuffWidth{ 256 };
+        const i32 groundBuffHeight{ 256 };
+        tranState->groundBuffCount = 128;
+        tranState->groundBuffs =
+            PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
+
+        for (i32 i{}; i < tranState->groundBuffCount; ++i) {
+            auto* groundBuff{ &tranState->groundBuffs[i] };
+            tranState->groundBitmapTemplate =
+                MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
+            groundBuff->memoryBitmap = tranState->groundBitmapTemplate.memory;
+            groundBuff->pos = NullWorldPos();
+        }
+
+        FillGroundChunk(gameState, tranState, tranState->groundBuffs, &gameState->cameraPos);
+
+        tranState->isInitialized = true;
+    }
+
     // Had a bug earlier with this not being initialized yet
     // Should probably assert a bunch more everywhere
     ASSERT(gameState->metersToPixels != 0.0f);
 
-    const World* world{ gameState->world };
+    World* world{ gameState->world };
 
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
@@ -1160,18 +1189,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const i32 tileSpanX{ tiles_Per_Width * 3 };
     const i32 tileSpanY{ tiles_Per_Height * 3 };
     const i32 tileSpanZ{ 1 };
-    const Rect3 cameraBounds{ RectCenterDim(Vec3{}, gameState->world->tileSideInMeters *
-                                                        Vec3{ static_cast<f32>(tileSpanX),
-                                                              static_cast<f32>(tileSpanY),
-                                                              static_cast<f32>(tileSpanZ) }) };
+    const Rect3 cameraBounds{ RectCenterDim(
+        Vec3{},
+        world->tileSideInMeters * Vec3{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY),
+                                        static_cast<f32>(tileSpanZ) }) };
 
-    MemoryArena simArena;
-    ArenaInit(&simArena, memory->transientStorage, memory->transientStorageSize);
-    auto* simRegion{ BeginSim(gameState, &simArena, gameState->world, gameState->cameraPos,
+    TempMemory simMemory{ BeginTempMemory(&tranState->tranArena) };
+    auto* simRegion{ BeginSim(gameState, &tranState->tranArena, world, gameState->cameraPos,
                               cameraBounds, delta) };
 
     // @Debug printing
-
 #if 0
     const auto player{ GetLowEntity(gameState, gameState->cameraFollowingEntityIndex) };
     if (IsValidWorldPos(player->pos)) {
@@ -1219,14 +1246,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // Scrolling bitmap buffer
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
-    Vec3 groundDelta{ SubtractWorldPos(gameState->world, &gameState->groundBuffPos,
-                                       &gameState->cameraPos) };
-    groundDelta.y = -groundDelta.y;
-    Vec2 ground{ screenCenter.x - (gameState->groundBuff.width * 0.5f),
-                 screenCenter.y - (gameState->groundBuff.height * 0.5f) };
-    ground += groundDelta.xy * gameState->metersToPixels;
-    DrawBitmap(drawBuff, &gameState->groundBuff, ground.x, ground.y);
-    //DrawGroundChunk(gameState, drawBuff);
+
+    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
+        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+        if (IsValidWorldPos(&groundBuff->pos)) {
+            auto bitmap{ tranState->groundBitmapTemplate };
+            ASSERT(groundBuff && bitmap.memory);
+            bitmap.memory = groundBuff->memoryBitmap;
+
+            const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) *
+                                 gameState->metersToPixels };
+            Vec2 ground{ screenCenter.x + posDelta.x - (bitmap.width * 0.5f),
+                         screenCenter.y - posDelta.y - (bitmap.height * 0.5f) };
+            DrawBitmap(drawBuff, &bitmap, ground.x, ground.y);
+        }
+    }
 
     /// Drawing and processing entities
 
@@ -1420,6 +1454,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         case EntityType::SPACE: {
             for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
                 const auto* volume{ &entity->collision->volumes[volumeIndex] };
+                // Outlines
                 //PushRectOutline(&pieceGroup, volume->offsetPos.xy, 0, volume->dim.xy,
                 //                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
             }
@@ -1508,6 +1543,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     DrawRect(drawBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
 
     EndSim(simRegion, gameState);
+    EndTempMemory(simMemory);
+
+    ArenaCheck(&tranState->tranArena);
+    ArenaCheck(&gameState->worldArena);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

@@ -1,6 +1,6 @@
 #include "handmade_memory.h"
 
-INTERNAL void
+INTERNAL inline void
 ArenaInit(MemoryArena* arena, void* base, memory_index size) {
     arena->base = static_cast<u8*>(base);
     arena->size = size;
@@ -8,8 +8,35 @@ ArenaInit(MemoryArena* arena, void* base, memory_index size) {
 }
 
 NODISCARD
+INTERNAL inline TempMemory
+BeginTempMemory(MemoryArena* arena) {
+    TempMemory result{};
+
+    result.arena = arena;
+    result.used = arena->used;
+    ++arena->tempCount;
+
+    return result;
+}
+
+INTERNAL inline void
+EndTempMemory(TempMemory tempMem) {
+    MemoryArena* arena{ tempMem.arena };
+    ASSERT(arena->used >= tempMem.used);
+    arena->used = tempMem.used;
+    ASSERT(arena->tempCount >= 0);
+    --arena->tempCount;
+}
+
+INTERNAL inline void
+ArenaCheck(MemoryArena* arena) {
+    ASSERT(arena->tempCount == 0);
+}
+
+NODISCARD
 INTERNAL void*
 PushSize_(MemoryArena* arena, memory_index size) {
+    ASSERT(arena);
     ASSERT(arena->used + size <= arena->size);
     void* result{ arena->base + arena->used };
     arena->used += size;
