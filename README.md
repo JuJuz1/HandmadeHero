@@ -29,9 +29,10 @@ _ is used to postfix a variable, a function or a macro meant to be accessed or c
 
 Annotations: prefixed with a "@"
 - @Speed
-- @Robustness
+- @Robustness -> needs better handling of different cases, hacks
 - @Remove -> temporary code for testing and debugging
 - @Debug -> debug code
+- @Duplicate -> duplicate variables or code, constants usually
 
 Documented here so I would remember to use these better!
 

@@ -112,6 +112,8 @@ struct GameState {
 
     World* world;
     f32 metersToPixels; // TODO: should this be here?
+    f32 pixelsToMeters;
+    f32 typicalFloorHeight;
 
     WorldPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)

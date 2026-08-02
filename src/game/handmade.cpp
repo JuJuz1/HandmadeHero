@@ -82,6 +82,22 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) 
     }
 }
 
+INTERNAL void
+DrawRectOutline(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec3 color,
+                f32 thickness = 1.0f) {
+    // Top bottom
+    DrawRect(buff, Vec2{ min.x - thickness, min.y - thickness },
+             Vec2{ max.x + thickness, min.y + thickness }, color.r, color.g, color.b);
+    DrawRect(buff, Vec2{ min.x - thickness, max.y - thickness },
+             Vec2{ max.x + thickness, max.y + thickness }, color.r, color.g, color.b);
+
+    // Left right
+    DrawRect(buff, Vec2{ min.x - thickness, min.y - thickness },
+             Vec2{ min.x + thickness, max.y + thickness }, color.r, color.g, color.b);
+    DrawRect(buff, Vec2{ max.x - thickness, min.y - thickness },
+             Vec2{ max.x + thickness, max.y + thickness }, color.r, color.g, color.b);
+}
+
 // Struct packing to avoid manual work
 #pragma pack(push, 1)
 
@@ -139,10 +155,10 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
 
         // Can also use _rotl
         // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/rotl-rotl64-rotr-rotr64?view=msvc-170
-        const BitscanResult redShift{ FindLeastSignificantBitSet(redMask) };
-        const BitscanResult greenShift{ FindLeastSignificantBitSet(greenMask) };
-        const BitscanResult blueShift{ FindLeastSignificantBitSet(blueMask) };
-        const BitscanResult alphaShift{ FindLeastSignificantBitSet(alphaMask) };
+        const auto redShift{ FindLeastSignificantBitSet(redMask) };
+        const auto greenShift{ FindLeastSignificantBitSet(greenMask) };
+        const auto blueShift{ FindLeastSignificantBitSet(blueMask) };
+        const auto alphaShift{ FindLeastSignificantBitSet(alphaMask) };
 
         ASSERT(redShift.found);
         ASSERT(greenShift.found);
@@ -273,6 +289,24 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
     }
 }
 
+// @Remove
+NODISCARD
+INTERNAL WorldPosition
+ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ,
+                              Vec3 additionalOffset = {}) {
+    const f32 tileSideInMeters{ 1.4f };
+    const f32 tileDepthInMeters{ 3.0f };
+
+    const Vec3 tileDim{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
+    const Vec3 offset{ tileDim * Vec3{ static_cast<f32>(tileX), static_cast<f32>(tileY),
+                                       static_cast<f32>(tileZ) } };
+    WorldPosition basePos{};
+    const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset + additionalOffset) };
+    ASSERT(IsCanonical(world, result.offset_));
+
+    return result;
+}
+
 struct AddLowEntityResult {
     LowEntity* lowEntity;
     i32 lowIndex;
@@ -379,7 +413,7 @@ AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
 
     AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
     lowEntity->sim.walkableDim = lowEntity->sim.collision->totalVolume.dim.xy;
-    lowEntity->sim.walkableHeight = gameState->world->tileDepthInMeters;
+    lowEntity->sim.walkableHeight = gameState->typicalFloorHeight;
 
     return stair;
 }
@@ -622,8 +656,12 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     ASSERT(chunkPos);
     ASSERT(IsValidWorldPos(chunkPos));
 
-    LoadedBitmapInfo templateBuff{ tranState->groundBitmapTemplate };
-    groundBuff->memoryBitmap = templateBuff.memory;
+    PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
+          chunkPos->chunkZ);
+
+    // Load the template but draw onto the pointer copied from the groundBuff
+    auto templateBuff{ tranState->groundBitmapTemplate };
+    templateBuff.memory = groundBuff->memoryBitmap;
     groundBuff->pos = *chunkPos;
 
     using namespace hm_random;
@@ -815,32 +853,43 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     gameState->world = PushSize(&gameState->worldArena, World);
     World* world{ gameState->world };
-    InitWorld(world, 1.4f, 3.0f);
+
+    gameState->metersToPixels = 42.0f; // Totally modifiable
+    gameState->pixelsToMeters = 1.0f / gameState->metersToPixels;
+    gameState->typicalFloorHeight = 3.0f;
+
+    const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
+    const i32 groundBuffHeight{ 256 };
+    const Vec3 chunkDimInMeters{ gameState->pixelsToMeters * groundBuffWidth,
+                                 gameState->pixelsToMeters * groundBuffHeight,
+                                 gameState->typicalFloorHeight };
+    InitWorld(world, chunkDimInMeters);
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
-    const i32 tileSideInPixels{ 60 };
-    gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
+    //const i32 tileSideInPixels{ 60 };
+    //gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
 
     // NOTE: reserve slot 0 for null entity
     // TODO: consider removing if there is no use case as this has caused a bit of problems with
     // all sorts of stuff
     AddLowEntity(gameState, EntityType::NON_EXISTENT, NullWorldPos());
 
+    // @Remove
+    const f32 tileSideInMeters{ 1.4f };
+    const f32 tileDepthInMeters{ 3.0f };
+
     gameState->nullCollision = MakeNullCollision(gameState);
     gameState->swordCollision = MakeSimpleCollision(gameState, 0.3f, 0.75f, 0.1f);
     gameState->stairwellCollision = MakeSimpleCollision(
-        gameState, gameState->world->tileSideInMeters, gameState->world->tileSideInMeters * 2.0f,
-        gameState->world->tileDepthInMeters * 1.1f);
+        gameState, tileSideInMeters, tileSideInMeters * 2.0f, tileDepthInMeters * 1.1f);
     gameState->monsterCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
     gameState->familiarCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
     gameState->heroCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
-    gameState->wallCollision = MakeSimpleCollision(gameState, gameState->world->tileSideInMeters,
-                                                   gameState->world->tileSideInMeters,
-                                                   gameState->world->tileDepthInMeters);
+    gameState->wallCollision =
+        MakeSimpleCollision(gameState, tileSideInMeters, tileSideInMeters, tileDepthInMeters);
     gameState->standardRoomCollision =
-        MakeSimpleCollision(gameState, gameState->world->tileSideInMeters * tiles_Per_Width,
-                            gameState->world->tileSideInMeters * tiles_Per_Height,
-                            gameState->world->tileDepthInMeters * 0.9f);
+        MakeSimpleCollision(gameState, tileSideInMeters * tiles_Per_Width,
+                            tileSideInMeters * tiles_Per_Height, tileDepthInMeters * 0.9f);
 
     // Changed to false after initializing one player
     gameState->startWithAPlayer = true;
@@ -1010,6 +1059,19 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     memory->isInitialized = true;
 }
 
+#if 0
+INTERNAL void
+RequestGroundBuffers(GameState* gameState, TransientState* tranState, WorldPosition* centerPos,
+                     Rect3 bounds) {
+    bounds = AddOffsetTo(bounds, centerPos->offset_);
+    centerPos->offset_ = Vec3{};
+    //for () {
+    //}
+
+    FillGroundChunk(gameState, tranState, tranState->groundBuffs, &gameState->cameraPos);
+}
+#endif
+
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: this macro depends on the order of the buttons inside InputButtons
@@ -1038,9 +1100,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                   memory->transientStorageSize - sizeof(TransientState));
 
         /// Ground buff
-
-        const i32 groundBuffWidth{ 256 };
+        // @Duplicate
+        const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
         const i32 groundBuffHeight{ 256 };
+
         tranState->groundBuffCount = 128;
         tranState->groundBuffs =
             PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
@@ -1053,14 +1116,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             groundBuff->pos = NullWorldPos();
         }
 
-        FillGroundChunk(gameState, tranState, tranState->groundBuffs, &gameState->cameraPos);
-
         tranState->isInitialized = true;
     }
 
     // Had a bug earlier with this not being initialized yet
     // Should probably assert a bunch more everywhere
     ASSERT(gameState->metersToPixels != 0.0f);
+    const f32 pixelsToMeters{ 1.0f / gameState->metersToPixels };
 
     World* world{ gameState->world };
 
@@ -1186,19 +1248,84 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
-    const i32 tileSpanX{ tiles_Per_Width * 3 };
-    const i32 tileSpanY{ tiles_Per_Height * 3 };
-    const i32 tileSpanZ{ 1 };
-    const Rect3 cameraBounds{ RectCenterDim(
-        Vec3{},
-        world->tileSideInMeters * Vec3{ static_cast<f32>(tileSpanX), static_cast<f32>(tileSpanY),
-                                        static_cast<f32>(tileSpanZ) }) };
+    // Copy the OS sent screen buff info into our format
+    LoadedBitmapInfo drawBuff_{};
+    LoadedBitmapInfo* drawBuff{ &drawBuff_ };
+    drawBuff->width = screenBuff->width;
+    drawBuff->height = screenBuff->height;
+    drawBuff->pitch = screenBuff->pitch;
+    drawBuff->memory = screenBuff->memory;
+
+    // Clear screen
+    DrawRect(drawBuff, Vec2{},
+             Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 0.5f,
+             0.5f, 0.5f);
+
+    const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
+
+    /// Drawing chunks
+
+    const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
+    const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
+    const Rect3 cameraBoundsInMeters{ RectCenterDim(
+        Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
+
+    {
+        const WorldPosition minChunk{ MapIntoChunkSpace(
+            world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
+        const WorldPosition maxChunk{ MapIntoChunkSpace(
+            world, gameState->cameraPos, Vec3{ GetMaxCorner(cameraBoundsInMeters) }) };
+
+        for (i32 chunkZ{ minChunk.chunkZ }; chunkZ <= maxChunk.chunkZ; ++chunkZ) {
+            for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
+                for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
+                    //auto* chunk{ GetWorldChunk(world, chunkX, chunkY, chunkZ) };
+                    //if (chunk) {
+                    const auto chunkCenter{ CenteredChunkPoint(chunkX, chunkY, chunkZ) };
+
+                    // @Speed, it's terrible!
+                    bool32 found{};
+                    GroundBuff* emptyGroundBuff{};
+                    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
+                         ++groundBuffIndex) {
+                        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+                        if (AreOnSameChunk(world, &groundBuff->pos, &chunkCenter)) {
+                            found = true;
+                            break;
+                        } else if (!IsValidWorldPos(&groundBuff->pos)) {
+                            // Found an empty one!
+                            emptyGroundBuff = groundBuff;
+                        }
+                    }
+
+                    if (!found && emptyGroundBuff) {
+                        FillGroundChunk(gameState, tranState, emptyGroundBuff, &chunkCenter);
+                    }
+
+                    const Vec3 relCenterPos{ SubtractWorldPos(world, &chunkCenter,
+                                                              &gameState->cameraPos) };
+                    const Vec2 screenPos{
+                        screenCenter.x + (relCenterPos.x * gameState->metersToPixels),
+                        screenCenter.y - (relCenterPos.y * gameState->metersToPixels)
+                    };
+                    const Vec2 screenDim{ world->chunkDimInMeters.xy * gameState->metersToPixels };
+                    DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
+                                    screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f }, 2.0f);
+                }
+                //}
+            }
+        }
+    }
+
+    // TODO: how big?
+    const Vec3 simBoundsExpansion{ 15.0f, 15.0f, 15.0f };
+    const Rect3 cameraBoundsSim{ AddRadiusTo(cameraBoundsInMeters, simBoundsExpansion) };
 
     TempMemory simMemory{ BeginTempMemory(&tranState->tranArena) };
     auto* simRegion{ BeginSim(gameState, &tranState->tranArena, world, gameState->cameraPos,
-                              cameraBounds, delta) };
+                              cameraBoundsSim, delta) };
 
-    // @Debug printing
+// @Debug printing
 #if 0
     const auto player{ GetLowEntity(gameState, gameState->cameraFollowingEntityIndex) };
     if (IsValidWorldPos(player->pos)) {
@@ -1225,27 +1352,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT_F32("Camera pos offset Y: ", gameState->cameraPos.offset_.x);
 #endif
 
-    // Copy the OS sent screen buff info into our format
-    LoadedBitmapInfo drawBuff_{};
-    LoadedBitmapInfo* drawBuff{ &drawBuff_ };
-    drawBuff->width = screenBuff->width;
-    drawBuff->height = screenBuff->height;
-    drawBuff->pitch = screenBuff->pitch;
-    drawBuff->memory = screenBuff->memory;
-
     /// Background
 
     //#if 0
     //DrawBitmap(drawBuff, &gameState->background, 0, 0);
     //#else
-    DrawRect(drawBuff, Vec2{},
-             Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 0.5f,
-             0.5f, 0.5f);
+    //DrawRect(drawBuff, Vec2{},
+    //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) },
+    //         0.5f, 0.5f, 0.5f);
     //#endif
 
     // Scrolling bitmap buffer
-
-    const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
@@ -1256,9 +1373,36 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) *
                                  gameState->metersToPixels };
-            Vec2 ground{ screenCenter.x + posDelta.x - (bitmap.width * 0.5f),
-                         screenCenter.y - posDelta.y - (bitmap.height * 0.5f) };
+            const Vec2 ground{ screenCenter.x + posDelta.x - (bitmap.width * 0.5f),
+                               screenCenter.y - posDelta.y - (bitmap.height * 0.5f) };
             DrawBitmap(drawBuff, &bitmap, ground.x, ground.y);
+        }
+    }
+
+    // @Debug @Duplicate
+    // Drawing edges later
+    {
+        const WorldPosition minChunk{ MapIntoChunkSpace(
+            world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
+        const WorldPosition maxChunk{ MapIntoChunkSpace(
+            world, gameState->cameraPos, Vec3{ GetMaxCorner(cameraBoundsInMeters) }) };
+
+        for (i32 chunkZ{ minChunk.chunkZ }; chunkZ <= maxChunk.chunkZ; ++chunkZ) {
+            for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
+                for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
+                    const auto chunkCenter{ CenteredChunkPoint(chunkX, chunkY, chunkZ) };
+                    const Vec3 relCenterPos{ SubtractWorldPos(world, &chunkCenter,
+                                                              &gameState->cameraPos) };
+                    const Vec2 screenPos{
+                        screenCenter.x + (relCenterPos.x * gameState->metersToPixels),
+                        screenCenter.y - (relCenterPos.y * gameState->metersToPixels)
+                    };
+                    const Vec2 screenDim{ world->chunkDimInMeters.xy * gameState->metersToPixels };
+                    DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
+                                    screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f }, 2.0f);
+                }
+                //}
+            }
         }
     }
 
@@ -1311,17 +1455,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     // Reset, done in EndSim as we kind of have to for now
                     //if (controlled->requestReset) {
                     //    PRINT("Request reset!\n");
-                    //    auto* lowEntity{ GetLowEntity(gameState, entity->storageIndex) };
-                    //    ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex,
+                    //    auto* lowEntity{ GetLowEntity(gameState, entity->storageIndex)
+                    //    }; ChangeEntityLocation(world, &gameState->worldArena,
+                    //    entity->storageIndex,
                     //                         lowEntity, lowEntity->startingPos);
                     //
                     //    continue;
                     //}
 
                     // Don't allow jumping if not on ground
-                    // We don't touch anything here because MoveEntity handles all the flags
-                    // when doing the simulation
-                    // A plain read is sufficient here
+                    // We don't touch anything here because MoveEntity handles all the
+                    // flags when doing the simulation A plain read is sufficient here
                     if (controlled->dZ != 0.0f) {
                         if (IsSet(entity, SimEntityFlags::Z_SUPPORTED) ||
                             gameState->allowUnlimitedJumps) { // && entity->pos.z == 0.0f
@@ -1435,8 +1579,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                        heroBitmaps->align);
         } break;
 
-            // FIXME: this seems to not get called if we stand still and use the sword at the start
-            // of the game, the sword stops working then
+            // FIXME: this seems to not get called if we stand still and use the sword
+            // at the start of the game, the sword stops working then
         case EntityType::SWORD: {
             // This doesn't affect the sword at all!
             moveSpec.speed = 0.0f;
@@ -1482,10 +1626,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Vec3 entityBasePos{ GetEntityGroundPoint(entity) };
             const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
 
-            //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels *
-            //entity->pos.x),
+            //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels
+            //* entity->pos.x),
             //                              screenCenter.y -
-            //                                  (gameState->metersToPixels * entity->pos.y) };
+            //                                  (gameState->metersToPixels *
+            //                                  entity->pos.y) };
             const Vec2 entityGroundPoint{
                 screenCenter.x + (gameState->metersToPixels * entityBasePos.x * zFudge),
                 screenCenter.y - (gameState->metersToPixels * entityBasePos.y * zFudge)
@@ -1527,7 +1672,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
-    // @Debug
+// @Debug
 #if 0
     PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
     PRINT("Max index: ", simRegion->maxRecordedEntityVelocityIndex);

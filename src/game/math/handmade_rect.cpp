@@ -37,6 +37,7 @@ IsInsideRectangle(Rect2 rect, Vec2 test) {
     return result;
 }
 
+NODISCARD
 INTERNAL inline Rect2
 AddRadiusTo(Rect2 rect, Vec2 radius) {
     Rect2 result;
@@ -44,6 +45,31 @@ AddRadiusTo(Rect2 rect, Vec2 radius) {
     result.min = rect.min - radius;
     result.max = rect.max + radius;
 
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Rect2
+AddOffsetTo(Rect2 rect, Vec2 offset) {
+    Rect2 result;
+
+    result.min = rect.min + offset;
+    result.max = rect.max + offset;
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec2
+GetMinCorner(Rect2 rect) {
+    const Vec2 result{ rect.min };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec2
+GetMaxCorner(Rect2 rect) {
+    const Vec2 result{ rect.max };
     return result;
 }
 
@@ -88,12 +114,24 @@ IsInsideRectangle(Rect3 rect, Vec3 test) {
     return result;
 }
 
+NODISCARD
 INTERNAL inline Rect3
 AddRadiusTo(Rect3 rect, Vec3 radius) {
     Rect3 result;
 
     result.min = rect.min - radius;
     result.max = rect.max + radius;
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Rect3
+AddOffsetTo(Rect3 rect, Vec3 offset) {
+    Rect3 result;
+
+    result.min = rect.min + offset;
+    result.max = rect.max + offset;
 
     return result;
 }
@@ -105,5 +143,19 @@ RectsIntersect(Rect3 a, Rect3 b) {
     const bool32 result{ !((b.max.x <= a.min.x || b.min.x >= a.max.x) ||
                            (b.max.y <= a.min.y || b.min.y >= a.max.y) ||
                            (b.max.z <= a.min.z || b.min.z >= a.max.z)) };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec3
+GetMinCorner(Rect3 rect) {
+    const Vec3 result{ rect.min };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec3
+GetMaxCorner(Rect3 rect) {
+    const Vec3 result{ rect.max };
     return result;
 }

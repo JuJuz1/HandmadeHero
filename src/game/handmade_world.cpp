@@ -20,13 +20,9 @@ IsValidWorldPos(const WorldPosition* pos) {
 }
 
 INTERNAL void
-InitWorld(World* world, f32 tileSideInMeters, f32 tileDepthInMeters) {
+InitWorld(World* world, Vec3 chunkDimInMeters) {
     // NOTE: This is now seperated from the rendering (tileSideInPixels)
-    world->tileSideInMeters = tileSideInMeters;
-
-    world->chunkDimInMeters = Vec3{ tileSideInMeters * tiles_Per_Chunk,
-                                    tileSideInMeters * tiles_Per_Chunk, tileDepthInMeters };
-    world->tileDepthInMeters = tileDepthInMeters;
+    world->chunkDimInMeters = chunkDimInMeters;
     world->firstFree = nullptr;
 
     for (i32 tileChunkIndex{}; tileChunkIndex < world->worldChunkHash.size; ++tileChunkIndex) {
@@ -37,7 +33,7 @@ InitWorld(World* world, f32 tileSideInMeters, f32 tileDepthInMeters) {
 
 NODISCARD
 INTERNAL WorldChunk*
-GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ, MemoryArena* arena) {
+GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ, MemoryArena* arena = nullptr) {
     ASSERT(chunkX > -tile_Chunk_Safe_Margin);
     ASSERT(chunkY > -tile_Chunk_Safe_Margin);
     ASSERT(chunkZ > -tile_Chunk_Safe_Margin);
@@ -93,7 +89,7 @@ IsCanonical(f32 chunkDim, f32 relPos) {
     // TODO: fix the floating point math to not allow the case above of ==
     //ASSERT(relPos >= -world->chunkSideInMeters * 0.5f && relPos <= world->chunkSideInMeters *
     //0.5f);
-    const f32 eps{ 0.0001f };
+    const f32 eps{ 0.01f };
     const bool32 result{ relPos >= -((chunkDim * 0.5f) + eps) &&
                          relPos <= ((chunkDim * 0.5f) + eps) };
     return result;
@@ -130,21 +126,6 @@ MapIntoChunkSpace(const World* world, WorldPosition pos, Vec3 offset) {
     ReCanonicalizeCoordinate(world->chunkDimInMeters.x, &result.chunkX, &result.offset_.x);
     ReCanonicalizeCoordinate(world->chunkDimInMeters.y, &result.chunkY, &result.offset_.y);
     ReCanonicalizeCoordinate(world->chunkDimInMeters.z, &result.chunkZ, &result.offset_.z);
-
-    return result;
-}
-
-NODISCARD
-INTERNAL WorldPosition
-ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ,
-                              Vec3 additionalOffset = {}) {
-    const Vec3 tileDim{ world->tileSideInMeters, world->tileSideInMeters,
-                        world->tileDepthInMeters };
-    const Vec3 offset{ tileDim * Vec3{ static_cast<f32>(tileX), static_cast<f32>(tileY),
-                                       static_cast<f32>(tileZ) } };
-    WorldPosition basePos{};
-    const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset + additionalOffset) };
-    ASSERT(IsCanonical(world, result.offset_));
 
     return result;
 }
@@ -196,6 +177,30 @@ SubtractWorldPos(const World* world, const WorldPosition* a, const WorldPosition
 
 //INTERNAL WorldEntityBlock*
 //FreeBlock(WorldEntityBlock* block) {}
+
+NODISCARD
+INTERNAL WorldPosition
+CenteredChunkPoint(i32 chunkX, i32 chunkY, i32 chunkZ) {
+    WorldPosition result{};
+
+    result.chunkX = chunkX;
+    result.chunkY = chunkY;
+    result.chunkZ = chunkZ;
+
+    return result;
+}
+
+NODISCARD
+INTERNAL WorldPosition
+CenteredChunkPoint(WorldChunk* chunk) {
+    WorldPosition result{};
+
+    result.chunkX = chunk->chunkX;
+    result.chunkY = chunk->chunkY;
+    result.chunkZ = chunk->chunkZ;
+
+    return result;
+}
 
 INTERNAL void
 ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, WorldPosition* oldPos,

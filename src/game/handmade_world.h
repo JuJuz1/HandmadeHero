@@ -23,7 +23,7 @@ GLOBAL const u32 blocked_Tile_Value{ 1 };
 GLOBAL const i32 tile_Chunk_Safe_Margin{ INT32_MAX / 64 };
 GLOBAL const i32 tile_Chunk_Uninitialized{ INT32_MAX };
 
-GLOBAL const i32 tiles_Per_Chunk{ 16 };
+GLOBAL const i32 tiles_Per_Chunk{ 8 }; // 16
 
 // NOTE: Engine internal
 struct WorldChunkPosition_ {
@@ -68,8 +68,8 @@ struct World {
     Array<WorldChunk, 4096> worldChunkHash;
     WorldEntityBlock* firstFree;
 
-    f32 tileSideInMeters;
-    f32 tileDepthInMeters;
+    //f32 tileSideInMeters;
+    //f32 tileDepthInMeters;
     Vec3 chunkDimInMeters;
 };
 

@@ -54,10 +54,10 @@ LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference*
     if (ref->index) {
         SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, ref->index) };
         if (!entry->ptr) {
+            entry->index = ref->index;
             auto* lowEntity{ GetLowEntity(gameState, ref->index) };
             Vec3 pos{ GetSimSpacePos(simRegion, lowEntity) };
             entry->ptr = AddEntityToSimRegion(gameState, simRegion, lowEntity, ref->index, nullptr);
-            entry->index = ref->index;
         }
 
         ref->ptr = entry->ptr;
@@ -141,13 +141,14 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
     simRegion->maxEntityRadius = 5.0f;
     simRegion->maxEntityVelocity = 30.0f; // TODO: revise more
 
-    simRegion->maxRecordedEntityVelocitySq = {};
-    simRegion->maxRecordedEntityVelocityIndex = {};
-    simRegion->maxRecordedEntityVelocityType = {};
-
     // Take into account max velocity of any entity and the delta time!
     const f32 safetyMargin{ simRegion->maxEntityRadius + (simRegion->maxEntityVelocity * delta) };
     const f32 safetyMarginZ{ 1.0f };
+
+    // @Debug
+    simRegion->maxRecordedEntityVelocitySq = {};
+    simRegion->maxRecordedEntityVelocityIndex = {};
+    simRegion->maxRecordedEntityVelocityType = {};
 
     simRegion->world = world;
     simRegion->origin = origin;
