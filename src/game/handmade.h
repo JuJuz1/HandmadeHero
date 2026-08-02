@@ -114,15 +114,7 @@ HANDMADE_DEBUG:
 #define GIGABYTES(count) (MEGABYTES(count) * 1024LL)
 #define TERABYTES(count) (GIGABYTES(count) * 1024LL)
 
-// TODO: do we need this seperation?
-// var arg printing works in MSVC via ##
-#if COMPILER_MSVC
-#    define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
-#elif COMPILER_LLVM
-#    define UNUSED_PARAMS(...) (void)(##__VA_ARGS__)
-#else
-#    define UNUSED_PARAMS(...)
-#endif
+#define UNUSED_PARAMS(...) (void)(__VA_ARGS__)
 
 // Returns the first if equal, same for MAX
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
