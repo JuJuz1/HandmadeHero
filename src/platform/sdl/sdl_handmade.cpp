@@ -846,10 +846,12 @@ main() {
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
+        gameInput.executableReloaded = false;
         const time_t newDllWriteTime{ hm_sdl::GetLastWriteTime(srcDllPath.data_) };
         if (game.lastWritetime != newDllWriteTime) {
             hm_sdl::UnloadGameCode(&game);
             game = hm_sdl::LoadGameCode(srcDllPath.data_, lockFilePath.data_);
+            gameInput.executableReloaded = true;
         }
 
         /// Keyboard input
