@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+#include <float.h>  // various float definitions
 #include <stddef.h> // size_t
 #include <stdint.h> // common types
 
@@ -57,6 +58,13 @@ typedef float f32;
 typedef double f64;
 
 typedef size_t memory_index;
+
+#ifdef FLT_MAX
+#    define F32_MAX FLT_MAX
+#else
+// TODO: error for now? or just define ourselves?
+#    error FLT_MAX not defined!
+#endif
 
 // A thread context passed to game code and is used when calling back to platform-specific code
 typedef struct ThreadContext {

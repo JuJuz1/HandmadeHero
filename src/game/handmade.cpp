@@ -666,40 +666,65 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
 
     using namespace hm_random;
 
-    // TODO: better, systemic random generation
-    RandSeries series{ RandSeed((chunkPos->chunkX * 139) + (chunkPos->chunkY * 593) +
-                                (chunkPos->chunkZ * 329)) };
-
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
     const f32 width{ static_cast<f32>(templateBuff.width) };
     const f32 height{ static_cast<f32>(templateBuff.height) };
 
-    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
-        LoadedBitmapInfo* stamp;
-        if (RandChoice(&series, 2)) {
-            stamp = &gameState->grassBitmaps[RandChoice(&series, gameState->grassBitmaps.size)];
-        } else {
-            stamp = &gameState->stoneBitmaps[RandChoice(&series, gameState->stoneBitmaps.size)];
+    for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
+        for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
+            const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };
+            const i32 chunkY{ chunkPos->chunkY + chunkOffsetY };
+            const i32 chunkZ{ chunkPos->chunkZ };
+
+            // TODO: better, systemic random generation
+            RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
+
+            const Vec2 center{ chunkOffsetX * width, -chunkOffsetY * height };
+            for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+                LoadedBitmapInfo* stamp;
+                if (RandChoice(&series, 2)) {
+                    stamp =
+                        &gameState->grassBitmaps[RandChoice(&series, gameState->grassBitmaps.size)];
+                } else {
+                    stamp =
+                        &gameState->stoneBitmaps[RandChoice(&series, gameState->stoneBitmaps.size)];
+                }
+
+                const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+                // Normalize to [-1, 1] via f(x) = 2x - 1
+                const Vec2 offset{ RandUnilateral(&series) * width,
+                                   RandUnilateral(&series) * height };
+                const Vec2 pos{ center + offset - bitmapCenter };
+
+                DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
+            }
         }
-
-        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-        // Normalize to [-1, 1] via f(x) = 2x - 1
-        const Vec2 offset{ RandUnilateral(&series) * width, RandUnilateral(&series) * height };
-        const Vec2 pos{ offset - bitmapCenter };
-
-        DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
     }
 
-    for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
-        LoadedBitmapInfo* stamp;
-        stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
+    // Detail tufts on top of the "ground"
+    for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
+        for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
+            const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };
+            const i32 chunkY{ chunkPos->chunkY + chunkOffsetY };
+            const i32 chunkZ{ chunkPos->chunkZ };
 
-        const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-        const Vec2 offset{ RandUnilateral(&series) * width, RandUnilateral(&series) * height };
-        const Vec2 pos{ offset - bitmapCenter };
+            // TODO: better, systemic random generation
+            RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
 
-        DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
+            const Vec2 center{ chunkOffsetX * width, -chunkOffsetY * height };
+            for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+                LoadedBitmapInfo* stamp;
+                stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
+
+                const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+                const Vec2 offset{ RandUnilateral(&series) * width,
+                                   RandUnilateral(&series) * height };
+                const Vec2 pos{ center + offset - bitmapCenter };
+
+                DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
+            }
+        }
     }
 }
 
@@ -867,11 +892,12 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
     //const i32 tileSideInPixels{ 60 };
-    //gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
+    //gameState->metersToPixels = static_cast<f32>(tileSideInPixels) /
+    //world->tileSideInMeters;
 
     // NOTE: reserve slot 0 for null entity
-    // TODO: consider removing if there is no use case as this has caused a bit of problems with
-    // all sorts of stuff
+    // TODO: consider removing if there is no use case as this has caused a bit of problems
+    // with all sorts of stuff
     AddLowEntity(gameState, EntityType::NON_EXISTENT, NullWorldPos());
 
     // @Remove
@@ -1051,7 +1077,8 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     // Atm SetCamera has to be called at the end if there is no player at the start
     // This is because we don't call SetCamera after this function if there is no player
-    //WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
+    //WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX,
+    //cameraTileY,
     //                                                       cameraTileZ) };
     //SetCamera(gameState, cameraPos);
 
@@ -1093,6 +1120,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     ASSERT(sizeof(TransientState) <= memory->transientStorageSize);
+    // Funny, casey uses C-style casts so he had a nasty typo, he accidentally had the size
+    // here not the actual start of the storage -> DON'T use C-style casts!
+    //TransientState* tranState{ (TransientState*)memory->transientStorageSize };
+    // static_cast would not allow the cast here, we would have to use reinterpret_cast
     TransientState* tranState{ static_cast<TransientState*>(memory->transientStorage) };
     if (!tranState->isInitialized) {
         ArenaInit(&tranState->tranArena,
@@ -1104,7 +1135,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
         const i32 groundBuffHeight{ 256 };
 
-        tranState->groundBuffCount = 128;
+        tranState->groundBuffCount = 32; // 128
         tranState->groundBuffs =
             PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
 
@@ -1237,10 +1268,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             //    if (ActionJustPressed(&inputButtons->Z)) {
             //        if (ActionPressed(&inputButtons->shift)) {
             //            controllingEntity.low->pos.chunkZ =
-            //                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, -1);
+            //                WorldPositionModifyZChecked(world,
+            //                &controllingEntity.low->pos, -1);
             //        } else {
             //            controllingEntity.low->pos.chunkZ =
-            //                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, 1);
+            //                WorldPositionModifyZChecked(world,
+            //                &controllingEntity.low->pos, 1);
             //        }
             //    }
             //}
@@ -1283,25 +1316,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     //if (chunk) {
                     const auto chunkCenter{ CenteredChunkPoint(chunkX, chunkY, chunkZ) };
 
-                    // @Speed, it's terrible!
-                    bool32 found{};
-                    GroundBuff* emptyGroundBuff{};
-                    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
-                         ++groundBuffIndex) {
-                        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
-                        if (AreOnSameChunk(world, &groundBuff->pos, &chunkCenter)) {
-                            found = true;
-                            break;
-                        } else if (!IsValidWorldPos(&groundBuff->pos)) {
-                            // Found an empty one!
-                            emptyGroundBuff = groundBuff;
-                        }
-                    }
-
-                    if (!found && emptyGroundBuff) {
-                        FillGroundChunk(gameState, tranState, emptyGroundBuff, &chunkCenter);
-                    }
-
                     const Vec3 relCenterPos{ SubtractWorldPos(world, &chunkCenter,
                                                               &gameState->cameraPos) };
                     const Vec2 screenPos{
@@ -1309,6 +1323,37 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                         screenCenter.y - (relCenterPos.y * gameState->metersToPixels)
                     };
                     const Vec2 screenDim{ world->chunkDimInMeters.xy * gameState->metersToPixels };
+
+                    // @Speed, it's terrible!
+                    f32 furthestBuffLengthSq{};
+                    GroundBuff* furthestBuff{};
+                    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
+                         ++groundBuffIndex) {
+                        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+                        if (AreOnSameChunk(world, &groundBuff->pos, &chunkCenter)) {
+                            furthestBuff = nullptr;
+                            break;
+                        } else if (IsValidWorldPos(&groundBuff->pos)) {
+                            // Check if we evict this already filled buff for a new one
+                            const Vec3 relPos{ SubtractWorldPos(world, &groundBuff->pos,
+                                                                &gameState->cameraPos) };
+                            const f32 buffDistSq{ LengthSq(relPos.xy) };
+                            if (furthestBuffLengthSq < buffDistSq) {
+                                furthestBuffLengthSq = buffDistSq;
+                                furthestBuff = groundBuff;
+                            }
+                        } else {
+                            // Found an empty one!
+                            furthestBuffLengthSq = F32_MAX;
+                            furthestBuff = groundBuff;
+                            // break here?
+                        }
+                    }
+
+                    if (furthestBuff) {
+                        FillGroundChunk(gameState, tranState, furthestBuff, &chunkCenter);
+                    }
+
                     DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
                                     screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f }, 2.0f);
                 }
@@ -1358,8 +1403,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //DrawBitmap(drawBuff, &gameState->background, 0, 0);
     //#else
     //DrawRect(drawBuff, Vec2{},
-    //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) },
-    //         0.5f, 0.5f, 0.5f);
+    //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height)
+    //         }, 0.5f, 0.5f, 0.5f);
     //#endif
 
     // Scrolling bitmap buffer
