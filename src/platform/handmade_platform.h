@@ -211,6 +211,8 @@ typedef struct Input {
     i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
 
     f32 frameDeltaTime;
+
+    bool32 executableReloaded;
 } Input;
 
 // We use the style 2 (Game as a service to the OS) described in the series

@@ -702,7 +702,8 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
         }
     }
 
-    // Detail tufts on top of the "ground"
+// Detail tufts on top of the "ground"
+#if 1
     for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
         for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
             const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };
@@ -713,7 +714,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
             RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
 
             const Vec2 center{ chunkOffsetX * width, -chunkOffsetY * height };
-            for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+            for (i32 grassIndex{}; grassIndex < 30; ++grassIndex) {
                 LoadedBitmapInfo* stamp;
                 stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
 
@@ -726,6 +727,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
             }
         }
     }
+#endif
 }
 
 INTERNAL void
@@ -1143,11 +1145,22 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             auto* groundBuff{ &tranState->groundBuffs[i] };
             tranState->groundBitmapTemplate =
                 MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
+            ASSERT(tranState->groundBitmapTemplate.memory);
             groundBuff->memoryBitmap = tranState->groundBitmapTemplate.memory;
             groundBuff->pos = NullWorldPos();
         }
 
         tranState->isInitialized = true;
+    }
+
+    // Newly added member to platform's Input
+    if (input->executableReloaded) {
+        for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
+             ++groundBuffIndex) {
+            auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+            //groundBuff->memoryBitmap = nullptr; // We assign memory locations for these above
+            groundBuff->pos = NullWorldPos();
+        }
     }
 
     // Had a bug earlier with this not being initialized yet
@@ -1354,8 +1367,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                         FillGroundChunk(gameState, tranState, furthestBuff, &chunkCenter);
                     }
 
-                    DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
-                                    screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f }, 2.0f);
+                    // Drawn later after drawing the ground buffs
+                    //DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
+                    //                screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f
+                    //                }, 2.0f);
                 }
                 //}
             }

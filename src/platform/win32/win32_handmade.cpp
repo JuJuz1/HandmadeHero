@@ -1209,10 +1209,13 @@ WinMain(
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
+        gameInput.executableReloaded = false;
+
         const FILETIME newDllWriteTime{ hm_win32::GetLastWriteTime(srcDllPath.data_) };
         if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
             hm_win32::UnloadGameCode(&game);
             game = hm_win32::LoadGameCode(srcDllPath.data_, tempDllPath.data_, lockFilePath.data_);
+            gameInput.executableReloaded = true;
         }
 
         /// Keyboard input
