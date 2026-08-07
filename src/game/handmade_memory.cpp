@@ -33,6 +33,13 @@ ArenaCheck(MemoryArena* arena) {
     ASSERT(arena->tempCount == 0);
 }
 
+// TODO: provide a better interface!!!
+#define PushStruct(arena, type) (type*)PushSize_(arena, sizeof(type))
+#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
+// Check return type, just use u8* or no?
+#define PushSize(arena, size) PushSize_(arena, size)
+#define ZeroSize(instance) ZeroMem(&(instance), sizeof(instance))
+
 NODISCARD
 INTERNAL void*
 PushSize_(MemoryArena* arena, memory_index size) {
@@ -43,11 +50,6 @@ PushSize_(MemoryArena* arena, memory_index size) {
 
     return result;
 }
-
-// TODO: provide a better interface!!!
-#define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
-#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
-#define ZeroSize(instance) ZeroMem(&(instance), sizeof(instance))
 
 INTERNAL void
 ZeroMem(void* ptr, memory_index size) {

@@ -49,16 +49,6 @@ struct HeroBitmaps {
     Vec2 align;
 };
 
-struct EntityVisiblePiece {
-    LoadedBitmapInfo* bitmap;
-    Vec2 offset;
-    f32 offsetZ;
-    f32 entityZC;
-
-    f32 r, g, b, a;
-    Vec2 dimension;
-};
-
 /**
  * State of the controlled hero, seperated from simulation
  */
@@ -92,7 +82,7 @@ struct PairWiseCollisionRule {
 struct GroundBuff {
     // An invalid pos tells use that this ground buffer has not been filled (used yet)
     WorldPosition pos; // Center of the bitmap!
-    void* memoryBitmap;
+    LoadedBitmapInfo bitmap;
 };
 
 struct TransientState {
@@ -154,13 +144,6 @@ struct GameState {
     // @Debug
     bool32 showCollisionBoxes;
     bool32 allowUnlimitedJumps;
-};
-
-// TODO: this should just be a part of the renderer...
-struct EntityVisiblePieceGroup {
-    GameState* gameState;
-    Array<EntityVisiblePiece, 8> pieces;
-    i32 pieceCount;
 };
 
 /// Here we can put functions which many other files need to call ///

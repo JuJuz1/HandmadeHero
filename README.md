@@ -33,6 +33,7 @@ Annotations: prefixed with a "@"
 - @Remove -> temporary code for testing and debugging
 - @Debug -> debug code
 - @Duplicate -> duplicate variables or code, constants usually
+- @Re-enable -> re-enable later
 
 Documented here so I would remember to use these better!
 

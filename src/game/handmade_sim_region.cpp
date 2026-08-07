@@ -129,7 +129,7 @@ NODISCARD
 INTERNAL SimRegion*
 BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPosition origin,
          Rect3 bounds, f32 delta) {
-    SimRegion* simRegion{ PushSize(simArena, SimRegion) };
+    SimRegion* simRegion{ PushStruct(simArena, SimRegion) };
     ZeroSize(simRegion->hash);
 
     simRegion->maxEntityCount = simRegion->hash.size; // 4096
@@ -427,7 +427,7 @@ HandleOverlap(GameState* gameState, SimEntity* mover, SimEntity* region, f32 del
 
 NODISCARD
 INTERNAL bool32
-SpeculativeCollide(SimEntity* mover, SimEntity* region) {
+SpeculativeCollide(SimEntity* mover, SimEntity* region, Vec3 testPos) {
     bool32 result{ true };
     if (region->type == EntityType::STAIRWELL) {
         const f32 ground{ GetStairGround(region, GetEntityGroundPoint(mover)) };
@@ -436,7 +436,7 @@ SpeculativeCollide(SimEntity* mover, SimEntity* region) {
         result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight) ||
                  ((bary.y > 0.1f) && (bary.y < 0.9f));
 #else
-        result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight);
+        result = (AbsF32(GetEntityGroundPoint(mover, testPos).z - ground) > stepHeight);
 #endif
     }
 
@@ -710,8 +710,8 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
                                 }
 
                                 if (testHitEntity) {
-                                    const Vec3 testP{ entity->pos + (playerDelta * testTMin) };
-                                    if (SpeculativeCollide(entity, testEntity)) {
+                                    const Vec3 testPos{ entity->pos + (playerDelta * testTMin) };
+                                    if (SpeculativeCollide(entity, testEntity, testPos)) {
                                         tMin = testTMin;
                                         wallNormalMin = testWallNormal;
                                         hitEntityMin = testHitEntity;

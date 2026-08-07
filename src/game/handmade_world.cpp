@@ -54,7 +54,7 @@ GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ, MemoryArena* are
 
         // Already initialized -> add next
         if (arena && chunk->chunkX != tile_Chunk_Uninitialized && !chunk->nextInHash) {
-            chunk->nextInHash = PushSize(arena, WorldChunk);
+            chunk->nextInHash = PushStruct(arena, WorldChunk);
             chunk = chunk->nextInHash;
             chunk->chunkX = tile_Chunk_Uninitialized;
         }
@@ -271,7 +271,7 @@ ChangeEntityLocationRaw(World* world, MemoryArena* arena, i32 lowEntityIndex, Wo
                 if (oldBlock) {
                     world->firstFree = oldBlock->next;
                 } else {
-                    oldBlock = PushSize(arena, WorldEntityBlock);
+                    oldBlock = PushStruct(arena, WorldEntityBlock);
                 }
 
                 *oldBlock = *block;

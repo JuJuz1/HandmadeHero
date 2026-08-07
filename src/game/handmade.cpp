@@ -33,6 +33,7 @@ GLOBAL GameMemory* gMemory;
 #include "game/handmade_world.cpp"
 #include "game/handmade_sim_region.cpp"
 #include "game/handmade_entity.cpp"
+#include "game/handmade_render_group.cpp"
 // clang-format on
 
 /**
@@ -594,7 +595,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 NODISCARD
 INTERNAL SimEntityCollisionVolumeGroup*
 MakeSimpleCollision(GameState* gameState, f32 dimX, f32 dimY, f32 dimZ) {
-    auto* collision{ PushSize(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
+    auto* collision{ PushStruct(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
     collision->volumeCount = 1;
     collision->volumes = PushArray(&gameState->worldArena, 1, SimEntityCollisionVolume);
     collision->totalVolume.dim = Vec3{ dimX, dimY, dimZ };
@@ -607,7 +608,7 @@ MakeSimpleCollision(GameState* gameState, f32 dimX, f32 dimY, f32 dimZ) {
 NODISCARD
 INTERNAL SimEntityCollisionVolumeGroup*
 MakeNullCollision(GameState* gameState) {
-    auto* collision{ PushSize(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
+    auto* collision{ PushStruct(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
     collision->volumeCount = 0;
     collision->volumes = nullptr;
     collision->totalVolume.offsetPos = {};
@@ -642,7 +643,7 @@ MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height, bool32 clearToZero = 
     result.height = height;
     result.pitch = width * bitmap_Bytes_Per_Pixel;
     const i32 totalSize{ width * height * bitmap_Bytes_Per_Pixel };
-    result.memory = PushSize_(arena, totalSize);
+    result.memory = PushSize(arena, totalSize);
     if (clearToZero) {
         ClearBitmap(&result);
     }
@@ -660,16 +661,17 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
           chunkPos->chunkZ);
 
     // Load the template but draw onto the pointer copied from the groundBuff
-    auto templateBuff{ tranState->groundBitmapTemplate };
-    templateBuff.memory = groundBuff->memoryBitmap;
+    // Not anymore as we had no way of storing the bitmap when using this new deferred method
+    auto* buff{ &groundBuff->bitmap };
+    //buff = groundBuff->bitmap;
     groundBuff->pos = *chunkPos;
 
     using namespace hm_random;
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
-    const f32 width{ static_cast<f32>(templateBuff.width) };
-    const f32 height{ static_cast<f32>(templateBuff.height) };
+    const f32 width{ static_cast<f32>(buff->width) };
+    const f32 height{ static_cast<f32>(buff->height) };
 
     for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
         for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
@@ -697,7 +699,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
+                DrawBitmap(buff, stamp, pos.x, pos.y);
             }
         }
     }
@@ -723,61 +725,11 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                DrawBitmap(&templateBuff, stamp, pos.x, pos.y);
+                DrawBitmap(buff, stamp, pos.x, pos.y);
             }
         }
     }
 #endif
-}
-
-INTERNAL void
-PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
-          Vec2 align, Vec2 dimension, Vec4 color, f32 entityZC = 1.0f) {
-    ASSERT(group->pieceCount < group->pieces.size);
-    EntityVisiblePiece* piece{ &group->pieces[group->pieceCount++] };
-
-    piece->bitmap = bitmap;
-    piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
-    piece->offsetZ = offsetZ;
-    piece->entityZC = entityZC;
-
-    piece->dimension = dimension;
-
-    piece->r = color.r;
-    piece->g = color.g;
-    piece->b = color.b;
-    piece->a = color.a;
-}
-
-INTERNAL void
-PushBitmap(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
-           Vec2 align, f32 alpha = 1.0f, f32 entityZC = 1.0f) {
-    PushPiece(group, bitmap, offset, offsetZ, align, Vec2{}, Vec4{ 1.0f, 1.0f, 1.0f, alpha },
-              entityZC);
-}
-
-INTERNAL void
-PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
-         f32 entityZC = 1.0f) {
-    PushPiece(group, nullptr, offset, offsetZ, Vec2{}, dim, color, entityZC);
-}
-
-INTERNAL void
-PushRectOutline(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
-                f32 entityZC = 1.0f) {
-    const f32 thickness{ 0.1f };
-
-    // Top bottom
-    PushPiece(group, 0, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
-              color, entityZC);
-    PushPiece(group, 0, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{}, Vec2{ dim.x, thickness },
-              color, entityZC);
-
-    // Left right
-    PushPiece(group, 0, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
-              color, entityZC);
-    PushPiece(group, 0, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{}, Vec2{ thickness, dim.y },
-              color, entityZC);
 }
 
 INTERNAL void
@@ -829,7 +781,7 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
             gameState->firstFreeCollisionRule = found->nextInHash;
         } else {
             // Push to head always
-            found = PushSize(&gameState->worldArena, PairWiseCollisionRule);
+            found = PushStruct(&gameState->worldArena, PairWiseCollisionRule);
         }
 
         found->nextInHash = gameState->collisionRuleHash[hashBucket];
@@ -847,7 +799,7 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
 }
 
 INTERNAL void
-DrawHitpoints(const SimEntity* entity, EntityVisiblePieceGroup* group) {
+DrawHitpoints(const SimEntity* entity, RenderGroup* group) {
     if (entity->hitPointMax >= 1) {
         const Vec2 hitPointdimension{ 0.2f, 0.2f };
         const f32 spacingX{ hitPointdimension.x * 1.5f };
@@ -878,7 +830,7 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     PRINT("GameState size: %d (%.3f mb)\n", sizeof(GameState),
           sizeof(GameState) / (1024.0f * 1024.0f));
 
-    gameState->world = PushSize(&gameState->worldArena, World);
+    gameState->world = PushStruct(&gameState->worldArena, World);
     World* world{ gameState->world };
 
     gameState->metersToPixels = 42.0f; // Totally modifiable
@@ -952,15 +904,15 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     // Generating tile values
     for (i32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
-        //u32 doorDirection;
+        u32 doorDirection;
         // Lateral only
-        //if (doorUp || doorDown) {
-        //    doorDirection = RandChoice(&series, 2);
-        //} else {
-        //    doorDirection = RandChoice(&series, 3);
-        //}
+        if (doorUp || doorDown) {
+            doorDirection = RandChoice(&series, 2);
+        } else {
+            doorDirection = RandChoice(&series, 3);
+        }
         // @Remove
-        u32 doorDirection{ RandChoice(&series, 2) };
+        //u32 doorDirection{ RandChoice(&series, 2) };
 
         bool32 createdZDoor{};
         // doorDirection of 2 means the room is blocked and has a door going up
@@ -1137,7 +1089,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
         const i32 groundBuffHeight{ 256 };
 
-        tranState->groundBuffCount = 32; // 128
+        tranState->groundBuffCount = 64; // 128
         tranState->groundBuffs =
             PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
 
@@ -1146,7 +1098,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             tranState->groundBitmapTemplate =
                 MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
             ASSERT(tranState->groundBitmapTemplate.memory);
-            groundBuff->memoryBitmap = tranState->groundBitmapTemplate.memory;
+            groundBuff->bitmap = tranState->groundBitmapTemplate;
             groundBuff->pos = NullWorldPos();
         }
 
@@ -1294,6 +1246,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
+    /// Render stuff
+    auto renderMemory{ BeginTempMemory(&tranState->tranArena) };
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4),
+                                        gameState->metersToPixels) };
+
     // Copy the OS sent screen buff info into our format
     LoadedBitmapInfo drawBuff_{};
     LoadedBitmapInfo* drawBuff{ &drawBuff_ };
@@ -1304,8 +1261,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     // Clear screen
     DrawRect(drawBuff, Vec2{},
-             Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 0.5f,
-             0.5f, 0.5f);
+             Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
+             0.0f, 1.0f);
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
@@ -1426,21 +1383,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+        ASSERT(groundBuff);
         if (IsValidWorldPos(&groundBuff->pos)) {
-            auto bitmap{ tranState->groundBitmapTemplate };
-            ASSERT(groundBuff && bitmap.memory);
-            bitmap.memory = groundBuff->memoryBitmap;
+            //auto bitmap{ tranState->groundBitmapTemplate };
+            //bitmap.memory = groundBuff->memoryBitmap;
+            //ASSERT(bitmap.memory);
+            auto* bitmap{ &groundBuff->bitmap };
+            ASSERT(bitmap->memory);
 
-            const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) *
-                                 gameState->metersToPixels };
-            const Vec2 ground{ screenCenter.x + posDelta.x - (bitmap.width * 0.5f),
-                               screenCenter.y - posDelta.y - (bitmap.height * 0.5f) };
-            DrawBitmap(drawBuff, &bitmap, ground.x, ground.y);
+            const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
+            PushBitmap(renderGroup, bitmap, posDelta.xy, posDelta.z,
+                       Vec2{ bitmap->width * 0.5f, bitmap->height * 0.5f });
         }
     }
 
     // @Debug @Duplicate
     // Drawing edges later
+    // FIXME: doesn't do anything with render group rendering now!
     {
         const WorldPosition minChunk{ MapIntoChunkSpace(
             world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
@@ -1468,19 +1427,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     /// Drawing and processing entities
 
-    // Every entity has its own one of these
-    EntityVisiblePieceGroup pieceGroup;
-    pieceGroup.gameState = gameState;
-
     /// Simulation
 
-    auto* entity{ simRegion->entities };
-    for (i32 i{}; i < simRegion->entityCount; ++i, ++entity) {
+    for (i32 i{}; i < simRegion->entityCount; ++i) {
+        auto* entity{ &simRegion->entities[i] };
         if (!entity->updatable) {
             continue;
         }
-
-        pieceGroup.pieceCount = 0;
 
         // TODO: This is wrong, compute after update
         f32 shadowAlpha{ 1.0f - (0.5f * entity->pos.z) };
@@ -1492,17 +1445,20 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         MoveSpec moveSpec{ DefaultMoveSpec() };
         Vec3 ddP{};
 
+        RenderBasis* renderBasis{ PushStruct(&tranState->tranArena, RenderBasis) };
+        renderGroup->defaultBasis = renderBasis;
+
         HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 
         switch (entity->type) {
         case EntityType::WALL: {
             // Tree bitmaps
-            PushBitmap(&pieceGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
+            PushBitmap(renderGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
         } break;
 
         case EntityType::STAIRWELL: {
-            PushRect(&pieceGroup, Vec2{}, 0, entity->walkableDim, Vec4{ 1, 1, 0, 1 }, 0.0f);
-            PushRect(&pieceGroup, Vec2{}, entity->walkableHeight, entity->walkableDim,
+            PushRect(renderGroup, Vec2{}, 0, entity->walkableDim, Vec4{ 1, 1, 0, 1 }, 0.0f);
+            PushRect(renderGroup, Vec2{}, entity->walkableHeight, entity->walkableDim,
                      Vec4{ 1, 0.5f, 0, 1 }, 0.0f);
         } break;
 
@@ -1559,21 +1515,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
+            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
-            PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
-            PushBitmap(&pieceGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
-            PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
 
-            DrawHitpoints(entity, &pieceGroup);
+            DrawHitpoints(entity, renderGroup);
         } break;
 
         case EntityType::MONSTER: {
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
+            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
-            PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
 
-            DrawHitpoints(entity, &pieceGroup);
+            DrawHitpoints(entity, renderGroup);
         } break;
 
         case EntityType::FAMILIAR: {
@@ -1633,9 +1589,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.15f * bobSin) };
             const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align,
+            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align,
                        newShadowAlpha, 0.0f);
-            PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, bobStrength * bobSin,
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec2{}, bobStrength * bobSin,
                        heroBitmaps->align);
         } break;
 
@@ -1650,16 +1606,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 ClearCollisionRulesFor(gameState, entity->storageIndex);
             }
 
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
+            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
-            PushBitmap(&pieceGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
+            PushBitmap(renderGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
         } break;
 
         case EntityType::SPACE: {
             for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
                 const auto* volume{ &entity->collision->volumes[volumeIndex] };
                 // Outlines
-                //PushRectOutline(&pieceGroup, volume->offsetPos.xy, 0, volume->dim.xy,
+                //PushRectOutline(renderGroup, volume->offsetPos.xy, 0, volume->dim.xy,
                 //                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
             }
         } break;
@@ -1675,60 +1631,65 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             MoveEntity(gameState, simRegion, entity, moveSpec, ddP, delta);
         }
 
+        renderBasis->pos = entity->pos;
+
         //if (entity->type == EntityType::HERO) {
         //    PRINT_F32("Z", entity->z);
         //}
+    }
 
-        // Draw pieces
-        for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
-            const EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
+    /// Rendering
 
-            const Vec3 entityBasePos{ GetEntityGroundPoint(entity) };
-            const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
+    for (i32 baseAddress{}; baseAddress < renderGroup->pushBufferSize;
+         baseAddress += sizeof(EntityVisiblePiece)) {
+        const EntityVisiblePiece* piece{ reinterpret_cast<EntityVisiblePiece*>(
+            renderGroup->pushBufferBase + baseAddress) };
 
-            //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels
-            //* entity->pos.x),
-            //                              screenCenter.y -
-            //                                  (gameState->metersToPixels *
-            //                                  entity->pos.y) };
-            const Vec2 entityGroundPoint{
-                screenCenter.x + (gameState->metersToPixels * entityBasePos.x * zFudge),
-                screenCenter.y - (gameState->metersToPixels * entityBasePos.y * zFudge)
-            };
+        const Vec3 entityBasePos{ piece->basis->pos };
+        const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
 
-            const f32 entityZ{ -entityBasePos.z * gameState->metersToPixels };
+        //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels
+        //* entity->pos.x),
+        //                              screenCenter.y -
+        //                                  (gameState->metersToPixels *
+        //                                  entity->pos.y) };
+        const Vec2 entityGroundPoint{
+            screenCenter.x + (gameState->metersToPixels * entityBasePos.x * zFudge),
+            screenCenter.y - (gameState->metersToPixels * entityBasePos.y * zFudge)
+        };
 
-            const Vec2 center{ entityGroundPoint.x + piece->offset.x,
-                               entityGroundPoint.y + piece->offset.y +
-                                   //(gameState->metersToPixels * piece->offsetZ) +
-                                   (entityZ * piece->entityZC) };
+        const f32 entityZ{ -entityBasePos.z * gameState->metersToPixels };
 
-            if (piece->bitmap) {
-                DrawBitmap(drawBuff, piece->bitmap, center.x, center.y, piece->a);
-            } else {
-                const Vec2 halfDim{ 0.5f * piece->dimension * gameState->metersToPixels };
-                DrawRect(drawBuff, center - halfDim, center + halfDim, piece->r, piece->g,
-                         piece->b);
+        const Vec2 center{ entityGroundPoint.x + piece->offset.x,
+                           entityGroundPoint.y + piece->offset.y +
+                               //(gameState->metersToPixels * piece->offsetZ) +
+                               (entityZ * piece->entityZC) };
+
+        if (piece->bitmap) {
+            DrawBitmap(drawBuff, piece->bitmap, center.x, center.y, piece->a);
+        } else {
+            const Vec2 halfDim{ 0.5f * piece->dimension * gameState->metersToPixels };
+            DrawRect(drawBuff, center - halfDim, center + halfDim, piece->r, piece->g, piece->b);
+        }
+
+        // @Debug collision box
+        if (gameState->showCollisionBoxes) {
+// Don't draw for room space as it blocks the whole screen
+// @Re-enable after getting reference to entity here, probably store to the piece?
+#if 0
+            if (entity->type != EntityType::SPACE) {
+                const Vec2 leftTop{ entityGroundPoint.x - (0.5f * gameState->metersToPixels *
+                                                           entity->collision->totalVolume.dim.x),
+                                    entityGroundPoint.y - (0.5f * gameState->metersToPixels *
+                                                           entity->collision->totalVolume.dim.y) };
+
+                DrawRect(drawBuff, leftTop,
+                         leftTop + entity->collision->totalVolume.dim.xy *
+                                       gameState->metersToPixels // *0.95f
+                         ,
+                         0.5f, 0.1f, 0.5f);
             }
-
-            // @Debug collision box
-            if (gameState->showCollisionBoxes) {
-                // Don't draw for room space as it blocks the whole screen
-                if (entity->type != EntityType::SPACE) {
-                    const Vec2 leftTop{
-                        entityGroundPoint.x - (0.5f * gameState->metersToPixels *
-                                               entity->collision->totalVolume.dim.x),
-                        entityGroundPoint.y - (0.5f * gameState->metersToPixels *
-                                               entity->collision->totalVolume.dim.y)
-                    };
-
-                    DrawRect(drawBuff, leftTop,
-                             leftTop + entity->collision->totalVolume.dim.xy *
-                                           gameState->metersToPixels // *0.95f
-                             ,
-                             0.5f, 0.1f, 0.5f);
-                }
-            }
+#endif
         }
     }
 
@@ -1743,12 +1704,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT("\n");
 #endif
 
-    WorldPosition worldOrigin{};
-    const Vec3 diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
-    DrawRect(drawBuff, diff.xy, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
-
     EndSim(simRegion, gameState);
     EndTempMemory(simMemory);
+    EndTempMemory(renderMemory); // Have to be in this order, not that great in the long run...
 
     ArenaCheck(&tranState->tranArena);
     ArenaCheck(&gameState->worldArena);
