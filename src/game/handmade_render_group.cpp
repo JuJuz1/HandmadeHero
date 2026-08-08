@@ -11,8 +11,8 @@ INTERNAL RenderGroupEntryHeader*
 PushRenderElement_(RenderGroup* group, i32 size, RenderGroupEntryType type) {
     RenderGroupEntryHeader* result{};
 
-    // TODO: why not <= ???
-    if ((group->pushBufferSize + size) < group->maxPushBufferSize) {
+    // TODO: why not <= ??? now we prevent pushing if we hit max size
+    if ((group->pushBufferSize + size) <= group->maxPushBufferSize) {
         result = reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
                                                            group->pushBufferSize);
         result->type = type;
@@ -38,11 +38,7 @@ PushPiece(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ
         piece->entityBasis.offsetZ = offsetZ;
         piece->entityBasis.entityZC = entityZC;
 
-        // TODO: piece->color = color
-        piece->color.r = color.r;
-        piece->color.g = color.g;
-        piece->color.b = color.b;
-        piece->color.a = color.a;
+        piece->color = color;
     }
 }
 
@@ -66,29 +62,24 @@ PushRect(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color, f32
 
         piece->dim = group->metersToPixels * dim;
 
-        piece->color.r = color.r;
-        piece->color.g = color.g;
-        piece->color.b = color.b;
-        piece->color.a = color.a;
+        piece->color = color;
     }
 }
 
 INTERNAL void
 PushRectOutline(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
-                f32 entityZC = 1.0f) {
-    const f32 thickness{ 0.1f };
-
+                f32 thickness = 0.1f, f32 entityZC = 1.0f) {
     // Top bottom
-    PushPiece(group, nullptr, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{ dim.x, thickness },
-              color, entityZC);
-    PushPiece(group, nullptr, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{ dim.x, thickness },
-              color, entityZC);
+    PushRect(group, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{ dim.x, thickness }, color,
+             entityZC);
+    PushRect(group, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{ dim.x, thickness }, color,
+             entityZC);
 
     // Left right
-    PushPiece(group, nullptr, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{ thickness, dim.y },
-              color, entityZC);
-    PushPiece(group, nullptr, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{ thickness, dim.y },
-              color, entityZC);
+    PushRect(group, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{ thickness, dim.y }, color,
+             entityZC);
+    PushRect(group, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{ thickness, dim.y }, color,
+             entityZC);
 }
 
 INTERNAL void
@@ -208,6 +199,8 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) 
     }
 }
 
+// We simply don't need this now as we use PushRectOutline to do this via the push buffer
+#if 0
 INTERNAL void
 DrawRectOutline(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec3 color,
                 f32 thickness = 1.0f) {
@@ -223,6 +216,7 @@ DrawRectOutline(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec3 color,
     DrawRect(buff, Vec2{ max.x - thickness, min.y - thickness },
              Vec2{ max.x + thickness, max.y + thickness }, color.r, color.g, color.b);
 }
+#endif
 
 NODISCARD
 INTERNAL RenderGroup*

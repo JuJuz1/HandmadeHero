@@ -666,8 +666,8 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
 INTERNAL void
 DrawHitpoints(const SimEntity* entity, RenderGroup* group) {
     if (entity->hitPointMax >= 1) {
-        const Vec2 hitPointdimension{ 0.2f, 0.2f };
-        const f32 spacingX{ hitPointdimension.x * 1.5f };
+        const Vec2 hitpointDim{ 0.2f, 0.2f };
+        const f32 spacingX{ hitpointDim.x * 1.5f };
         Vec2 hitPointPos{ -0.5f * (entity->hitPointMax - 1) * spacingX, -0.25f };
         const Vec2 dPos{ spacingX, 0.0f };
 
@@ -679,7 +679,7 @@ DrawHitpoints(const SimEntity* entity, RenderGroup* group) {
             }
 
             // TODO: Height
-            PushRect(group, hitPointPos, 0, hitPointdimension, color, 0.0f);
+            PushRect(group, hitPointPos, 0, hitpointDim, color, 0.0f);
             hitPointPos += dPos;
         }
     }
@@ -1188,11 +1188,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     if (furthestBuff) {
                         FillGroundChunk(gameState, tranState, furthestBuff, &chunkCenter);
                     }
-
-                    // Drawn later after drawing the ground buffs
-                    //DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
-                    //                screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f
-                    //                }, 2.0f);
                 }
                 //}
             }
@@ -1259,38 +1254,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
             PushBitmap(renderGroup, bitmap, posDelta.xy, posDelta.z,
                        Vec2{ bitmap->width * 0.5f, bitmap->height * 0.5f });
+            // We can just push the outline here as it overlaps with the just pushed ground buffer
+            // bitmaps, thickness is parametrized now
+            PushRectOutline(renderGroup, posDelta.xy, 0, world->chunkDimInMeters.xy,
+                            Vec4{ 1.0f, 1.0f, 0.0f }, 0.1f);
         }
     }
-
-    // @Debug @Duplicate
-    // Drawing edges later
-    // FIXME: doesn't do anything with render group rendering now!
-    {
-        const WorldPosition minChunk{ MapIntoChunkSpace(
-            world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
-        const WorldPosition maxChunk{ MapIntoChunkSpace(
-            world, gameState->cameraPos, Vec3{ GetMaxCorner(cameraBoundsInMeters) }) };
-
-        for (i32 chunkZ{ minChunk.chunkZ }; chunkZ <= maxChunk.chunkZ; ++chunkZ) {
-            for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
-                for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
-                    const auto chunkCenter{ CenteredChunkPoint(chunkX, chunkY, chunkZ) };
-                    const Vec3 relCenterPos{ SubtractWorldPos(world, &chunkCenter,
-                                                              &gameState->cameraPos) };
-                    const Vec2 screenPos{
-                        screenCenter.x + (relCenterPos.x * gameState->metersToPixels),
-                        screenCenter.y - (relCenterPos.y * gameState->metersToPixels)
-                    };
-                    const Vec2 screenDim{ world->chunkDimInMeters.xy * gameState->metersToPixels };
-                    DrawRectOutline(drawBuff, screenPos - (screenDim * 0.5f),
-                                    screenPos + (screenDim * 0.5f), Vec3{ 1.0f, 1.0f, 0.0f }, 2.0f);
-                }
-                //}
-            }
-        }
-    }
-
-    /// Drawing and processing entities
 
     /// Simulation
 
