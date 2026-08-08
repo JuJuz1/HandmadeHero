@@ -44,61 +44,6 @@ OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {
     UNUSED_PARAMS(gameState, buff);
 }
 
-INTERNAL void
-DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
-    i32 roundedMinX{ RoundF32ToI32(min.x) };
-    i32 roundedMinY{ RoundF32ToI32(min.y) };
-    i32 roundedMaxX{ RoundF32ToI32(max.x) };
-    i32 roundedMaxY{ RoundF32ToI32(max.y) };
-
-    if (roundedMinX < 0) {
-        roundedMinX = 0;
-    }
-    if (roundedMinY < 0) {
-        roundedMinY = 0;
-    }
-
-    if (roundedMaxX > buff->width) {
-        roundedMaxX = buff->width;
-    }
-    if (roundedMaxY > buff->height) {
-        roundedMaxY = buff->height;
-    }
-
-    // AA RR GG BB
-    const i32 color{ (RoundF32ToI32(r * 255.0f) << 16) | (RoundF32ToI32(g * 255.0f) << 8) |
-                     (RoundF32ToI32(b * 255.0f) << 0) };
-
-    u8* memory{ static_cast<u8*>(buff->memory) };
-    u8* row{ memory + (roundedMinX * bitmap_Bytes_Per_Pixel) + (roundedMinY * buff->pitch) };
-
-    for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
-        // Not including fill pixel
-        u32* pixel{ reinterpret_cast<u32*>(row) };
-        for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            *pixel++ = color;
-        }
-
-        row += buff->pitch;
-    }
-}
-
-INTERNAL void
-DrawRectOutline(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec3 color,
-                f32 thickness = 1.0f) {
-    // Top bottom
-    DrawRect(buff, Vec2{ min.x - thickness, min.y - thickness },
-             Vec2{ max.x + thickness, min.y + thickness }, color.r, color.g, color.b);
-    DrawRect(buff, Vec2{ min.x - thickness, max.y - thickness },
-             Vec2{ max.x + thickness, max.y + thickness }, color.r, color.g, color.b);
-
-    // Left right
-    DrawRect(buff, Vec2{ min.x - thickness, min.y - thickness },
-             Vec2{ min.x + thickness, max.y + thickness }, color.r, color.g, color.b);
-    DrawRect(buff, Vec2{ max.x - thickness, min.y - thickness },
-             Vec2{ max.x + thickness, max.y + thickness }, color.r, color.g, color.b);
-}
-
 // Struct packing to avoid manual work
 #pragma pack(push, 1)
 
@@ -210,84 +155,6 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
     result.memory = static_cast<u8*>(result.memory) - (result.pitch * (result.height - 1));
 
     return result;
-}
-
-INTERNAL void
-DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
-           f32 CAlpha = 1.0f) {
-    // TODO: never have this case? use a placeholder instead?
-    if (!bitmap->memory) {
-        return;
-    }
-
-    i32 roundedMinX{ RoundF32ToI32(xPos) };
-    i32 roundedMinY{ RoundF32ToI32(yPos) };
-    i32 roundedMaxX{ roundedMinX + bitmap->width };
-    i32 roundedMaxY{ roundedMinY + bitmap->height };
-
-    i32 srcOffsetX{};
-    if (roundedMinX < 0) {
-        srcOffsetX = -roundedMinX;
-        roundedMinX = 0;
-    }
-
-    i32 srcOffsetY{};
-    if (roundedMinY < 0) {
-        srcOffsetY = -roundedMinY;
-        roundedMinY = 0;
-    }
-
-    if (roundedMaxX > buff->width) {
-        roundedMaxX = buff->width;
-    }
-    if (roundedMaxY > buff->height) {
-        roundedMaxY = buff->height;
-    }
-
-    // Start from the last row (top row of the image) as the bitmap is stored bottom up
-    u8* srcRow{ static_cast<u8*>(bitmap->memory) + (srcOffsetY * bitmap->pitch) +
-                (srcOffsetX * bitmap_Bytes_Per_Pixel) };
-    u8* destRow{ static_cast<u8*>(buff->memory) + (roundedMinY * buff->pitch) +
-                 (roundedMinX * bitmap_Bytes_Per_Pixel) };
-
-    for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
-        u32* dest{ reinterpret_cast<u32*>(destRow) };
-        u32* src{ reinterpret_cast<u32*>(srcRow) };
-        for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            const f32 srcAlpha{ static_cast<f32>((*src >> 24) & 0xFF) };
-            const f32 srcRelAlpha{ (srcAlpha / 255.0f) * CAlpha };
-
-            const f32 srcRed{ CAlpha * static_cast<f32>((*src >> 16) & 0xFF) };
-            const f32 srcGreen{ CAlpha * static_cast<f32>((*src >> 8) & 0xFF) };
-            const f32 srcBlue{ CAlpha * static_cast<f32>((*src >> 0) & 0xFF) };
-
-            const f32 destAlpha{ static_cast<f32>((*dest >> 24) & 0xFF) };
-            const f32 destRelAlpha{ destAlpha / 255.0f };
-
-            const f32 destRed{ static_cast<f32>((*dest >> 16) & 0xFF) };
-            const f32 destGreen{ static_cast<f32>((*dest >> 8) & 0xFF) };
-            const f32 destBlue{ static_cast<f32>((*dest >> 0) & 0xFF) };
-
-            const f32 invRelAlpha{ 1.0f - srcRelAlpha };
-            const f32 resultAlpha{ 255.0f *
-                                   (srcRelAlpha + destRelAlpha - (srcRelAlpha * destRelAlpha)) };
-            const f32 resultRed{ (invRelAlpha * destRed) + srcRed };
-            const f32 resultGreen{ (invRelAlpha * destGreen) + srcGreen };
-            const f32 resultBlue{ (invRelAlpha * destBlue) + srcBlue };
-
-            *dest = { (TruncateF32ToU32(resultAlpha + 0.5f) << 24) |
-                      (TruncateF32ToU32(resultRed + 0.5f) << 16) |
-                      (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
-                      (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
-
-            ++dest;
-            ++src;
-        }
-
-        destRow += buff->pitch;
-        // Move to the start of the above row
-        srcRow += bitmap->pitch;
-    }
 }
 
 // @Remove
@@ -657,16 +524,14 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     ASSERT(chunkPos);
     ASSERT(IsValidWorldPos(chunkPos));
 
-    PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
-          chunkPos->chunkZ);
+    //PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
+    //      chunkPos->chunkZ);
 
     // Load the template but draw onto the pointer copied from the groundBuff
     // Not anymore as we had no way of storing the bitmap when using this new deferred method
     auto* buff{ &groundBuff->bitmap };
     //buff = groundBuff->bitmap;
     groundBuff->pos = *chunkPos;
-
-    using namespace hm_random;
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
@@ -1124,7 +989,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
-        // Why are we namespacing if we end up doing this...
+        // TODO: Why are we namespacing if we end up doing this...
         using namespace hm_input;
 
         const auto* buttons{ &input->playerInputs[controllerIndex] };
@@ -1463,7 +1328,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         } break;
 
         case EntityType::HERO: {
-            for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
+            for (i32 controlIndex{}; controlIndex < gameState->controlledHeroes.size;
                  ++controlIndex) {
                 auto* controlled{ &gameState->controlledHeroes[controlIndex] };
                 // Confirm we are the one controlling
@@ -1613,7 +1478,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         case EntityType::SPACE: {
             for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
-                const auto* volume{ &entity->collision->volumes[volumeIndex] };
+                //const auto* volume{ &entity->collision->volumes[volumeIndex] };
                 // Outlines
                 //PushRectOutline(renderGroup, volume->offsetPos.xy, 0, volume->dim.xy,
                 //                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
@@ -1638,61 +1503,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //}
     }
 
-    /// Rendering
-
-    for (i32 baseAddress{}; baseAddress < renderGroup->pushBufferSize;
-         baseAddress += sizeof(EntityVisiblePiece)) {
-        const EntityVisiblePiece* piece{ reinterpret_cast<EntityVisiblePiece*>(
-            renderGroup->pushBufferBase + baseAddress) };
-
-        const Vec3 entityBasePos{ piece->basis->pos };
-        const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + piece->offsetZ) };
-
-        //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels
-        //* entity->pos.x),
-        //                              screenCenter.y -
-        //                                  (gameState->metersToPixels *
-        //                                  entity->pos.y) };
-        const Vec2 entityGroundPoint{
-            screenCenter.x + (gameState->metersToPixels * entityBasePos.x * zFudge),
-            screenCenter.y - (gameState->metersToPixels * entityBasePos.y * zFudge)
-        };
-
-        const f32 entityZ{ -entityBasePos.z * gameState->metersToPixels };
-
-        const Vec2 center{ entityGroundPoint.x + piece->offset.x,
-                           entityGroundPoint.y + piece->offset.y +
-                               //(gameState->metersToPixels * piece->offsetZ) +
-                               (entityZ * piece->entityZC) };
-
-        if (piece->bitmap) {
-            DrawBitmap(drawBuff, piece->bitmap, center.x, center.y, piece->a);
-        } else {
-            const Vec2 halfDim{ 0.5f * piece->dimension * gameState->metersToPixels };
-            DrawRect(drawBuff, center - halfDim, center + halfDim, piece->r, piece->g, piece->b);
-        }
-
-        // @Debug collision box
-        if (gameState->showCollisionBoxes) {
-// Don't draw for room space as it blocks the whole screen
-// @Re-enable after getting reference to entity here, probably store to the piece?
-#if 0
-            if (entity->type != EntityType::SPACE) {
-                const Vec2 leftTop{ entityGroundPoint.x - (0.5f * gameState->metersToPixels *
-                                                           entity->collision->totalVolume.dim.x),
-                                    entityGroundPoint.y - (0.5f * gameState->metersToPixels *
-                                                           entity->collision->totalVolume.dim.y) };
-
-                DrawRect(drawBuff, leftTop,
-                         leftTop + entity->collision->totalVolume.dim.xy *
-                                       gameState->metersToPixels // *0.95f
-                         ,
-                         0.5f, 0.1f, 0.5f);
-            }
-#endif
-        }
-    }
-
 // @Debug
 #if 0
     PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
@@ -1710,6 +1520,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     ArenaCheck(&tranState->tranArena);
     ArenaCheck(&gameState->worldArena);
+
+    /// Rendering
+
+    RenderGroupToOutput(renderGroup, drawBuff, gameState);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

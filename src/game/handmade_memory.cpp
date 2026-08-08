@@ -34,10 +34,10 @@ ArenaCheck(MemoryArena* arena) {
 }
 
 // TODO: provide a better interface!!!
-#define PushStruct(arena, type) (type*)PushSize_(arena, sizeof(type))
-#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
+#define PushStruct(arena, type) (type*)PushSize_((arena), sizeof(type))
+#define PushArray(arena, count, type) (type*)PushSize_((arena), (count) * sizeof(type))
 // Check return type, just use u8* or no?
-#define PushSize(arena, size) PushSize_(arena, size)
+#define PushSize(arena, size) PushSize_((arena), (size))
 #define ZeroSize(instance) ZeroMem(&(instance), sizeof(instance))
 
 NODISCARD

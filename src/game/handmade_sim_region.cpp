@@ -769,9 +769,6 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // so we need a solid concept of ground levels
     f32 ground{};
 
-    // @Debug
-    i32 overLappingCount{};
-
     {
         for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
             SimEntity* testEntity{ &simRegion->entities[highIndex] };

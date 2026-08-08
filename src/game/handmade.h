@@ -88,16 +88,19 @@ HANDMADE_DEBUG:
 #if HANDMADE_DEBUG
 // clang-format off
 // clang-tidy NOLINTBEGIN
-    #define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(nullptr)) = 0; }
-    // This is to detect invalid paths that we should never enter, BUT shouldn't cause a crash
-    // TODO: probably log also
-    #define INVALID_CODE_PATH ASSERT(!"INVALID CODE PATH")
+#define ASSERT(expr) if (!(expr)) { *(static_cast<int*>(nullptr)) = 0; }
 // clang-format on
 // clang-tidy NOLINTEND
 #else
 #    define ASSERT(expr)
-#    define INVALID_CODE_PATH
 #endif
+
+// This is to detect invalid paths that we should never enter, BUT shouldn't cause a crash
+// TODO: probably log also
+#define INVALID_CODE_PATH ASSERT(!"INVALID CODE PATH")
+// clang-format off
+#define INVALID_DEFAULT_CASE default: { INVALID_CODE_PATH } break;
+// clang-format on
 
 // Defines for different meanings of static
 

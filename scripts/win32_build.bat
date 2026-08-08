@@ -71,7 +71,8 @@ if %useCTime% == 1 (
 set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
 
 rem other compile options
-rem /wd4100 unreferenced param
+rem /wd4100 unreferenced param /wd4189 local variable init but not referenced
+rem /wd4189 /wd4100
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4189 /wd4100
 
 set commonCompilerFlags=/MTd /Od /Zi
