@@ -933,23 +933,36 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 delta{ input->frameDeltaTime };
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
-
-    if (!memory->isInitialized) {
-        InitGameState(threadContext, gameState, memory, screenBuff);
-    }
-
     ASSERT(sizeof(TransientState) <= memory->transientStorageSize);
     // Funny, casey uses C-style casts so he had a nasty typo, he accidentally had the size
     // here not the actual start of the storage -> DON'T use C-style casts!
     //TransientState* tranState{ (TransientState*)memory->transientStorageSize };
     // static_cast would not allow the cast here, we would have to use reinterpret_cast
     TransientState* tranState{ static_cast<TransientState*>(memory->transientStorage) };
+
+    if (gameState->requestFullGameReset) {
+        PRINT("FULL RESET!\n");
+        gameState->requestFullGameReset = false;
+
+        //*gameState = {};
+        ZeroMem(memory->permanentStorage, memory->permanentStorageSize);
+        memory->isInitialized = false;
+
+        // TODO: Seperate tranState resetting from this full reset?
+        ZeroMem(memory->transientStorage, memory->transientStorageSize);
+        tranState->isInitialized = false;
+    }
+
+    if (!memory->isInitialized) {
+        InitGameState(threadContext, gameState, memory, screenBuff);
+    }
+
     if (!tranState->isInitialized) {
         ArenaInit(&tranState->tranArena,
                   static_cast<u8*>(memory->transientStorage) + sizeof(TransientState),
                   memory->transientStorageSize - sizeof(TransientState));
 
-        /// Ground buff
+        /// Ground buffs
         // @Duplicate
         const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
         const i32 groundBuffHeight{ 256 };
@@ -1052,9 +1065,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             if (ActionJustPressed(&buttons->R)) {
                 // Shift means resetting the sword
                 if (ActionPressed(&buttons->shift)) {
-                    controlled->requestResetSword = true;
+                    // Full reset of game, at the start of the next frame
+                    if (ActionPressed(&buttons->ctrl)) {
+                        // TODO: store in controlledHero or no?
+                        gameState->requestFullGameReset = true;
+                        PRINT("Full game reset requested!\n");
+                    } else {
+                        controlled->requestSwordReset = true;
+                    }
+
                 } else {
-                    controlled->requestReset = true;
+                    controlled->requestHeroReset = true;
                 }
             }
 
@@ -1303,7 +1324,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 // Confirm we are the one controlling
                 if (entity->storageIndex == controlled->entityIndex) {
                     // Reset, done in EndSim as we kind of have to for now
-                    //if (controlled->requestReset) {
+                    //if (controlled->requestHeroReset) {
                     //    PRINT("Request reset!\n");
                     //    auto* lowEntity{ GetLowEntity(gameState, entity->storageIndex)
                     //    }; ChangeEntityLocation(world, &gameState->worldArena,

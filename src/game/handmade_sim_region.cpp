@@ -234,10 +234,10 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
              ++controlIndex) {
             auto* controlled{ &gameState->controlledHeroes[controlIndex] };
             if (controlled->entityIndex == entity->storageIndex) {
-                if (controlled->requestReset) {
+                if (controlled->requestHeroReset) {
                     doReset = true;
-                    //controlled->requestReset = false;
-                } else if (controlled->requestResetSword) {
+                    //controlled->requestHeroReset = false;
+                } else if (controlled->requestSwordReset) {
                     doResetSword = true;
                 } else if (controlled->requestFamiliarStopFollow) {
                     doFamiliarStopFollow = true;

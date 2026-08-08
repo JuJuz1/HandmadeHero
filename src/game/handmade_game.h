@@ -61,8 +61,8 @@ struct ControlledHero {
 
     bool32 sprint; // Shift
 
-    bool32 requestReset;              // Reset pos
-    bool32 requestResetSword;         // Reset sword pos
+    bool32 requestHeroReset;          // Reset pos
+    bool32 requestSwordReset;         // Reset sword pos
     bool32 requestFamiliarStopFollow; // Reset familiar
     bool32 requestFamiliarReset;
 };
@@ -144,6 +144,7 @@ struct GameState {
     // @Debug
     bool32 showCollisionBoxes;
     bool32 allowUnlimitedJumps;
+    bool32 requestFullGameReset; // Full game reset
 };
 
 /// Here we can put functions which many other files need to call ///
