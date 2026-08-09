@@ -527,6 +527,12 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     //PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
     //      chunkPos->chunkZ);
 
+    auto groundMemory{ BeginTempMemory(&tranState->tranArena) };
+    // We do ground chunks in pixel space
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2), 1.0f) };
+
+    //ScreenClear(renderGroup, Vec4{ 1.0f, 1.0f, 0.0f, 1.0f });
+
     // Load the template but draw onto the pointer copied from the groundBuff
     // Not anymore as we had no way of storing the bitmap when using this new deferred method
     auto* buff{ &groundBuff->bitmap };
@@ -564,7 +570,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                DrawBitmap(buff, stamp, pos.x, pos.y);
+                PushBitmap(renderGroup, stamp, pos, 0.0f, Vec2{});
             }
         }
     }
@@ -590,11 +596,14 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                DrawBitmap(buff, stamp, pos.x, pos.y);
+                PushBitmap(renderGroup, stamp, pos, 0.0f, Vec2{});
             }
         }
     }
 #endif
+
+    RenderGroupToOutput(renderGroup, buff, gameState);
+    EndTempMemory(groundMemory);
 }
 
 INTERNAL void
@@ -1079,6 +1088,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
+            if (ActionJustPressed(&buttons->F5)) {
+                gameState->requestFullGameReset = true;
+                PRINT("Full game reset requested!\n");
+            }
+
             if (ActionJustPressed(&buttons->F)) {
                 if (ActionPressed(&buttons->shift)) {
                     controlled->requestFamiliarReset = true;
@@ -1146,9 +1160,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     drawBuff->memory = screenBuff->memory;
 
     // Clear screen
-    DrawRect(drawBuff, Vec2{},
-             Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
-             0.0f, 1.0f);
+    //DrawRect(drawBuff, Vec2{},
+    //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
+    //         0.0f, 1.0f);
+    ScreenClear(renderGroup, Vec4{ 1.0f, 0, 1.0f, 1.0f });
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
@@ -1260,7 +1275,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //         }, 0.5f, 0.5f, 0.5f);
     //#endif
 
-    // Scrolling bitmap buffer
+    /// Ground buffs
+    // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
+    // Is it because we don't want to lag 1 frame behind on these?
 
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
@@ -1278,7 +1295,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             // We can just push the outline here as it overlaps with the just pushed ground buffer
             // bitmaps, thickness is parametrized now
             PushRectOutline(renderGroup, posDelta.xy, 0, world->chunkDimInMeters.xy,
-                            Vec4{ 1.0f, 1.0f, 0.0f }, 0.1f);
+                            Vec4{ 1.0f, 1.0f, 0.0f, 1.0f }, 0.1f);
         }
     }
 
@@ -1303,7 +1320,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         RenderBasis* renderBasis{ PushStruct(&tranState->tranArena, RenderBasis) };
         renderGroup->defaultBasis = renderBasis;
 
-        HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
+        auto* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 
         switch (entity->type) {
         case EntityType::WALL: {
@@ -1468,10 +1485,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         case EntityType::SPACE: {
             for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
-                //const auto* volume{ &entity->collision->volumes[volumeIndex] };
+                const auto* volume{ &entity->collision->volumes[volumeIndex] };
                 // Outlines
-                //PushRectOutline(renderGroup, volume->offsetPos.xy, 0, volume->dim.xy,
-                //                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f }, 0.0f);
+                PushRectOutline(renderGroup, volume->offsetPos.xy, 0, volume->dim.xy,
+                                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f });
             }
         } break;
 
@@ -1487,6 +1504,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
 
         renderBasis->pos = entity->pos;
+
+        // @Debug
+        // Pink
+        const Vec4 debugColor{ 1.0f, 0.0f, 1.0f, 1.0f };
+        const f32 collisionBoxScale{ 0.95f };
+        if (gameState->showCollisionBoxes && entity->type != EntityType::SPACE) {
+            PushCollisionBox(renderGroup, entity->collision, debugColor, collisionBoxScale);
+        }
 
         //if (entity->type == EntityType::HERO) {
         //    PRINT_F32("Z", entity->z);

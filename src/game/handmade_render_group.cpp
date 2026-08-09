@@ -83,6 +83,21 @@ PushRectOutline(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 col
 }
 
 INTERNAL void
+ScreenClear(RenderGroup* group, Vec4 color) {
+    auto* piece{ PushRenderElement(group, RenderEntryClear) };
+    if (piece) {
+        piece->color = color;
+    }
+}
+
+INTERNAL void
+PushCollisionBox(RenderGroup* group, SimEntityCollisionVolumeGroup* collision, Vec4 color,
+                 f32 scale) {
+    PushRect(group, collision->totalVolume.offsetPos.xy, 0.0f,
+             collision->totalVolume.dim.xy * scale, color);
+}
+
+INTERNAL void
 DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
            f32 CAlpha = 1.0f) {
     // TODO: never have this case? use a placeholder instead?
@@ -161,7 +176,7 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
 }
 
 INTERNAL void
-DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
+DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, f32 a = 1.0f) {
     i32 roundedMinX{ RoundF32ToI32(min.x) };
     i32 roundedMinY{ RoundF32ToI32(min.y) };
     i32 roundedMaxX{ RoundF32ToI32(max.x) };
@@ -182,8 +197,8 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) 
     }
 
     // AA RR GG BB
-    const i32 color{ (RoundF32ToI32(r * 255.0f) << 16) | (RoundF32ToI32(g * 255.0f) << 8) |
-                     (RoundF32ToI32(b * 255.0f) << 0) };
+    const i32 color{ (RoundF32ToI32(a * 255.0f) << 24) | (RoundF32ToI32(r * 255.0f) << 16) |
+                     (RoundF32ToI32(g * 255.0f) << 8) | (RoundF32ToI32(b * 255.0f) << 0) };
 
     u8* memory{ static_cast<u8*>(buff->memory) };
     u8* row{ memory + (roundedMinX * bitmap_Bytes_Per_Pixel) + (roundedMinY * buff->pitch) };
@@ -273,6 +288,11 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
         case RenderGroupEntryType_RenderEntryClear: {
             auto* entry{ reinterpret_cast<RenderEntryClear*>(header) };
             baseAddress += sizeof(*entry);
+
+            DrawRect(outputTarget, Vec2{},
+                     Vec2{ static_cast<f32>(outputTarget->width),
+                           static_cast<f32>(outputTarget->height) },
+                     entry->color.r, entry->color.g, entry->color.b, entry->color.a);
         } break;
         case RenderGroupEntryType_RenderEntryRect: {
             auto* entry{ reinterpret_cast<RenderEntryRect*>(header) };
