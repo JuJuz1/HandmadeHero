@@ -13,6 +13,16 @@ struct Vec2 {
         f32 e[2];
     };
 
+    Vec2() = default;
+
+    // Yucky :(
+    // TODO: it would be cumbersome to make overloads for all different combinations
+    // i32, f32, f32
+    // f32, f32, i32
+    // ...
+    template <typename T, typename U>
+    Vec2(T x_, U y_) : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) } {}
+
     // NOTE: These could also be outside the struct by taking a reference as the first parameter
     //inline Vec2& operator+=(Vec2& a, Vec2 b);
 

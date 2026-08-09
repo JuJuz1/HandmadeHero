@@ -276,8 +276,7 @@ GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2
 
 INTERNAL void
 RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameState* gameState) {
-    const Vec2 screenCenter{ static_cast<f32>(outputTarget->width) * 0.5f,
-                             static_cast<f32>(outputTarget->height) * 0.5f };
+    const Vec2 screenCenter{ outputTarget->width * 0.5f, outputTarget->height * 0.5f };
 
     for (i32 baseAddress{}; baseAddress < group->pushBufferSize;) {
         auto* header{ reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
@@ -289,9 +288,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryClear*>(header) };
             baseAddress += sizeof(*entry);
 
-            DrawRect(outputTarget, Vec2{},
-                     Vec2{ static_cast<f32>(outputTarget->width),
-                           static_cast<f32>(outputTarget->height) },
+            DrawRect(outputTarget, Vec2{}, Vec2{ outputTarget->width, outputTarget->height },
                      entry->color.r, entry->color.g, entry->color.b, entry->color.a);
         } break;
         case RenderGroupEntryType_RenderEntryRect: {

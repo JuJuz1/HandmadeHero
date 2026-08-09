@@ -166,8 +166,7 @@ ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ,
     const f32 tileDepthInMeters{ 3.0f };
 
     const Vec3 tileDim{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
-    const Vec3 offset{ tileDim * Vec3{ static_cast<f32>(tileX), static_cast<f32>(tileY),
-                                       static_cast<f32>(tileZ) } };
+    const Vec3 offset{ tileDim * Vec3{ tileX, tileY, tileZ } };
     WorldPosition basePos{};
     const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset + additionalOffset) };
     ASSERT(IsCanonical(world, result.offset_));
@@ -733,7 +732,7 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     const f32 tileDepthInMeters{ 3.0f };
 
     gameState->nullCollision = MakeNullCollision(gameState);
-    gameState->swordCollision = MakeSimpleCollision(gameState, 0.3f, 0.75f, 0.1f);
+    gameState->swordCollision = MakeSimpleCollision(gameState, 0.8f, 0.75f, 0.1f);
     gameState->stairwellCollision = MakeSimpleCollision(
         gameState, tileSideInMeters, tileSideInMeters * 2.0f, tileDepthInMeters * 1.1f);
     gameState->monsterCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);

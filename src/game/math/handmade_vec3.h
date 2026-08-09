@@ -30,6 +30,12 @@ struct Vec3 {
         f32 e[3];
     };
 
+    Vec3() = default;
+
+    template <typename T, typename U, typename V>
+    Vec3(T x_, U y_, V z_)
+        : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) }, z{ static_cast<f32>(z_) } {}
+
     NODISCARD
     inline f32& operator[](i32 i);
 
