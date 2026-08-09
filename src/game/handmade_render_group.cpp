@@ -29,16 +29,16 @@ PushPiece(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ
           Vec4 color, f32 entityZC = 1.0f) {
     //ASSERT(group->pieceCount < group->pieces.size);
     //RenderGroupEntry* piece{ &group->pieces[group->pieceCount++] };
-    auto* piece{ PushRenderElement(group, RenderEntryBitmap) };
-    if (piece) {
-        piece->bitmap = bitmap;
+    auto* entry{ PushRenderElement(group, RenderEntryBitmap) };
+    if (entry) {
+        entry->bitmap = bitmap;
 
-        piece->entityBasis.basis = group->defaultBasis;
-        piece->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
-        piece->entityBasis.offsetZ = offsetZ;
-        piece->entityBasis.entityZC = entityZC;
+        entry->entityBasis.basis = group->defaultBasis;
+        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
+        entry->entityBasis.offsetZ = offsetZ;
+        entry->entityBasis.entityZC = entityZC;
 
-        piece->color = color;
+        entry->color = color;
     }
 }
 
@@ -51,18 +51,18 @@ PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offset
 INTERNAL void
 PushRect(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color, f32 entityZC = 1.0f) {
     // @Duplicate
-    auto* piece{ PushRenderElement(group, RenderEntryRect) };
-    if (piece) {
-        piece->entityBasis.basis = group->defaultBasis;
+    auto* entry{ PushRenderElement(group, RenderEntryRect) };
+    if (entry) {
+        entry->entityBasis.basis = group->defaultBasis;
 
         const Vec2 halfDim{ 0.5f * dim * group->metersToPixels };
-        piece->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, -offset.y }) - halfDim;
-        piece->entityBasis.offsetZ = offsetZ;
-        piece->entityBasis.entityZC = entityZC;
+        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, -offset.y }) - halfDim;
+        entry->entityBasis.offsetZ = offsetZ;
+        entry->entityBasis.entityZC = entityZC;
 
-        piece->dim = group->metersToPixels * dim;
+        entry->dim = group->metersToPixels * dim;
 
-        piece->color = color;
+        entry->color = color;
     }
 }
 
@@ -82,11 +82,25 @@ PushRectOutline(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 col
              entityZC);
 }
 
+NODISCARD
+INTERNAL RenderEntryCoordinateSystem*
+PushCoordinateSystem(RenderGroup* group, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color) {
+    auto* entry{ PushRenderElement(group, RenderEntryCoordinateSystem) };
+    if (entry) {
+        entry->origin = origin;
+        entry->xAxis = xAxis;
+        entry->yAxis = yAxis;
+        entry->color = color;
+    }
+
+    return entry;
+}
+
 INTERNAL void
 ScreenClear(RenderGroup* group, Vec4 color) {
-    auto* piece{ PushRenderElement(group, RenderEntryClear) };
-    if (piece) {
-        piece->color = color;
+    auto* entry{ PushRenderElement(group, RenderEntryClear) };
+    if (entry) {
+        entry->color = color;
     }
 }
 
@@ -308,6 +322,32 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
 
             ASSERT(entry->bitmap);
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
+        } break;
+        case RenderGroupEntryType_RenderEntryCoordinateSystem: {
+            auto* entry{ reinterpret_cast<RenderEntryCoordinateSystem*>(header) };
+            baseAddress += sizeof(*entry);
+
+            const Vec2 dim{ 2, 2 };
+            Vec2 pos{ entry->origin };
+            //DrawRect(outputTarget, pos - dim, pos + dim, entry->color.r, entry->color.g,
+            //         entry->color.b);
+
+            //pos = entry->origin + entry->xAxis;
+            //DrawRect(outputTarget, pos - dim, pos + dim, entry->color.r, entry->color.g,
+            //         entry->color.b);
+
+            //pos = entry->origin + entry->yAxis;
+            //DrawRect(outputTarget, pos - dim, pos + dim, entry->color.r, entry->color.g,
+            //         entry->color.b);
+
+            for (i32 i{}; i < entry->points.size; ++i) {
+                Vec2 p{ entry->points[i] };
+                p = entry->origin + (entry->xAxis * p.x) + (entry->yAxis * p.y);
+                // Hadamard produces a funny squeezing grid
+                //p = entry->origin + (entry->xAxis * p) + (entry->yAxis * p);
+                DrawRect(outputTarget, p - dim, p + dim, entry->color.r, entry->color.g,
+                         entry->color.b);
+            }
         } break;
 
             INVALID_DEFAULT_CASE;

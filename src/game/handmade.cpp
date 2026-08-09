@@ -938,7 +938,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     gThreadContext = threadContext;
     gMemory = memory;
 
-    const f32 delta{ input->frameDeltaTime };
+    const f32 deltaTime{ input->frameDeltaTime };
 
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
     ASSERT(sizeof(TransientState) <= memory->transientStorageSize);
@@ -1123,7 +1123,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // The separation of handling input and moving the player is not yet clear
             //MoveEntity(gameState, controllingEntity, controllerIndex, inputButtons,
-            //           acceleration, delta);
+            //           acceleration, deltaTime);
 
             // TODO: disabled for now
             // Only the first player can do certain operations
@@ -1235,7 +1235,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     TempMemory simMemory{ BeginTempMemory(&tranState->tranArena) };
     auto* simRegion{ BeginSim(gameState, &tranState->tranArena, world, gameState->cameraPos,
-                              cameraBoundsSim, delta) };
+                              cameraBoundsSim, deltaTime) };
 
 // @Debug printing
 #if 0
@@ -1451,7 +1451,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Head bob
             const f32 bobSpeed{ 3.5f };
-            entity->tBob += delta * bobSpeed;
+            entity->tBob += deltaTime * bobSpeed;
             if (entity->tBob > (2.0f * PI32f)) {
                 entity->tBob -= (2.0f * PI32f);
             }
@@ -1499,7 +1499,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
         if (!IsSet(entity, SimEntityFlags::NON_SPATIAL) &&
             IsSet(entity, SimEntityFlags::MOVEABLE)) {
-            MoveEntity(gameState, simRegion, entity, moveSpec, ddP, delta);
+            MoveEntity(gameState, simRegion, entity, moveSpec, ddP, deltaTime);
         }
 
         renderBasis->pos = entity->pos;
@@ -1527,6 +1527,29 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT(typeStr);
     PRINT("\n");
 #endif
+
+    gameState->time += deltaTime;
+    const f32 angle{ gameState->time };
+    // Wiggle
+    //const Vec2 origin{ screenCenter + Vec2{ Sin(angle) * 50, 0.0f } };
+    const Vec2 origin{ screenCenter };
+    //const Vec2 xAxis{ (drawBuff->width * 0.5f) + 1, 0 };
+    const Vec2 xAxis{ Vec2{ Cos(angle), Sin(angle) } * (100 + (Cos(angle * 2.2f) * 50.0f)) };
+    //const Vec2 yAxis{ Vec2{ -xAxis.y, xAxis.x * 2 } };
+    const Vec2 yAxis{ Vec2{ -xAxis.y, xAxis.x } };
+    //const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } * 100 };
+    auto* coordinateSystem{ PushCoordinateSystem(renderGroup, origin, xAxis, yAxis,
+                                                 Vec4{ 0.5f + 0.5f * Sin(angle * 2.9f),
+                                                       0.5f + 0.5f * Sin(angle * 3.9f),
+                                                       0.5f + 0.5f * Sin(angle * 0.9f), 1 }) };
+    i32 i{};
+    for (f32 x{}; x < 1.0f; x += 0.25f) {
+        for (f32 y{}; y < 1.0f; y += 0.25f) {
+            coordinateSystem->points[i++] = Vec2{ x, y };
+        }
+    }
+
+    //PushCoordinateSystem(renderGroup, origin, xAxis, yAxis, Vec4{ 1, 1, 0, 1 });
 
     EndSim(simRegion, gameState);
     EndTempMemory(simMemory);

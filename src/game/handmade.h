@@ -99,7 +99,7 @@ HANDMADE_DEBUG:
 // TODO: probably log also
 #define INVALID_CODE_PATH ASSERT(!"INVALID CODE PATH")
 // clang-format off
-#define INVALID_DEFAULT_CASE default: { INVALID_CODE_PATH } break;
+#define INVALID_DEFAULT_CASE default: { INVALID_CODE_PATH; } break;
 // clang-format on
 
 // Defines for different meanings of static

@@ -187,6 +187,7 @@ INTERNAL void
 ToggleFullscreen(HWND hWnd) {
     const LONG style{ GetWindowLongA(hWnd, GWL_STYLE) };
     if (style & WS_OVERLAPPEDWINDOW) {
+        OutputDebugStringA("Toggle fullscreen!\n");
         MONITORINFO mi{ sizeof(mi) };
         if (GetWindowPlacement(hWnd, &gWindowPlacement) &&
             GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
@@ -197,6 +198,7 @@ ToggleFullscreen(HWND hWnd) {
                          SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
         }
     } else {
+        OutputDebugStringA("Disable fullscreen!\n");
         SetWindowLongA(hWnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
         SetWindowPlacement(hWnd, &gWindowPlacement);
         SetWindowPos(hWnd, 0, 0, 0, 0, 0,
@@ -819,7 +821,6 @@ ProcessPendingMessages(Input* input, AllState* allState) {
                 }
             } break;
             case VK_F11: {
-                OutputDebugStringA("VK_F11 toggle fullscreen\n");
                 if (isDown) {
                     ToggleFullscreen(message.hwnd);
                 }

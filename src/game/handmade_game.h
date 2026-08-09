@@ -141,6 +141,8 @@ struct GameState {
     SimEntityCollisionVolumeGroup* wallCollision;
     SimEntityCollisionVolumeGroup* standardRoomCollision;
 
+    f32 time;
+
     // @Debug
     bool32 showCollisionBoxes;
     bool32 allowUnlimitedJumps;

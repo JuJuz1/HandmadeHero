@@ -9,6 +9,7 @@ enum RenderGroupEntryType {
     RenderGroupEntryType_RenderEntryClear = 0,
     RenderGroupEntryType_RenderEntryRect,
     RenderGroupEntryType_RenderEntryBitmap,
+    RenderGroupEntryType_RenderEntryCoordinateSystem,
 };
 
 struct RenderGroupEntryHeader {
@@ -42,6 +43,17 @@ struct RenderEntryBitmap {
     RenderEntityBasis entityBasis;
     LoadedBitmapInfo* bitmap;
     Vec4 color;
+};
+
+struct RenderEntryCoordinateSystem {
+    RenderGroupEntryHeader header;
+
+    Vec2 origin;
+    Vec2 xAxis;
+    Vec2 yAxis;
+    Vec4 color;
+
+    Array<Vec2, 16> points;
 };
 
 struct RenderGroup {
