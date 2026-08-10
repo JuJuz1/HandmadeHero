@@ -228,6 +228,76 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, 
     }
 }
 
+// @Debug
+INTERNAL void
+DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color) {
+    // AA RR GG BB
+    const i32 colorRounded{ (RoundF32ToI32(color.a * 255.0f) << 24) |
+                            (RoundF32ToI32(color.r * 255.0f) << 16) |
+                            (RoundF32ToI32(color.g * 255.0f) << 8) |
+                            (RoundF32ToI32(color.b * 255.0f) << 0) };
+
+    i32 minX{ buff->width - 1 };
+    i32 minY{ buff->height - 1 };
+    i32 maxX{};
+    i32 maxY{};
+
+    Array<Vec2, 4> points{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
+    for (i32 i{}; i < points.size; ++i) {
+        const i32 floorX{ FloorF32ToI32(points[i].x) };
+        const i32 ceilX{ CeilF32ToI32(points[i].x) };
+        const i32 floorY{ FloorF32ToI32(points[i].y) };
+        const i32 ceilY{ CeilF32ToI32(points[i].y) };
+
+        if (floorX < minX) {
+            minX = floorX;
+        }
+        if (ceilX > maxX) {
+            maxX = ceilX;
+        }
+        if (floorY < minY) {
+            minY = floorY;
+        }
+        if (ceilY > maxY) {
+            maxY = ceilY;
+        }
+    }
+
+    if (minX < 0) {
+        minX = 0;
+    }
+    if (minY < 0) {
+        minY = 0;
+    }
+    if (maxX > buff->width - 1) {
+        maxX = buff->width - 1;
+    }
+    if (maxY > buff->height - 1) {
+        maxY = buff->height - 1;
+    }
+
+    u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
+             (minY * buff->pitch) };
+
+    for (i32 y{ minY }; y <= maxY; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{ minX }; x <= maxX; ++x) {
+            const Vec2 pixelPos{ x, y };
+            const f32 edge0{ Dot(pixelPos - origin, -Perp(xAxis)) };
+            const f32 edge1{ Dot(pixelPos - (origin + xAxis), -Perp(yAxis)) };
+            const f32 edge2{ Dot(pixelPos - (origin + xAxis + yAxis), Perp(xAxis)) };
+            const f32 edge3{ Dot(pixelPos - (origin + yAxis), Perp(yAxis)) };
+            if ((edge0 < 0) && (edge1 < 0) && (edge2 < 0) && (edge3 < 0)) {
+                *pixel = colorRounded;
+            }
+
+            ++pixel;
+        }
+
+        row += buff->pitch;
+    }
+}
+
 // We simply don't need this now as we use PushRectOutline to do this via the push buffer
 #if 0
 INTERNAL void
@@ -328,18 +398,19 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             baseAddress += sizeof(*entry);
 
             const Vec2 dim{ 2, 2 };
+            const Vec4 color{ 1, 1, 0, 1 };
             Vec2 pos{ entry->origin };
-            //DrawRect(outputTarget, pos - dim, pos + dim, entry->color.r, entry->color.g,
-            //         entry->color.b);
+            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            pos = entry->origin + entry->xAxis;
+            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            pos = entry->origin + entry->yAxis;
+            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            pos = entry->origin + entry->xAxis + entry->yAxis;
+            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
 
-            //pos = entry->origin + entry->xAxis;
-            //DrawRect(outputTarget, pos - dim, pos + dim, entry->color.r, entry->color.g,
-            //         entry->color.b);
+            DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color);
 
-            //pos = entry->origin + entry->yAxis;
-            //DrawRect(outputTarget, pos - dim, pos + dim, entry->color.r, entry->color.g,
-            //         entry->color.b);
-
+#if 0
             for (i32 i{}; i < entry->points.size; ++i) {
                 Vec2 p{ entry->points[i] };
                 p = entry->origin + (entry->xAxis * p.x) + (entry->yAxis * p.y);
@@ -348,6 +419,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
                 DrawRect(outputTarget, p - dim, p + dim, entry->color.r, entry->color.g,
                          entry->color.b);
             }
+#endif
         } break;
 
             INVALID_DEFAULT_CASE;

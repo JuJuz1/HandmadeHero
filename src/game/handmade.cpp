@@ -1528,16 +1528,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT("\n");
 #endif
 
+    // @Remove
     gameState->time += deltaTime;
-    const f32 angle{ gameState->time };
+    const f32 angle{ //0.0f
+                     gameState->time
+    };
     // Wiggle
-    //const Vec2 origin{ screenCenter + Vec2{ Sin(angle) * 50, 0.0f } };
-    const Vec2 origin{ screenCenter };
+    //const Vec2 origin{ screenCenter + Vec2{ Sin(angle) * 10, 0.0f } };
     //const Vec2 xAxis{ (drawBuff->width * 0.5f) + 1, 0 };
-    const Vec2 xAxis{ Vec2{ Cos(angle), Sin(angle) } * (100 + (Cos(angle * 2.2f) * 50.0f)) };
-    //const Vec2 yAxis{ Vec2{ -xAxis.y, xAxis.x * 2 } };
-    const Vec2 yAxis{ Vec2{ -xAxis.y, xAxis.x } };
-    //const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } * 100 };
+    const Vec2 xAxis{ Vec2{ Cos(angle), Sin(angle) } *
+                      (50 + (Cos(angle * 2.2f) * 50.0f)) }; // Scale via time
+    const Vec2 origin{ screenCenter };
+    //const Vec2 xAxis{ Vec2{ Cos(angle), Sin(angle) } * 100 };
+    //const Vec2 yAxis{ Vec2{ -xAxis.y, xAxis.x } };
+    const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } *
+                      (100 + 50.0f * Sin(3.9f * angle)) }; // Skewing works now
     auto* coordinateSystem{ PushCoordinateSystem(renderGroup, origin, xAxis, yAxis,
                                                  Vec4{ 0.5f + 0.5f * Sin(angle * 2.9f),
                                                        0.5f + 0.5f * Sin(angle * 3.9f),

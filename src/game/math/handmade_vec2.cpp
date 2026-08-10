@@ -165,3 +165,10 @@ Reflect(Vec2 v, Vec2 n) {
     const Vec2 result{ v - (2.0f * Dot(v, n) * n) };
     return result;
 }
+
+NODISCARD
+INTERNAL inline Vec2
+Perp(Vec2 v) {
+    const Vec2 result{ -v.y, v.x };
+    return (result);
+}
