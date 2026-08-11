@@ -75,3 +75,10 @@ Vec4::operator/=(f32 scalar) {
     *this = *this * (1.0f / scalar);
     return *this;
 }
+
+NODISCARD
+INTERNAL Vec4
+Lerp(Vec4 a, f32 t, Vec4 b) {
+    const Vec4 result{ (1 - t) * a + t * b };
+    return result;
+}

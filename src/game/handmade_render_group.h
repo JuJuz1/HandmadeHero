@@ -52,6 +52,7 @@ struct RenderEntryCoordinateSystem {
     Vec2 xAxis;
     Vec2 yAxis;
     Vec4 color;
+    LoadedBitmapInfo* texture;
 
     Array<Vec2, 16> points;
 };

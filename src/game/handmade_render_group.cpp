@@ -84,13 +84,15 @@ PushRectOutline(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 col
 
 NODISCARD
 INTERNAL RenderEntryCoordinateSystem*
-PushCoordinateSystem(RenderGroup* group, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color) {
+PushCoordinateSystem(RenderGroup* group, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
+                     LoadedBitmapInfo* texture) {
     auto* entry{ PushRenderElement(group, RenderEntryCoordinateSystem) };
     if (entry) {
         entry->origin = origin;
         entry->xAxis = xAxis;
         entry->yAxis = yAxis;
         entry->color = color;
+        entry->texture = texture;
     }
 
     return entry;
@@ -228,14 +230,14 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, 
     }
 }
 
-// @Debug
 INTERNAL void
-DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color) {
+DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
+               LoadedBitmapInfo* texture) {
     // AA RR GG BB
-    const i32 colorRounded{ (RoundF32ToI32(color.a * 255.0f) << 24) |
-                            (RoundF32ToI32(color.r * 255.0f) << 16) |
-                            (RoundF32ToI32(color.g * 255.0f) << 8) |
-                            (RoundF32ToI32(color.b * 255.0f) << 0) };
+    u32 colorRounded{ (RoundF32ToU32(color.a * 255.0f) << 24) |
+                      (RoundF32ToU32(color.r * 255.0f) << 16) |
+                      (RoundF32ToU32(color.g * 255.0f) << 8) |
+                      (RoundF32ToU32(color.b * 255.0f) << 0) };
 
     i32 minX{ buff->width - 1 };
     i32 minY{ buff->height - 1 };
@@ -276,20 +278,106 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
         maxY = buff->height - 1;
     }
 
+    const f32 xAxisLenSqInv{ 1.0f / LengthSq(xAxis) };
+    const f32 yAxisLenSqInv{ 1.0f / LengthSq(yAxis) };
+
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
 
     for (i32 y{ minY }; y <= maxY; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; ++x) {
+#if 1
             const Vec2 pixelPos{ x, y };
-            const f32 edge0{ Dot(pixelPos - origin, -Perp(xAxis)) };
-            const f32 edge1{ Dot(pixelPos - (origin + xAxis), -Perp(yAxis)) };
-            const f32 edge2{ Dot(pixelPos - (origin + xAxis + yAxis), Perp(xAxis)) };
-            const f32 edge3{ Dot(pixelPos - (origin + yAxis), Perp(yAxis)) };
+            const Vec2 d{ pixelPos - origin };
+
+            const f32 edge0{ Dot(d, -Perp(xAxis)) };
+            const f32 edge1{ Dot(d - xAxis, -Perp(yAxis)) };
+            const f32 edge2{ Dot(d - xAxis - yAxis, Perp(xAxis)) };
+            const f32 edge3{ Dot(d - yAxis, Perp(yAxis)) };
             if ((edge0 < 0) && (edge1 < 0) && (edge2 < 0) && (edge3 < 0)) {
-                *pixel = colorRounded;
+                // Lookup into texture
+                const Vec2 uv{ Dot(d, xAxis) * xAxisLenSqInv, Dot(d, yAxis) * yAxisLenSqInv };
+                // TODO: needs to be clamped
+                // @Re-enable asserts
+                //ASSERT(uv.x >= 0.0f && uv.x <= 1.0f);
+                //ASSERT(uv.y >= 0.0f && uv.y <= 1.0f);
+
+                // Pretend the texture is 1 pixel smaller in both dimensions
+                const f32 texelX{ uv.x * static_cast<f32>(texture->width - 2) };
+                const f32 texelY{ uv.y * static_cast<f32>(texture->height - 2) };
+
+                const i32 roundedX{ static_cast<i32>(texelX) };
+                const i32 roundedY{ static_cast<i32>(texelY) };
+                //ASSERT(roundedX >= 0 && roundedX < texture->width);
+                //ASSERT(roundedY >= 0 && roundedY < texture->height);
+
+                const f32 fX{ static_cast<f32>(texelX - roundedX) };
+                const f32 fY{ static_cast<f32>(texelY - roundedY) };
+
+                u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
+                              roundedX * sizeof(u32) };
+                u32 texelPtrA{ *reinterpret_cast<u32*>(texelPtr) };
+                // Right, down and right-down
+                u32 texelPtrB{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
+                u32 texelPtrC{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
+                u32 texelPtrD{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
+
+                // TODO: color.a
+                const Vec4 texelA{ static_cast<f32>((texelPtrA >> 16) & 0xFF),
+                                   static_cast<f32>((texelPtrA >> 8) & 0xFF),
+                                   static_cast<f32>((texelPtrA >> 0) & 0xFF),
+                                   static_cast<f32>((texelPtrA >> 24) & 0xFF) };
+                const Vec4 texelB{ static_cast<f32>((texelPtrB >> 16) & 0xFF),
+                                   static_cast<f32>((texelPtrB >> 8) & 0xFF),
+                                   static_cast<f32>((texelPtrB >> 0) & 0xFF),
+                                   static_cast<f32>((texelPtrB >> 24) & 0xFF) };
+                const Vec4 texelC{ static_cast<f32>((texelPtrC >> 16) & 0xFF),
+                                   static_cast<f32>((texelPtrC >> 8) & 0xFF),
+                                   static_cast<f32>((texelPtrC >> 0) & 0xFF),
+                                   static_cast<f32>((texelPtrC >> 24) & 0xFF) };
+                const Vec4 texelD{ static_cast<f32>((texelPtrD >> 16) & 0xFF),
+                                   static_cast<f32>((texelPtrD >> 8) & 0xFF),
+                                   static_cast<f32>((texelPtrD >> 0) & 0xFF),
+                                   static_cast<f32>((texelPtrD >> 24) & 0xFF) };
+
+#    if 1
+                // Lerp the color with the neighbours
+                const Vec4 texel{ Lerp(Lerp(texelA, fX, texelB), fY, Lerp(texelC, fX, texelD)) };
+#    else
+                const Vec4 texel{ texelA };
+#    endif
+
+                // Figure out color
+                const f32 srcAlpha{ texel.a };
+                const f32 srcRelAlpha{ (srcAlpha / 255.0f) * color.a };
+
+                const f32 srcRed{ texel.r };
+                const f32 srcGreen{ texel.g };
+                const f32 srcBlue{ texel.b };
+
+                const f32 destAlpha{ static_cast<f32>((*pixel >> 24) & 0xFF) };
+                const f32 destRelAlpha{ destAlpha / 255.0f };
+
+                const f32 destRed{ static_cast<f32>((*pixel >> 16) & 0xFF) };
+                const f32 destGreen{ static_cast<f32>((*pixel >> 8) & 0xFF) };
+                const f32 destBlue{ static_cast<f32>((*pixel >> 0) & 0xFF) };
+
+                const f32 invRelAlpha{ 1.0f - srcRelAlpha };
+                const f32 resultAlpha{ 255.0f * (srcRelAlpha + destRelAlpha -
+                                                 (srcRelAlpha * destRelAlpha)) };
+                const f32 resultRed{ (invRelAlpha * destRed) + srcRed };
+                const f32 resultGreen{ (invRelAlpha * destGreen) + srcGreen };
+                const f32 resultBlue{ (invRelAlpha * destBlue) + srcBlue };
+
+                *pixel = { (TruncateF32ToU32(resultAlpha + 0.5f) << 24) |
+                           (TruncateF32ToU32(resultRed + 0.5f) << 16) |
+                           (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
+                           (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
             }
+#else
+            *pixel = colorRounded;
+#endif
 
             ++pixel;
         }
@@ -408,7 +496,8 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             pos = entry->origin + entry->xAxis + entry->yAxis;
             DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
 
-            DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color);
+            DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color,
+                           entry->texture);
 
 #if 0
             for (i32 i{}; i < entry->points.size; ++i) {
