@@ -1550,11 +1550,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 //const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } *
 //                  (100 + 50.0f * Sin(3.9f * angle)) }; // Skewing works now
 #endif
+    const Vec4 coordinateColor{ 0.5f + 0.5f * Sin(angle * 2.9f), 0.5f + 0.5f * Sin(angle * 3.9f),
+                                0.5f + 0.5f * Sin(angle * 0.9f), 0.5f + 0.5f * Sin(angle * 15.5f) };
     auto* coordinateSystem{ PushCoordinateSystem(
         renderGroup, Vec2{ disp, 0 } + origin - 0.5f * xAxis - 0.5f * yAxis, xAxis, yAxis,
-        Vec4{ 0.5f + 0.5f * Sin(angle * 2.9f), 0.5f + 0.5f * Sin(angle * 3.9f),
-              0.5f + 0.5f * Sin(angle * 0.9f), 1 },
-        &gameState->tree) };
+        coordinateColor, &gameState->tree) };
     i32 i{};
     for (f32 x{}; x < 1.0f; x += 0.25f) {
         for (f32 y{}; y < 1.0f; y += 0.25f) {

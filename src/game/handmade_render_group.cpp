@@ -113,6 +113,34 @@ PushCollisionBox(RenderGroup* group, SimEntityCollisionVolumeGroup* collision, V
              collision->totalVolume.dim.xy * scale, color);
 }
 
+NODISCARD
+INTERNAL Vec4
+SRGB255ToLinear1(Vec4 color) {
+    Vec4 result;
+
+    const f32 inv255{ 1.0f / 255.0f };
+    result.r = SquareF32(color.r * inv255);
+    result.g = SquareF32(color.g * inv255);
+    result.b = SquareF32(color.b * inv255);
+    result.a = color.a * inv255;
+
+    return result;
+}
+
+NODISCARD
+INTERNAL Vec4
+Linear1ToSRGB255(Vec4 color) {
+    Vec4 result;
+
+    const f32 one255{ 255.0f };
+    result.r = Sqrt(color.r) * one255;
+    result.g = Sqrt(color.g) * one255;
+    result.b = Sqrt(color.b) * one255;
+    result.a = color.a * one255;
+
+    return result;
+}
+
 INTERNAL void
 DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
            f32 CAlpha = 1.0f) {
@@ -324,22 +352,27 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                 u32 texelPtrD{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
 
                 // TODO: color.a
-                const Vec4 texelA{ static_cast<f32>((texelPtrA >> 16) & 0xFF),
-                                   static_cast<f32>((texelPtrA >> 8) & 0xFF),
-                                   static_cast<f32>((texelPtrA >> 0) & 0xFF),
-                                   static_cast<f32>((texelPtrA >> 24) & 0xFF) };
-                const Vec4 texelB{ static_cast<f32>((texelPtrB >> 16) & 0xFF),
-                                   static_cast<f32>((texelPtrB >> 8) & 0xFF),
-                                   static_cast<f32>((texelPtrB >> 0) & 0xFF),
-                                   static_cast<f32>((texelPtrB >> 24) & 0xFF) };
-                const Vec4 texelC{ static_cast<f32>((texelPtrC >> 16) & 0xFF),
-                                   static_cast<f32>((texelPtrC >> 8) & 0xFF),
-                                   static_cast<f32>((texelPtrC >> 0) & 0xFF),
-                                   static_cast<f32>((texelPtrC >> 24) & 0xFF) };
-                const Vec4 texelD{ static_cast<f32>((texelPtrD >> 16) & 0xFF),
-                                   static_cast<f32>((texelPtrD >> 8) & 0xFF),
-                                   static_cast<f32>((texelPtrD >> 0) & 0xFF),
-                                   static_cast<f32>((texelPtrD >> 24) & 0xFF) };
+                Vec4 texelA{ static_cast<f32>((texelPtrA >> 16) & 0xFF),
+                             static_cast<f32>((texelPtrA >> 8) & 0xFF),
+                             static_cast<f32>((texelPtrA >> 0) & 0xFF),
+                             static_cast<f32>((texelPtrA >> 24) & 0xFF) };
+                Vec4 texelB{ static_cast<f32>((texelPtrB >> 16) & 0xFF),
+                             static_cast<f32>((texelPtrB >> 8) & 0xFF),
+                             static_cast<f32>((texelPtrB >> 0) & 0xFF),
+                             static_cast<f32>((texelPtrB >> 24) & 0xFF) };
+                Vec4 texelC{ static_cast<f32>((texelPtrC >> 16) & 0xFF),
+                             static_cast<f32>((texelPtrC >> 8) & 0xFF),
+                             static_cast<f32>((texelPtrC >> 0) & 0xFF),
+                             static_cast<f32>((texelPtrC >> 24) & 0xFF) };
+                Vec4 texelD{ static_cast<f32>((texelPtrD >> 16) & 0xFF),
+                             static_cast<f32>((texelPtrD >> 8) & 0xFF),
+                             static_cast<f32>((texelPtrD >> 0) & 0xFF),
+                             static_cast<f32>((texelPtrD >> 24) & 0xFF) };
+
+                texelA = SRGB255ToLinear1(texelA);
+                texelB = SRGB255ToLinear1(texelB);
+                texelC = SRGB255ToLinear1(texelC);
+                texelD = SRGB255ToLinear1(texelD);
 
 #    if 1
                 // Lerp the color with the neighbours
@@ -349,31 +382,27 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
 #    endif
 
                 // Figure out color
-                const f32 srcAlpha{ texel.a };
-                const f32 srcRelAlpha{ (srcAlpha / 255.0f) * color.a };
+                const f32 srcRelAlpha{ texel.a * color.a };
 
-                const f32 srcRed{ texel.r };
-                const f32 srcGreen{ texel.g };
-                const f32 srcBlue{ texel.b };
+                Vec4 dest{ static_cast<f32>((*pixel >> 16) & 0xFF),
+                           static_cast<f32>((*pixel >> 8) & 0xFF),
+                           static_cast<f32>((*pixel >> 0) & 0xFF),
+                           static_cast<f32>((*pixel >> 24) & 0xFF) };
+                dest = SRGB255ToLinear1(dest);
 
-                const f32 destAlpha{ static_cast<f32>((*pixel >> 24) & 0xFF) };
-                const f32 destRelAlpha{ destAlpha / 255.0f };
-
-                const f32 destRed{ static_cast<f32>((*pixel >> 16) & 0xFF) };
-                const f32 destGreen{ static_cast<f32>((*pixel >> 8) & 0xFF) };
-                const f32 destBlue{ static_cast<f32>((*pixel >> 0) & 0xFF) };
-
+                const f32 destRelAlpha{ dest.a };
                 const f32 invRelAlpha{ 1.0f - srcRelAlpha };
-                const f32 resultAlpha{ 255.0f * (srcRelAlpha + destRelAlpha -
-                                                 (srcRelAlpha * destRelAlpha)) };
-                const f32 resultRed{ (invRelAlpha * destRed) + srcRed };
-                const f32 resultGreen{ (invRelAlpha * destGreen) + srcGreen };
-                const f32 resultBlue{ (invRelAlpha * destBlue) + srcBlue };
 
-                *pixel = { (TruncateF32ToU32(resultAlpha + 0.5f) << 24) |
-                           (TruncateF32ToU32(resultRed + 0.5f) << 16) |
-                           (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
-                           (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
+                Vec4 blended{ (invRelAlpha * dest.r) + texel.r * color.r * color.a,
+                              (invRelAlpha * dest.g) + texel.g * color.g * color.a,
+                              (invRelAlpha * dest.b) + texel.b * color.b * color.a,
+                              (srcRelAlpha + destRelAlpha - (srcRelAlpha * destRelAlpha)) };
+                blended = Linear1ToSRGB255(blended);
+
+                *pixel = { (TruncateF32ToU32(blended.a + 0.5f) << 24) |
+                           (TruncateF32ToU32(blended.r + 0.5f) << 16) |
+                           (TruncateF32ToU32(blended.g + 0.5f) << 8) |
+                           (TruncateF32ToU32(blended.b + 0.5f) << 0) };
             }
 #else
             *pixel = colorRounded;
