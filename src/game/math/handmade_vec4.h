@@ -9,9 +9,17 @@ struct Vec4 {
             f32 x, y, z, w;
         };
 
-        // As color
+        // As color, very cumbersome and bug-attracting stuff...
         struct {
-            f32 r, g, b, a;
+            union {
+                Vec3 rgb;
+
+                struct {
+                    f32 r, g, b;
+                };
+            };
+
+            f32 a;
         };
 
         f32 e[4];
@@ -31,7 +39,15 @@ struct Vec4 {
     inline Vec4& operator-=(Vec4 rhs);
     inline Vec4& operator*=(f32 scalar);
     inline Vec4& operator/=(f32 scalar);
+    // Hadamard
+    inline Vec4& operator*=(Vec4 vec);
+
+    NOT_BOUND const Vec4 ZERO;
+    NOT_BOUND const Vec4 ONE;
 };
+
+inline const Vec4 Vec4::ZERO{};
+inline const Vec4 Vec4::ONE{ 1, 1, 1, 1 };
 
 //NODISCARD
 //INTERNAL inline Vec4 operator-(Vec4 rhs);

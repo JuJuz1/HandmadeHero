@@ -74,6 +74,7 @@ struct BitmapHeader {
 
 #pragma pack(pop)
 
+NODISCARD
 INTERNAL LoadedBitmapInfo
 DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename) {
     LoadedBitmapInfo result{};
@@ -121,17 +122,24 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
             for (i32 x{}; x < bitMapHeader->width; ++x) {
                 const u32 color{ *srcDest };
 
-                f32 r{ static_cast<f32>((color & redMask) >> redShiftDown) };
-                f32 g{ static_cast<f32>((color & greenMask) >> greenShiftDown) };
-                f32 b{ static_cast<f32>((color & blueMask) >> blueShiftDown) };
-                const f32 a{ static_cast<f32>((color & alphaMask) >> alphaShiftDown) };
-                const f32 an{ a / 255.0f };
+                Vec4 texel{ static_cast<f32>((color & redMask) >> redShiftDown),
+                            static_cast<f32>((color & greenMask) >> greenShiftDown),
+                            static_cast<f32>((color & blueMask) >> blueShiftDown),
+                            static_cast<f32>((color & alphaMask) >> alphaShiftDown) };
 
-#if 1
+                texel = SRGB255ToLinear1(texel);
+
+// Premultiplied alpha
+#if 0
+// Old way
+               const f32 an{ a / 255.0f };
                 r = r * an;
                 g = g * an;
                 b = b * an;
+#else
+                texel.rgb *= texel.a;
 #endif
+                texel = Linear1ToSRGB255(texel);
 
 // TODO: episode 52, use rotateleft and right?
 #if 0
@@ -140,10 +148,10 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
                               (((color >> greenShift.index) & 0xFF) << 8) |
                               (((color >> blueShift.index) & 0xFF) << 0));
 #else
-                // Premultiplied alpha
-                *srcDest++ =
-                    ((static_cast<u32>(a + 0.5f) << 24) | (static_cast<u32>(r + 0.5f) << 16) |
-                     (static_cast<u32>(g + 0.5f) << 8) | (static_cast<u32>(b + 0.5f) << 0));
+                *srcDest++ = ((static_cast<u32>(texel.a + 0.5f) << 24) |
+                              (static_cast<u32>(texel.r + 0.5f) << 16) |
+                              (static_cast<u32>(texel.g + 0.5f) << 8) |
+                              (static_cast<u32>(texel.b + 0.5f) << 0));
 #endif
             }
         }
@@ -1550,8 +1558,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 //const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } *
 //                  (100 + 50.0f * Sin(3.9f * angle)) }; // Skewing works now
 #endif
+
+#if 0
     const Vec4 coordinateColor{ 0.5f + 0.5f * Sin(angle * 2.9f), 0.5f + 0.5f * Sin(angle * 3.9f),
                                 0.5f + 0.5f * Sin(angle * 0.9f), 0.5f + 0.5f * Sin(angle * 15.5f) };
+#else
+    const Vec4 coordinateColor{ Vec4::ONE };
+#endif
     auto* coordinateSystem{ PushCoordinateSystem(
         renderGroup, Vec2{ disp, 0 } + origin - 0.5f * xAxis - 0.5f * yAxis, xAxis, yAxis,
         coordinateColor, &gameState->tree) };

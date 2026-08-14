@@ -12,6 +12,7 @@ enum RenderGroupEntryType {
     RenderGroupEntryType_RenderEntryCoordinateSystem,
 };
 
+// Callers don't have to know about this now
 struct RenderGroupEntryHeader {
     RenderGroupEntryType type;
 };
@@ -23,31 +24,23 @@ struct RenderEntityBasis {
     f32 entityZC;
 };
 
-// IMPORTANT: Each entry should contain the header
 struct RenderEntryClear {
-    RenderGroupEntryHeader header;
     Vec4 color;
 };
 
 struct RenderEntryRect {
-    RenderGroupEntryHeader header;
-
     RenderEntityBasis entityBasis;
     Vec4 color;
     Vec2 dim;
 };
 
 struct RenderEntryBitmap {
-    RenderGroupEntryHeader header;
-
     RenderEntityBasis entityBasis;
     LoadedBitmapInfo* bitmap;
     Vec4 color;
 };
 
 struct RenderEntryCoordinateSystem {
-    RenderGroupEntryHeader header;
-
     Vec2 origin;
     Vec2 xAxis;
     Vec2 yAxis;

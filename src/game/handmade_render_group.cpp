@@ -7,15 +7,18 @@
 // clang-format on
 
 NODISCARD
-INTERNAL RenderGroupEntryHeader*
+INTERNAL void*
 PushRenderElement_(RenderGroup* group, i32 size, RenderGroupEntryType type) {
-    RenderGroupEntryHeader* result{};
+    void* result{};
+
+    size += sizeof(RenderGroupEntryHeader);
 
     // TODO: why not <= ??? now we prevent pushing if we hit max size
     if ((group->pushBufferSize + size) <= group->maxPushBufferSize) {
-        result = reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
-                                                           group->pushBufferSize);
-        result->type = type;
+        auto* header{ reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
+                                                                group->pushBufferSize) };
+        header->type = type;
+        result = header + 1; // Data is right after the header
         group->pushBufferSize += size;
     } else {
         INVALID_CODE_PATH;
@@ -180,37 +183,33 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
                  (roundedMinX * bitmap_Bytes_Per_Pixel) };
 
     for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
-        u32* dest{ reinterpret_cast<u32*>(destRow) };
-        u32* src{ reinterpret_cast<u32*>(srcRow) };
+        u32* destPtr{ reinterpret_cast<u32*>(destRow) };
+        u32* srcPtr{ reinterpret_cast<u32*>(srcRow) };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            const f32 srcAlpha{ static_cast<f32>((*src >> 24) & 0xFF) };
-            const f32 srcRelAlpha{ (srcAlpha / 255.0f) * CAlpha };
+            Vec4 texel{ static_cast<f32>((*srcPtr >> 16) & 0xFF),
+                        static_cast<f32>((*srcPtr >> 8) & 0xFF),
+                        static_cast<f32>((*srcPtr >> 0) & 0xFF),
+                        static_cast<f32>((*srcPtr >> 24) & 0xFF) };
+            texel = SRGB255ToLinear1(texel);
+            texel *= CAlpha;
 
-            const f32 srcRed{ CAlpha * static_cast<f32>((*src >> 16) & 0xFF) };
-            const f32 srcGreen{ CAlpha * static_cast<f32>((*src >> 8) & 0xFF) };
-            const f32 srcBlue{ CAlpha * static_cast<f32>((*src >> 0) & 0xFF) };
+            Vec4 dest{ static_cast<f32>((*destPtr >> 16) & 0xFF),
+                       static_cast<f32>((*destPtr >> 8) & 0xFF),
+                       static_cast<f32>((*destPtr >> 0) & 0xFF),
+                       static_cast<f32>((*destPtr >> 24) & 0xFF) };
+            dest = SRGB255ToLinear1(dest);
+            //const f32 destRelAlpha{ dest.a / 255.0f };
 
-            const f32 destAlpha{ static_cast<f32>((*dest >> 24) & 0xFF) };
-            const f32 destRelAlpha{ destAlpha / 255.0f };
+            Vec4 result{ ((1.0f - texel.a) * dest) + texel };
+            result = Linear1ToSRGB255(result);
 
-            const f32 destRed{ static_cast<f32>((*dest >> 16) & 0xFF) };
-            const f32 destGreen{ static_cast<f32>((*dest >> 8) & 0xFF) };
-            const f32 destBlue{ static_cast<f32>((*dest >> 0) & 0xFF) };
+            *destPtr = { (TruncateF32ToU32(result.a + 0.5f) << 24) |
+                         (TruncateF32ToU32(result.r + 0.5f) << 16) |
+                         (TruncateF32ToU32(result.g + 0.5f) << 8) |
+                         (TruncateF32ToU32(result.b + 0.5f) << 0) };
 
-            const f32 invRelAlpha{ 1.0f - srcRelAlpha };
-            const f32 resultAlpha{ 255.0f *
-                                   (srcRelAlpha + destRelAlpha - (srcRelAlpha * destRelAlpha)) };
-            const f32 resultRed{ (invRelAlpha * destRed) + srcRed };
-            const f32 resultGreen{ (invRelAlpha * destGreen) + srcGreen };
-            const f32 resultBlue{ (invRelAlpha * destBlue) + srcBlue };
-
-            *dest = { (TruncateF32ToU32(resultAlpha + 0.5f) << 24) |
-                      (TruncateF32ToU32(resultRed + 0.5f) << 16) |
-                      (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
-                      (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
-
-            ++dest;
-            ++src;
+            ++destPtr;
+            ++srcPtr;
         }
 
         destRow += buff->pitch;
@@ -261,6 +260,8 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, 
 INTERNAL void
 DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
                LoadedBitmapInfo* texture) {
+    // Premultiply color
+    color.rgb *= color.a;
     // AA RR GG BB
     u32 colorRounded{ (RoundF32ToU32(color.a * 255.0f) << 24) |
                       (RoundF32ToU32(color.r * 255.0f) << 16) |
@@ -376,13 +377,13 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
 
 #    if 1
                 // Lerp the color with the neighbours
-                const Vec4 texel{ Lerp(Lerp(texelA, fX, texelB), fY, Lerp(texelC, fX, texelD)) };
+                Vec4 texel{ Lerp(Lerp(texelA, fX, texelB), fY, Lerp(texelC, fX, texelD)) };
 #    else
                 const Vec4 texel{ texelA };
 #    endif
 
                 // Figure out color
-                const f32 srcRelAlpha{ texel.a * color.a };
+                texel *= color;
 
                 Vec4 dest{ static_cast<f32>((*pixel >> 16) & 0xFF),
                            static_cast<f32>((*pixel >> 8) & 0xFF),
@@ -390,13 +391,11 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                            static_cast<f32>((*pixel >> 24) & 0xFF) };
                 dest = SRGB255ToLinear1(dest);
 
-                const f32 destRelAlpha{ dest.a };
-                const f32 invRelAlpha{ 1.0f - srcRelAlpha };
+                const f32 invRelAlpha{ 1.0f - texel.a };
 
-                Vec4 blended{ (invRelAlpha * dest.r) + texel.r * color.r * color.a,
-                              (invRelAlpha * dest.g) + texel.g * color.g * color.a,
-                              (invRelAlpha * dest.b) + texel.b * color.b * color.a,
-                              (srcRelAlpha + destRelAlpha - (srcRelAlpha * destRelAlpha)) };
+                Vec4 blended{ (invRelAlpha * dest.r) + texel.r, (invRelAlpha * dest.g) + texel.g,
+                              (invRelAlpha * dest.b) + texel.b,
+                              (texel.a + dest.a - (texel.a * dest.a)) };
                 blended = Linear1ToSRGB255(blended);
 
                 *pixel = { (TruncateF32ToU32(blended.a + 0.5f) << 24) |
@@ -482,18 +481,21 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
     for (i32 baseAddress{}; baseAddress < group->pushBufferSize;) {
         auto* header{ reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
                                                                 baseAddress) };
+        baseAddress += sizeof(*header);
+        // Data is located right after
+        void* data{ header + 1 };
 
         switch (header->type) {
             // This is a bit ugly but it can't be perfect everywhere
         case RenderGroupEntryType_RenderEntryClear: {
-            auto* entry{ reinterpret_cast<RenderEntryClear*>(header) };
+            auto* entry{ reinterpret_cast<RenderEntryClear*>(data) };
             baseAddress += sizeof(*entry);
 
             DrawRect(outputTarget, Vec2{}, Vec2{ outputTarget->width, outputTarget->height },
                      entry->color.r, entry->color.g, entry->color.b, entry->color.a);
         } break;
         case RenderGroupEntryType_RenderEntryRect: {
-            auto* entry{ reinterpret_cast<RenderEntryRect*>(header) };
+            auto* entry{ reinterpret_cast<RenderEntryRect*>(data) };
             baseAddress += sizeof(*entry);
 
             const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
@@ -502,7 +504,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
                      entry->color.b);
         } break;
         case RenderGroupEntryType_RenderEntryBitmap: {
-            auto* entry{ reinterpret_cast<RenderEntryBitmap*>(header) };
+            auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
             baseAddress += sizeof(*entry);
 
             const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
@@ -511,7 +513,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
         } break;
         case RenderGroupEntryType_RenderEntryCoordinateSystem: {
-            auto* entry{ reinterpret_cast<RenderEntryCoordinateSystem*>(header) };
+            auto* entry{ reinterpret_cast<RenderEntryCoordinateSystem*>(data) };
             baseAddress += sizeof(*entry);
 
             const Vec2 dim{ 2, 2 };
