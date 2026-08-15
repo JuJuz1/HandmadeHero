@@ -35,7 +35,8 @@ else
     commonCompilerDefines="$commonCompilerDefines -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1"
 fi
 
-commonCompilerFlags="$commonCompilerDefines $commonCompilerFlags -fno-exceptions -fno-rtti -std=c++20 $commonCompilerWarnings"
+# Started getting complaints about having to use -fPIC, some c++ mangled name so have to investigate more 15.8.2026. The toolset didn't change so you never know... On mac we seem to be fine
+commonCompilerFlags="$commonCompilerDefines $commonCompilerFlags -fno-exceptions -fno-rtti -fPIC -std=c++20 $commonCompilerWarnings"
 
 echo "$commonCompilerFlags"
 echo
