@@ -43,6 +43,8 @@ struct Vec3 {
     inline Vec3& operator-=(Vec3 rhs);
     inline Vec3& operator*=(f32 scalar);
     inline Vec3& operator/=(f32 scalar);
+    // Hadamard
+    inline Vec3& operator*=(Vec3 scalar);
 
     NOT_BOUND const Vec3 ZERO;
     NOT_BOUND const Vec3 ONE;

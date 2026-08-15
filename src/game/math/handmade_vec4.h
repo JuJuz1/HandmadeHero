@@ -4,12 +4,20 @@
 #include "game/handmade.h"
 
 struct Vec4 {
+    // Very cumbersome and bug-attracting stuff...
     union {
         struct {
-            f32 x, y, z, w;
+            union {
+                Vec3 xyz;
+
+                struct {
+                    f32 x, y, z;
+                };
+            };
+
+            f32 w;
         };
 
-        // As color, very cumbersome and bug-attracting stuff...
         struct {
             union {
                 Vec3 rgb;

@@ -1,6 +1,12 @@
 #ifndef HANDMADE_RENDER_GROUP_H
 #define HANDMADE_RENDER_GROUP_H
 
+struct EnvironmentMap {
+    Array<LoadedBitmapInfo*, 4> lod;
+    i32 widthPow2;
+    i32 heightPow2;
+};
+
 struct RenderBasis {
     Vec3 pos;
 };
@@ -46,8 +52,13 @@ struct RenderEntryCoordinateSystem {
     Vec2 yAxis;
     Vec4 color;
     LoadedBitmapInfo* texture;
+    LoadedBitmapInfo* normalMap;
 
-    Array<Vec2, 16> points;
+    EnvironmentMap* top;
+    EnvironmentMap* middle;
+    EnvironmentMap* bottom;
+
+    //Array<Vec2, 16> points;
 };
 
 struct RenderGroup {

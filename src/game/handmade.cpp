@@ -127,6 +127,8 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
                             static_cast<f32>((color & blueMask) >> blueShiftDown),
                             static_cast<f32>((color & alphaMask) >> alphaShiftDown) };
 
+                // @Speed
+                // TODO: this is now much slower and slows startup A LOT!
                 texel = SRGB255ToLinear1(texel);
 
 // Premultiplied alpha
@@ -523,6 +525,33 @@ MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height, bool32 clearToZero = 
     }
 
     return result;
+}
+
+INTERNAL void
+MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
+    const f32 invWidth{ 1.0f / (1.0f - bitmap->width) };
+    const f32 invHeight{ 1.0f / (1.0f - bitmap->height) };
+
+    u8* row{ static_cast<u8*>(bitmap->memory) };
+    for (i32 y{}; y < bitmap->height; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{}; x < bitmap->width; ++x) {
+            const Vec2 bitmapUV{ invWidth * static_cast<f32>(x), invHeight * static_cast<f32>(y) };
+
+            Vec3 normal{ 2.0f * bitmapUV.x - 1.0f, 2.0f * bitmapUV.y - 1.0f, 0.0f };
+            normal.z = Sqrt(1.0f - MIN(1.0f, SquareF32(normal.x) + SquareF32(normal.y)));
+
+            const Vec4 color{ 255.0f * (0.5f * (normal.x + 1.0f)),
+                              255.0f * (0.5f * (normal.y + 1.0f)), 127.0f * normal.z,
+                              255.0f * roughness };
+            *pixel++ =
+                ((static_cast<u32>(color.a + 0.5f) << 24) |
+                 (static_cast<u32>(color.r + 0.5f) << 16) |
+                 (static_cast<u32>(color.g + 0.5f) << 8) | (static_cast<u32>(color.b + 0.5f) << 0));
+        }
+
+        row += bitmap->pitch;
+    }
 }
 
 INTERNAL void
@@ -1170,7 +1199,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //DrawRect(drawBuff, Vec2{},
     //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
     //         0.0f, 1.0f);
-    ScreenClear(renderGroup, Vec4{ 1.0f, 0, 1.0f, 1.0f });
+    const Vec4 clearColor{ 0.5f, 0.5f, 0.5f, 1.0f };
+    ScreenClear(renderGroup, clearColor);
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
@@ -1541,9 +1571,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 angle{ //0.0f
                      gameState->time * 0.1f
     };
+#if 0
     const f32 disp{ Cos(angle * 5.0f) * 100.0f };
+#else
+    const f32 disp{ 0 };
+#endif
+
     const Vec2 origin{ screenCenter };
-#if 1
+#if 0
     const Vec2 xAxis{ Vec2{ Cos(angle * 3.0f), Sin(angle * 3.0f) } * 150.0f };
     //  (50 + (Cos(angle * 2.2f) * 50.0f)) }; // Scale via time
     const Vec2 yAxis{ Perp(xAxis) };
@@ -1567,13 +1602,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 #endif
     auto* coordinateSystem{ PushCoordinateSystem(
         renderGroup, Vec2{ disp, 0 } + origin - 0.5f * xAxis - 0.5f * yAxis, xAxis, yAxis,
-        coordinateColor, &gameState->tree) };
-    i32 i{};
-    for (f32 x{}; x < 1.0f; x += 0.25f) {
-        for (f32 y{}; y < 1.0f; y += 0.25f) {
-            coordinateSystem->points[i++] = Vec2{ x, y };
-        }
-    }
+        coordinateColor, &gameState->tree, nullptr, nullptr, nullptr, nullptr) };
+    //i32 i{};
+    //for (f32 x{}; x < 1.0f; x += 0.25f) {
+    //    for (f32 y{}; y < 1.0f; y += 0.25f) {
+    //        coordinateSystem->points[i++] = Vec2{ x, y };
+    //    }
+    //}
 
     //PushCoordinateSystem(renderGroup, origin, xAxis, yAxis, Vec4{ 1, 1, 0, 1 });
 

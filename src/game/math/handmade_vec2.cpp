@@ -172,3 +172,10 @@ Perp(Vec2 v) {
     const Vec2 result{ -v.y, v.x };
     return (result);
 }
+
+NODISCARD
+INTERNAL Vec2
+Lerp(Vec2 a, f32 t, Vec2 b) {
+    const Vec2 result{ (1 - t) * a + t * b };
+    return result;
+}

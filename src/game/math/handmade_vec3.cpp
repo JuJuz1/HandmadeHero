@@ -84,6 +84,13 @@ Vec3::operator/=(f32 scalar) {
     return *this;
 }
 
+// Hadamard
+inline Vec3&
+Vec3::operator*=(Vec3 vec) {
+    *this = *this * vec;
+    return *this;
+}
+
 NODISCARD
 INTERNAL inline bool32
 operator==(Vec3 lhs, Vec3 rhs) {
@@ -119,5 +126,12 @@ INTERNAL inline f32
 Length(Vec3 v) {
     const f32 result{ Sqrt(LengthSq(v)) };
     ASSERT(result >= 0.0f);
+    return result;
+}
+
+NODISCARD
+INTERNAL Vec3
+Lerp(Vec3 a, f32 t, Vec3 b) {
+    const Vec3 result{ (1 - t) * a + t * b };
     return result;
 }

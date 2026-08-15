@@ -126,7 +126,7 @@ if ERRORLEVEL 1 (
 )
 
 if %useCTime% == 1 (
-    ctime.exe -end win32_handmade.ctm
+    ctime.exe -end win32_handmade.ctm %buildFailed%
 )
 
 del lock.tmp
@@ -142,7 +142,7 @@ if ERRORLEVEL 1 (
 )
 
 if %useCTime% == 1 (
-    ctime.exe -end win32_platform.ctm
+    ctime.exe -end win32_platform.ctm %buildFailed%
 )
 
 rem needed if building from command line and not vscode

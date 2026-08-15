@@ -88,7 +88,8 @@ PushRectOutline(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 col
 NODISCARD
 INTERNAL RenderEntryCoordinateSystem*
 PushCoordinateSystem(RenderGroup* group, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
-                     LoadedBitmapInfo* texture) {
+                     LoadedBitmapInfo* texture, LoadedBitmapInfo* normalMap, EnvironmentMap* top,
+                     EnvironmentMap* middle, EnvironmentMap* bottom) {
     auto* entry{ PushRenderElement(group, RenderEntryCoordinateSystem) };
     if (entry) {
         entry->origin = origin;
@@ -96,6 +97,11 @@ PushCoordinateSystem(RenderGroup* group, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Ve
         entry->yAxis = yAxis;
         entry->color = color;
         entry->texture = texture;
+
+        entry->normalMap = normalMap;
+        entry->top = top;
+        entry->middle = middle;
+        entry->bottom = bottom;
     }
 
     return entry;
@@ -141,6 +147,24 @@ Linear1ToSRGB255(Vec4 color) {
     result.b = Sqrt(color.b) * one255;
     result.a = color.a * one255;
 
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec4
+Unpack4x8(u32 packed) {
+    const Vec4 result{ static_cast<f32>((packed >> 16) & 0xFF),
+                       static_cast<f32>((packed >> 8) & 0xFF),
+                       static_cast<f32>((packed >> 0) & 0xFF),
+                       static_cast<f32>((packed >> 24) & 0xFF) };
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec3
+SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 normal, f32 roughness, EnvironmentMap* map) {
+    Vec3 result{ normal };
     return result;
 }
 
@@ -200,7 +224,7 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
             dest = SRGB255ToLinear1(dest);
             //const f32 destRelAlpha{ dest.a / 255.0f };
 
-            Vec4 result{ ((1.0f - texel.a) * dest) + texel };
+            Vec4 result{ (dest * (1.0f - texel.a)) + texel };
             result = Linear1ToSRGB255(result);
 
             *destPtr = { (TruncateF32ToU32(result.a + 0.5f) << 24) |
@@ -259,7 +283,8 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, 
 
 INTERNAL void
 DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
-               LoadedBitmapInfo* texture) {
+               LoadedBitmapInfo* texture, LoadedBitmapInfo* normalMap, EnvironmentMap* top,
+               EnvironmentMap* middle, EnvironmentMap* bottom) {
     // Premultiply color
     color.rgb *= color.a;
     // AA RR GG BB
@@ -346,29 +371,17 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
 
                 u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
                               roundedX * sizeof(u32) };
-                u32 texelPtrA{ *reinterpret_cast<u32*>(texelPtr) };
+                u32 texelValA{ *reinterpret_cast<u32*>(texelPtr) };
                 // Right, down and right-down
-                u32 texelPtrB{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
-                u32 texelPtrC{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
-                u32 texelPtrD{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
+                u32 texelValB{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
+                u32 texelValC{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
+                u32 texelValD{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
 
                 // TODO: color.a
-                Vec4 texelA{ static_cast<f32>((texelPtrA >> 16) & 0xFF),
-                             static_cast<f32>((texelPtrA >> 8) & 0xFF),
-                             static_cast<f32>((texelPtrA >> 0) & 0xFF),
-                             static_cast<f32>((texelPtrA >> 24) & 0xFF) };
-                Vec4 texelB{ static_cast<f32>((texelPtrB >> 16) & 0xFF),
-                             static_cast<f32>((texelPtrB >> 8) & 0xFF),
-                             static_cast<f32>((texelPtrB >> 0) & 0xFF),
-                             static_cast<f32>((texelPtrB >> 24) & 0xFF) };
-                Vec4 texelC{ static_cast<f32>((texelPtrC >> 16) & 0xFF),
-                             static_cast<f32>((texelPtrC >> 8) & 0xFF),
-                             static_cast<f32>((texelPtrC >> 0) & 0xFF),
-                             static_cast<f32>((texelPtrC >> 24) & 0xFF) };
-                Vec4 texelD{ static_cast<f32>((texelPtrD >> 16) & 0xFF),
-                             static_cast<f32>((texelPtrD >> 8) & 0xFF),
-                             static_cast<f32>((texelPtrD >> 0) & 0xFF),
-                             static_cast<f32>((texelPtrD >> 24) & 0xFF) };
+                Vec4 texelA{ Unpack4x8(texelValA) };
+                Vec4 texelB{ Unpack4x8(texelValB) };
+                Vec4 texelC{ Unpack4x8(texelValC) };
+                Vec4 texelD{ Unpack4x8(texelValD) };
 
                 texelA = SRGB255ToLinear1(texelA);
                 texelB = SRGB255ToLinear1(texelB);
@@ -382,7 +395,48 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                 const Vec4 texel{ texelA };
 #    endif
 
-                // Figure out color
+                /// Normals
+                if (normalMap) {
+                    u8* normalPtr{ static_cast<u8*>(normalMap->memory) +
+                                   roundedY * normalMap->pitch + roundedX * sizeof(u32) };
+                    u32 normalValA{ *reinterpret_cast<u32*>(normalPtr) };
+                    u32 normalValB{ *reinterpret_cast<u32*>(normalPtr + sizeof(u32)) };
+                    u32 normalValC{ *reinterpret_cast<u32*>(normalPtr + normalMap->pitch) };
+                    u32 normalValD{ *reinterpret_cast<u32*>(normalPtr + normalMap->pitch +
+                                                            sizeof(u32)) };
+
+                    Vec4 normalA{ Unpack4x8(normalValA) };
+                    Vec4 normalB{ Unpack4x8(normalValB) };
+                    Vec4 normalC{ Unpack4x8(normalValC) };
+                    Vec4 normalD{ Unpack4x8(normalValD) };
+
+                    Vec4 normal{ Lerp(Lerp(normalA, fX, normalB), fY, Lerp(normalC, fX, normalD)) };
+
+                    EnvironmentMap* farMap{};
+                    f32 tEnvMap{ normal.z };
+                    f32 tFarMap{ 0.0f };
+                    if (tEnvMap < 0.25f) {
+                        farMap = bottom;
+                        tFarMap = 1.0f - (tEnvMap / 0.25f);
+                    } else if (tEnvMap > 0.75f) {
+                        farMap = top;
+                        tFarMap = (1.0f - tEnvMap) / 0.25f;
+                    }
+
+                    const Vec2 screenSpaceUV{ static_cast<f32>(x) / static_cast<f32>(maxX),
+                                              static_cast<f32>(y) / static_cast<f32>(maxY) };
+                    Vec3 lightColor{ SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w,
+                                                          middle) };
+                    if (farMap) {
+                        Vec3 farMapColor{ SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w,
+                                                               middle) };
+                        lightColor = Lerp(lightColor, tFarMap, farMapColor);
+                    }
+
+                    texel.rgb *= lightColor;
+                }
+
+                // Figure out the final color
                 texel *= color;
 
                 Vec4 dest{ static_cast<f32>((*pixel >> 16) & 0xFF),
@@ -391,11 +445,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                            static_cast<f32>((*pixel >> 24) & 0xFF) };
                 dest = SRGB255ToLinear1(dest);
 
-                const f32 invRelAlpha{ 1.0f - texel.a };
-
-                Vec4 blended{ (invRelAlpha * dest.r) + texel.r, (invRelAlpha * dest.g) + texel.g,
-                              (invRelAlpha * dest.b) + texel.b,
-                              (texel.a + dest.a - (texel.a * dest.a)) };
+                Vec4 blended{ (dest * (1.0f - texel.a)) + texel };
                 blended = Linear1ToSRGB255(blended);
 
                 *pixel = { (TruncateF32ToU32(blended.a + 0.5f) << 24) |
@@ -507,10 +557,12 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
             baseAddress += sizeof(*entry);
 
+#if 0
             const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
 
             ASSERT(entry->bitmap);
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
+#endif
         } break;
         case RenderGroupEntryType_RenderEntryCoordinateSystem: {
             auto* entry{ reinterpret_cast<RenderEntryCoordinateSystem*>(data) };
@@ -528,7 +580,8 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
 
             DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color,
-                           entry->texture);
+                           entry->texture, entry->normalMap, entry->top, entry->middle,
+                           entry->bottom);
 
 #if 0
             for (i32 i{}; i < entry->points.size; ++i) {
