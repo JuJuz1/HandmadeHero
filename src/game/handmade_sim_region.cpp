@@ -417,7 +417,6 @@ CanOverlap(GameState* gameState, SimEntity* mover, SimEntity* region) {
     return result;
 }
 
-NODISCARD
 INTERNAL void
 HandleOverlap(GameState* gameState, SimEntity* mover, SimEntity* region, f32 delta, f32* ground) {
     if (region->type == EntityType::STAIRWELL) {

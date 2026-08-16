@@ -120,6 +120,7 @@ struct GameState {
     Array<HeroBitmaps, 4> heroBitmaps;
     LoadedBitmapInfo background;
     LoadedBitmapInfo tree;
+    LoadedBitmapInfo treeNormal;
     LoadedBitmapInfo shadow;
 
     LoadedBitmapInfo stairwell;
