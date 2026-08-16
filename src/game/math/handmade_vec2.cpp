@@ -131,6 +131,7 @@ Length(Vec2 v) {
     return result;
 }
 
+// Is this even "good" code :D?
 NODISCARD
 INTERNAL inline bool32
 IsNormalized(Vec2 v) {
@@ -143,6 +144,7 @@ IsNormalized(Vec2 v) {
 NODISCARD
 INTERNAL inline Vec2
 Normalize(Vec2 v) {
+    // TODO: @Cleanup
     if (IsNormalized(v)) {
         return v;
     }

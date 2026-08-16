@@ -152,6 +152,21 @@ Linear1ToSRGB255(Vec4 color) {
 
 NODISCARD
 INTERNAL inline Vec4
+UnscaleAndBiasNormal(Vec4 normal) {
+    Vec4 result;
+
+    const f32 inv255{ 1.0f / 255.0f };
+    result.x = -1.0f + 2.0f * (normal.x * inv255);
+    result.y = -1.0f + 2.0f * (normal.y * inv255);
+    result.z = -1.0f + 2.0f * (normal.z * inv255);
+
+    result.w = normal.w * inv255;
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec4
 Unpack4x8(u32 packed) {
     const Vec4 result{ static_cast<f32>((packed >> 16) & 0xFF),
                        static_cast<f32>((packed >> 8) & 0xFF),
@@ -161,10 +176,70 @@ Unpack4x8(u32 packed) {
     return result;
 }
 
+struct BilinearSample {
+    i32 a, b, c, d;
+};
+
+NODISCARD
+INTERNAL inline Vec4
+SRGBBilinearBlend(BilinearSample sample, f32 fX, f32 fY) {
+    Vec4 result;
+
+    // TODO: color.a
+    Vec4 texelA{ Unpack4x8(sample.a) };
+    Vec4 texelB{ Unpack4x8(sample.b) };
+    Vec4 texelC{ Unpack4x8(sample.c) };
+    Vec4 texelD{ Unpack4x8(sample.d) };
+
+    texelA = SRGB255ToLinear1(texelA);
+    texelB = SRGB255ToLinear1(texelB);
+    texelC = SRGB255ToLinear1(texelC);
+    texelD = SRGB255ToLinear1(texelD);
+
+    // Lerp the color with the neighbours
+    result = Lerp(Lerp(texelA, fX, texelB), fY, Lerp(texelC, fX, texelD));
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline BilinearSample
+BilinearSampleFromTex(LoadedBitmapInfo* texture, i32 x, i32 y) {
+    BilinearSample result;
+
+    u8* normalPtr{ static_cast<u8*>(texture->memory) + y * texture->pitch + x * sizeof(u32) };
+    result.a = *reinterpret_cast<u32*>(normalPtr);
+    result.b = *reinterpret_cast<u32*>(normalPtr + sizeof(u32));
+    result.c = *reinterpret_cast<u32*>(normalPtr + texture->pitch);
+    result.d = *reinterpret_cast<u32*>(normalPtr + texture->pitch + sizeof(u32));
+
+    return result;
+}
+
 NODISCARD
 INTERNAL inline Vec3
 SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 normal, f32 roughness, EnvironmentMap* map) {
-    Vec3 result{ normal };
+    ASSERT(roughness >= 0.0f && roughness <= 1.0f);
+    const i32 lodIndex{ RoundF32ToI32(roughness * (map->lod.size - 1)) };
+    ASSERT(lodIndex < map->lod.size);
+
+    LoadedBitmapInfo* lod{ map->lod[lodIndex] };
+
+    const f32 texelX{};
+    const f32 texelY{};
+
+    // @Duplicate
+    const i32 roundedX{ static_cast<i32>(texelX) };
+    const i32 roundedY{ static_cast<i32>(texelY) };
+    //ASSERT(roundedX >= 0 && roundedX < lod->width);
+    //ASSERT(roundedY >= 0 && roundedY < lod->height);
+
+    const f32 fX{ static_cast<f32>(texelX - roundedX) };
+    const f32 fY{ static_cast<f32>(texelY - roundedY) };
+
+    auto sample{ BilinearSampleFromTex(lod, roundedX, roundedY) };
+    Vec3 result{ SRGBBilinearBlend(sample, fX, fY).xyz };
+
     return result;
 }
 
@@ -341,7 +416,6 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     for (i32 y{ minY }; y <= maxY; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; ++x) {
-#if 1
             const Vec2 pixelPos{ x, y };
             const Vec2 d{ pixelPos - origin };
 
@@ -369,75 +443,55 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                 const f32 fX{ static_cast<f32>(texelX - roundedX) };
                 const f32 fY{ static_cast<f32>(texelY - roundedY) };
 
-                u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
-                              roundedX * sizeof(u32) };
-                u32 texelValA{ *reinterpret_cast<u32*>(texelPtr) };
-                // Right, down and right-down
-                u32 texelValB{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
-                u32 texelValC{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
-                u32 texelValD{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
-
-                // TODO: color.a
-                Vec4 texelA{ Unpack4x8(texelValA) };
-                Vec4 texelB{ Unpack4x8(texelValB) };
-                Vec4 texelC{ Unpack4x8(texelValC) };
-                Vec4 texelD{ Unpack4x8(texelValD) };
-
-                texelA = SRGB255ToLinear1(texelA);
-                texelB = SRGB255ToLinear1(texelB);
-                texelC = SRGB255ToLinear1(texelC);
-                texelD = SRGB255ToLinear1(texelD);
-
-#    if 1
-                // Lerp the color with the neighbours
-                Vec4 texel{ Lerp(Lerp(texelA, fX, texelB), fY, Lerp(texelC, fX, texelD)) };
-#    else
-                const Vec4 texel{ texelA };
-#    endif
+                auto texelSample{ BilinearSampleFromTex(texture, roundedX, roundedY) };
+                Vec4 texel{ SRGBBilinearBlend(texelSample, fX, fY) };
 
                 /// Normals
                 if (normalMap) {
-                    u8* normalPtr{ static_cast<u8*>(normalMap->memory) +
-                                   roundedY * normalMap->pitch + roundedX * sizeof(u32) };
-                    u32 normalValA{ *reinterpret_cast<u32*>(normalPtr) };
-                    u32 normalValB{ *reinterpret_cast<u32*>(normalPtr + sizeof(u32)) };
-                    u32 normalValC{ *reinterpret_cast<u32*>(normalPtr + normalMap->pitch) };
-                    u32 normalValD{ *reinterpret_cast<u32*>(normalPtr + normalMap->pitch +
-                                                            sizeof(u32)) };
+                    auto normalSample{ BilinearSampleFromTex(normalMap, roundedX, roundedY) };
 
-                    Vec4 normalA{ Unpack4x8(normalValA) };
-                    Vec4 normalB{ Unpack4x8(normalValB) };
-                    Vec4 normalC{ Unpack4x8(normalValC) };
-                    Vec4 normalD{ Unpack4x8(normalValD) };
+                    Vec4 normalA{ Unpack4x8(normalSample.a) };
+                    Vec4 normalB{ Unpack4x8(normalSample.b) };
+                    Vec4 normalC{ Unpack4x8(normalSample.c) };
+                    Vec4 normalD{ Unpack4x8(normalSample.d) };
 
                     Vec4 normal{ Lerp(Lerp(normalA, fX, normalB), fY, Lerp(normalC, fX, normalD)) };
+                    normal = UnscaleAndBiasNormal(normal);
+                    // TODO: needed?
+                    normal.xyz = Normalize(normal.xyz);
 
+#if 1
                     EnvironmentMap* farMap{};
-                    f32 tEnvMap{ normal.z };
+                    f32 tEnvMap{ normal.y };
                     f32 tFarMap{ 0.0f };
-                    if (tEnvMap < 0.25f) {
+                    if (tEnvMap < -0.5f) {
                         farMap = bottom;
-                        tFarMap = 1.0f - (tEnvMap / 0.25f);
-                    } else if (tEnvMap > 0.75f) {
+                        tFarMap = (tEnvMap + 1.0f) * 2;
+                    } else if (tEnvMap > 0.5f) {
                         farMap = top;
-                        tFarMap = (1.0f - tEnvMap) / 0.25f;
+                        tFarMap = (tEnvMap - 0.5f) * 2;
                     }
 
                     const Vec2 screenSpaceUV{ static_cast<f32>(x) / static_cast<f32>(maxX),
                                               static_cast<f32>(y) / static_cast<f32>(maxY) };
-                    Vec3 lightColor{ SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w,
-                                                          middle) };
+                    Vec3 lightColor{
+                        //SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w, middle)
+                    };
                     if (farMap) {
-                        Vec3 farMapColor{ SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w,
-                                                               middle) };
+                        const Vec3 farMapColor{ SampleEnvironmentMap(screenSpaceUV, normal.xyz,
+                                                                     normal.w, farMap) };
                         lightColor = Lerp(lightColor, tFarMap, farMapColor);
                     }
 
-                    texel.rgb *= lightColor;
+                    texel.rgb += texel.a * lightColor;
                 }
 
                 // Figure out the final color
                 texel *= color;
+                texel.r = Clamp01(texel.r);
+                texel.g = Clamp01(texel.g);
+                texel.b = Clamp01(texel.b);
+                //texel.a = Clamp01(texel.a);
 
                 Vec4 dest{ static_cast<f32>((*pixel >> 16) & 0xFF),
                            static_cast<f32>((*pixel >> 8) & 0xFF),
@@ -454,7 +508,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                            (TruncateF32ToU32(blended.b + 0.5f) << 0) };
             }
 #else
-            *pixel = colorRounded;
+                    *pixel = colorRounded;
 #endif
 
             ++pixel;

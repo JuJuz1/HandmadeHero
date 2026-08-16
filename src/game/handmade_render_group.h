@@ -3,14 +3,13 @@
 
 struct EnvironmentMap {
     Array<LoadedBitmapInfo*, 4> lod;
-    i32 widthPow2;
-    i32 heightPow2;
 };
 
 struct RenderBasis {
     Vec3 pos;
 };
 
+// See the .cpp PushRenderElement macro for an explanation for the naming
 enum RenderGroupEntryType {
     RenderGroupEntryType_RenderEntryClear = 0,
     RenderGroupEntryType_RenderEntryRect,

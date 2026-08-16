@@ -399,8 +399,8 @@ MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height, bool32 clearToZero = 
 
 INTERNAL void
 MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
-    const f32 invWidth{ 1.0f / (1.0f - bitmap->width) };
-    const f32 invHeight{ 1.0f / (1.0f - bitmap->height) };
+    const f32 invWidth{ 1.0f / (bitmap->width - 1) };
+    const f32 invHeight{ 1.0f / (bitmap->height - 1) };
 
     u8* row{ static_cast<u8*>(bitmap->memory) };
     for (i32 y{}; y < bitmap->height; ++y) {
@@ -408,12 +408,19 @@ MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
         for (i32 x{}; x < bitmap->width; ++x) {
             const Vec2 bitmapUV{ invWidth * static_cast<f32>(x), invHeight * static_cast<f32>(y) };
 
-            Vec3 normal{ 2.0f * bitmapUV.x - 1.0f, 2.0f * bitmapUV.y - 1.0f, 0.0f };
-            normal.z = Sqrt(1.0f - MIN(1.0f, SquareF32(normal.x) + SquareF32(normal.y)));
+            const f32 nX{ (2.0f * bitmapUV.x) - 1.0f };
+            const f32 nY{ (2.0f * bitmapUV.y) - 1.0f };
 
-            const Vec4 color{ 255.0f * (0.5f * (normal.x + 1.0f)),
-                              255.0f * (0.5f * (normal.y + 1.0f)), 127.0f * normal.z,
-                              255.0f * roughness };
+            const f32 rootTerm{ 1.0f - SquareF32(nX) - SquareF32(nY) };
+            Vec3 normal{ 0, 0, 1 };
+            f32 nZ{};
+            if (rootTerm >= 0.0f) {
+                nZ = Sqrt(rootTerm);
+                normal = Vec3(nX, nY, nZ);
+            }
+
+            const Vec4 color{ 255.0f * 0.5f * (normal.x + 1.0f), 255.0f * 0.5f * (normal.y + 1.0f),
+                              255.0f * 0.5f * (normal.z + 1.0f), 255.0f * roughness };
             *pixel++ =
                 ((static_cast<u32>(color.a + 0.5f) << 24) |
                  (static_cast<u32>(color.r + 0.5f) << 16) |

@@ -34,6 +34,7 @@ Annotations: prefixed with a "@"
 - @Debug -> debug code
 - @Duplicate -> duplicate variables or code, constants usually
 - @Re-enable -> re-enable later
+- @Cleanup -> messy code, see if we can improve
 
 Documented here so I would remember to use these better!
 

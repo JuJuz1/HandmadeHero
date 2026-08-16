@@ -130,6 +130,31 @@ Length(Vec3 v) {
 }
 
 NODISCARD
+INTERNAL inline bool32
+IsNormalized(Vec3 v) {
+    const f32 eps{ 0.001f };
+    const bool32 result{ AbsF32(LengthSq(v) - 1.0f) < eps };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec3
+Normalize(Vec3 v) {
+    // TODO: @Cleanup
+    if (IsNormalized(v)) {
+        return v;
+    }
+
+    Vec3 result{ v };
+    const f32 lengthSq{ LengthSq(v) };
+    if (lengthSq > 0.0f) {
+        result /= Sqrt(lengthSq);
+    }
+
+    return result;
+}
+
+NODISCARD
 INTERNAL Vec3
 Lerp(Vec3 a, f32 t, Vec3 b) {
     const Vec3 result{ (1 - t) * a + t * b };
