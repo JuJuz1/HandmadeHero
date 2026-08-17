@@ -35,6 +35,17 @@ struct Vec4 {
 
     Vec4() = default;
 
+    // TODO: Better ways?
+    template <typename T>
+    Vec4(T x_) : x{ static_cast<f32>(x_) }, y{}, z{}, w{} {}
+
+    template <typename T, typename U>
+    Vec4(T x_, U y_) : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) }, z{}, w{} {}
+
+    template <typename T, typename U, typename V>
+    Vec4(T x_, U y_, V z_)
+        : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) }, z{ static_cast<f32>(z_) }, w{} {}
+
     template <typename T, typename U, typename V, typename W>
     Vec4(T x_, U y_, V z_, W w_)
         : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) }, z{ static_cast<f32>(z_) },

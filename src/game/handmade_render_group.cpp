@@ -223,16 +223,16 @@ SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 normal, f32 roughness, Environment
     const i32 lodIndex{ RoundF32ToI32(roughness * (map->lod.size - 1)) };
     ASSERT(lodIndex < map->lod.size);
 
-    LoadedBitmapInfo* lod{ map->lod[lodIndex] };
+    auto* lod{ &map->lod[lodIndex] };
 
-    const f32 texelX{};
-    const f32 texelY{};
+    const f32 texelX{ lod->width / 2 + (normal.x * lod->width / 2) };
+    const f32 texelY{ lod->height / 2 + (normal.y * lod->height / 2) };
 
     // @Duplicate
     const i32 roundedX{ static_cast<i32>(texelX) };
     const i32 roundedY{ static_cast<i32>(texelY) };
-    //ASSERT(roundedX >= 0 && roundedX < lod->width);
-    //ASSERT(roundedY >= 0 && roundedY < lod->height);
+    ASSERT(roundedX >= 0 && roundedX < lod->width);
+    ASSERT(roundedY >= 0 && roundedY < lod->height);
 
     const f32 fX{ static_cast<f32>(texelX - roundedX) };
     const f32 fY{ static_cast<f32>(texelY - roundedY) };
@@ -318,7 +318,12 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
 }
 
 INTERNAL void
-DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, f32 a = 1.0f) {
+DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec4 color) {
+    f32 r{ color.r };
+    f32 g{ color.g };
+    f32 b{ color.b };
+    f32 a{ color.a };
+
     i32 roundedMinX{ RoundF32ToI32(min.x) };
     i32 roundedMinY{ RoundF32ToI32(min.y) };
     i32 roundedMaxX{ RoundF32ToI32(max.x) };
@@ -339,8 +344,8 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, 
     }
 
     // AA RR GG BB
-    const i32 color{ (RoundF32ToI32(a * 255.0f) << 24) | (RoundF32ToI32(r * 255.0f) << 16) |
-                     (RoundF32ToI32(g * 255.0f) << 8) | (RoundF32ToI32(b * 255.0f) << 0) };
+    const i32 roundedColor{ (RoundF32ToI32(a * 255.0f) << 24) | (RoundF32ToI32(r * 255.0f) << 16) |
+                            (RoundF32ToI32(g * 255.0f) << 8) | (RoundF32ToI32(b * 255.0f) << 0) };
 
     u8* memory{ static_cast<u8*>(buff->memory) };
     u8* row{ memory + (roundedMinX * bitmap_Bytes_Per_Pixel) + (roundedMinY * buff->pitch) };
@@ -349,7 +354,7 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b, 
         // Not including fill pixel
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            *pixel++ = color;
+            *pixel++ = roundedColor;
         }
 
         row += buff->pitch;
@@ -466,7 +471,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                     f32 tFarMap{ 0.0f };
                     if (tEnvMap < -0.5f) {
                         farMap = bottom;
-                        tFarMap = (tEnvMap + 1.0f) * 2;
+                        tFarMap = 1.0f - ((tEnvMap + 1.0f) * 2);
                     } else if (tEnvMap > 0.5f) {
                         farMap = top;
                         tFarMap = (tEnvMap - 0.5f) * 2;
@@ -596,7 +601,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             baseAddress += sizeof(*entry);
 
             DrawRect(outputTarget, Vec2{}, Vec2{ outputTarget->width, outputTarget->height },
-                     entry->color.r, entry->color.g, entry->color.b, entry->color.a);
+                     entry->color);
         } break;
         case RenderGroupEntryType_RenderEntryRect: {
             auto* entry{ reinterpret_cast<RenderEntryRect*>(data) };
@@ -604,8 +609,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
 
             const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
 
-            DrawRect(outputTarget, pos, pos + entry->dim, entry->color.r, entry->color.g,
-                     entry->color.b);
+            DrawRect(outputTarget, pos, pos + entry->dim, entry->color);
         } break;
         case RenderGroupEntryType_RenderEntryBitmap: {
             auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
@@ -625,13 +629,13 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             const Vec2 dim{ 2, 2 };
             const Vec4 color{ 1, 1, 0, 1 };
             Vec2 pos{ entry->origin };
-            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            DrawRect(outputTarget, pos - dim, pos + dim, color);
             pos = entry->origin + entry->xAxis;
-            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            DrawRect(outputTarget, pos - dim, pos + dim, color);
             pos = entry->origin + entry->yAxis;
-            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            DrawRect(outputTarget, pos - dim, pos + dim, color);
             pos = entry->origin + entry->xAxis + entry->yAxis;
-            DrawRect(outputTarget, pos - dim, pos + dim, color.r, color.g, color.b);
+            DrawRect(outputTarget, pos - dim, pos + dim, color);
 
             DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color,
                            entry->texture, entry->normalMap, entry->top, entry->middle,

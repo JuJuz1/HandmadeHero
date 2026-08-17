@@ -30,17 +30,12 @@
 
 #include "handmade_input.h"
 
+#include "handmade_render_group.h"
+
 GLOBAL const i32 tiles_Per_Width{ 17 };
 GLOBAL const i32 tiles_Per_Height{ 9 };
 
 GLOBAL const i32 bitmap_Bytes_Per_Pixel{ 4 };
-
-struct LoadedBitmapInfo {
-    void* memory;
-    i32 width;
-    i32 height;
-    i32 pitch;
-};
 
 struct HeroBitmaps {
     LoadedBitmapInfo head;
@@ -90,6 +85,12 @@ struct TransientState {
     i32 groundBuffCount;
     LoadedBitmapInfo groundBitmapTemplate;
     GroundBuff* groundBuffs;
+
+    // 0 bottom, 1 middle, 2 top
+    Array<EnvironmentMap, 3> envMaps;
+    i32 envMapWidth;
+    i32 envMapHeight;
+
     bool32 isInitialized;
 };
 
@@ -120,7 +121,6 @@ struct GameState {
     Array<HeroBitmaps, 4> heroBitmaps;
     LoadedBitmapInfo background;
     LoadedBitmapInfo tree;
-    LoadedBitmapInfo treeNormal;
     LoadedBitmapInfo shadow;
 
     LoadedBitmapInfo stairwell;
@@ -148,6 +148,9 @@ struct GameState {
     bool32 showCollisionBoxes;
     bool32 allowUnlimitedJumps;
     bool32 requestFullGameReset; // Full game reset
+
+    LoadedBitmapInfo testDiffuse;
+    LoadedBitmapInfo testNormal;
 };
 
 /// Here we can put functions which many other files need to call ///

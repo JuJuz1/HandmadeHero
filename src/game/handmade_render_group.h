@@ -1,8 +1,15 @@
 #ifndef HANDMADE_RENDER_GROUP_H
 #define HANDMADE_RENDER_GROUP_H
 
+struct LoadedBitmapInfo {
+    void* memory;
+    i32 width;
+    i32 height;
+    i32 pitch;
+};
+
 struct EnvironmentMap {
-    Array<LoadedBitmapInfo*, 4> lod;
+    Array<LoadedBitmapInfo, 4> lod;
 };
 
 struct RenderBasis {

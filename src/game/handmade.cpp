@@ -1032,9 +1032,27 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             groundBuff->pos = NullWorldPos();
         }
 
-        gameState->treeNormal = MakeEmptyBitmap(&tranState->tranArena, gameState->tree.width,
-                                                gameState->tree.height, false);
-        MakeSphereNormalMap(&gameState->treeNormal, 0.0f);
+        gameState->testDiffuse = MakeEmptyBitmap(&tranState->tranArena, 256, 256, false);
+        DrawRect(&gameState->testDiffuse, Vec2{},
+                 Vec2{ gameState->testDiffuse.width, gameState->testDiffuse.height },
+                 Vec4{ 0.5, 0.5, 0.5, 1 });
+        gameState->testNormal = MakeEmptyBitmap(&tranState->tranArena, gameState->testDiffuse.width,
+                                                gameState->testDiffuse.height, false);
+        MakeSphereNormalMap(&gameState->testNormal, 0.0f);
+
+        tranState->envMapWidth = 512;
+        tranState->envMapHeight = 256;
+
+        for (i32 i{}; i < tranState->envMaps.size; ++i) {
+            auto* map{ &tranState->envMaps[i] };
+            i32 width{ tranState->envMapWidth };
+            i32 height{ tranState->envMapHeight };
+            for (i32 lodIndex{}; lodIndex < map->lod.size; ++lodIndex) {
+                map->lod[lodIndex] = MakeEmptyBitmap(&tranState->tranArena, width, height, false);
+                width >>= 1;
+                height >>= 1;
+            }
+        }
 
         tranState->isInitialized = true;
     }
@@ -1210,7 +1228,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //DrawRect(drawBuff, Vec2{},
     //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
     //         0.0f, 1.0f);
-    const Vec4 clearColor{ 0.5f, 0.5f, 0.5f, 1.0f };
+    const Vec4 clearColor{ 0.25f, 0.25f, 0.25f, 1.0f };
     ScreenClear(renderGroup, clearColor);
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
@@ -1577,6 +1595,35 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT("\n");
 #endif
 
+    // @Debug
+    {
+        Vec4 mapColor[]{
+            { 1, 0, 0, 1 },
+            { 0, 1, 0, 1 },
+            { 0, 0, 1, 1 },
+        };
+
+        for (i32 mapIndex{}; mapIndex < tranState->envMaps.size; ++mapIndex) {
+            auto* map{ &tranState->envMaps[mapIndex] };
+            auto* lod{ &map->lod[0] };
+            i32 checkerWidth{ 16 };
+            i32 checkerHeight{ 16 };
+            bool32 rowCheckerOn{};
+            for (i32 y{}; y < lod->height; y += checkerHeight) {
+                bool32 checkerOn{ rowCheckerOn };
+                for (i32 x{}; x < lod->width; x += checkerWidth) {
+                    Vec4 color{ checkerOn ? mapColor[mapIndex] : Vec4{ 0, 0, 0, 1 } };
+                    Vec2 minPos{ x, y };
+                    Vec2 maxPos{ minPos + Vec2{ checkerWidth, checkerHeight } };
+                    DrawRect(lod, minPos, maxPos, color);
+                    checkerOn = !checkerOn;
+                }
+
+                rowCheckerOn = !rowCheckerOn;
+            }
+        }
+    }
+
     // @Remove
     gameState->time += deltaTime;
     const f32 angle{ //0.0f
@@ -1590,13 +1637,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const Vec2 origin{ screenCenter };
 #if 0
-    const Vec2 xAxis{ Vec2{ Cos(angle * 3.0f), Sin(angle * 3.0f) } * 150.0f };
+    Vec2 xAxis{ Vec2{ Cos(angle * 3.0f), Sin(angle * 3.0f) } * 150.0f };
     //  (50 + (Cos(angle * 2.2f) * 50.0f)) }; // Scale via time
-    const Vec2 yAxis{ Perp(xAxis) };
+    Vec2 yAxis{ Perp(xAxis) };
 #else
     const f32 axisSize{ 150 };
-    const Vec2 xAxis{ axisSize, 0 };
-    const Vec2 yAxis{ 0, axisSize };
+    Vec2 xAxis{ axisSize, 0 };
+    Vec2 yAxis{ 0, axisSize };
     // Wiggle
 //const Vec2 origin{ screenCenter + Vec2{ Sin(angle) * 10, 0.0f } };
 //const Vec2 xAxis{ (drawBuff->width * 0.5f) + 1, 0 };
@@ -1613,7 +1660,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 #endif
     auto* coordinateSystem{ PushCoordinateSystem(
         renderGroup, Vec2{ disp, 0 } + origin - 0.5f * xAxis - 0.5f * yAxis, xAxis, yAxis,
-        coordinateColor, &gameState->tree, &gameState->treeNormal, nullptr, nullptr, nullptr) };
+        coordinateColor, &gameState->testDiffuse, &gameState->testNormal, &tranState->envMaps[2],
+        &tranState->envMaps[1], &tranState->envMaps[0]) };
     //i32 i{};
     //for (f32 x{}; x < 1.0f; x += 0.25f) {
     //    for (f32 y{}; y < 1.0f; y += 0.25f) {
@@ -1621,7 +1669,20 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //    }
     //}
 
-    //PushCoordinateSystem(renderGroup, origin, xAxis, yAxis, Vec4{ 1, 1, 0, 1 });
+    // @Debug
+    {
+        Vec2 mapPos{};
+        for (i32 mapIndex{}; mapIndex < tranState->envMaps.size; ++mapIndex) {
+            auto* map{ &tranState->envMaps[mapIndex] };
+            auto* lod{ &map->lod[0] };
+
+            xAxis = Vec2{ lod->width, 0 } * 0.5f;
+            yAxis = Vec2{ 0, lod->height } * 0.5f;
+            PushCoordinateSystem(renderGroup, mapPos, xAxis, yAxis, Vec4::ONE, lod, nullptr,
+                                 nullptr, nullptr, nullptr);
+            mapPos += yAxis + Vec2{ 0, 6.0f };
+        }
+    }
 
     EndSim(simRegion, gameState);
     EndTempMemory(simMemory);
