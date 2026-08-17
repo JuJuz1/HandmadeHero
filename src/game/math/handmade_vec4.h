@@ -51,6 +51,10 @@ struct Vec4 {
         : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) }, z{ static_cast<f32>(z_) },
           w{ static_cast<f32>(w_) } {}
 
+    Vec4(Vec3 vec, f32 w_)
+        : x{ static_cast<f32>(vec.x) }, y{ static_cast<f32>(vec.y) }, z{ static_cast<f32>(vec.z) },
+          w{ static_cast<f32>(w_) } {}
+
     NODISCARD
     inline f32& operator[](i32 i);
 

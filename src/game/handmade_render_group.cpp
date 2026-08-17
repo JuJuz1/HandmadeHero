@@ -116,6 +116,14 @@ ScreenClear(RenderGroup* group, Vec4 color) {
 }
 
 INTERNAL void
+PushSaturation(RenderGroup* group, f32 saturation) {
+    auto* entry{ PushRenderElement(group, RenderEntrySaturation) };
+    if (entry) {
+        entry->saturation = saturation;
+    }
+}
+
+INTERNAL void
 PushCollisionBox(RenderGroup* group, SimEntityCollisionVolumeGroup* collision, Vec4 color,
                  f32 scale) {
     PushRect(group, collision->totalVolume.offsetPos.xy, 0.0f,
@@ -241,6 +249,38 @@ SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 normal, f32 roughness, Environment
     Vec3 result{ SRGBBilinearBlend(sample, fX, fY).xyz };
 
     return result;
+}
+
+INTERNAL void
+ChangeSaturation(LoadedBitmapInfo* buff, f32 saturation) {
+    u8* destRow{ static_cast<u8*>(buff->memory) };
+
+    for (i32 y{}; y < buff->height; ++y) {
+        u32* destPtr{ reinterpret_cast<u32*>(destRow) };
+        for (i32 x{}; x < buff->width; ++x) {
+            Vec4 dest{ static_cast<f32>((*destPtr >> 16) & 0xFF),
+                       static_cast<f32>((*destPtr >> 8) & 0xFF),
+                       static_cast<f32>((*destPtr >> 0) & 0xFF),
+                       static_cast<f32>((*destPtr >> 24) & 0xFF) };
+            dest = SRGB255ToLinear1(dest);
+            //const f32 destRelAlpha{ dest.a / 255.0f };
+
+            const f32 avg{ (1.0f / 3.0f) * (dest.r + dest.g + dest.b) };
+            const Vec3 delta{ dest.r - avg, dest.g - avg, dest.b - avg };
+
+            Vec4 result{ Vec3{ avg, avg, avg } + (saturation * delta), dest.a };
+            result = Linear1ToSRGB255(result);
+
+            *destPtr = { (TruncateF32ToU32(result.a + 0.5f) << 24) |
+                         (TruncateF32ToU32(result.r + 0.5f) << 16) |
+                         (TruncateF32ToU32(result.g + 0.5f) << 8) |
+                         (TruncateF32ToU32(result.b + 0.5f) << 0) };
+
+            ++destPtr;
+        }
+
+        destRow += buff->pitch;
+    }
 }
 
 INTERNAL void
@@ -651,6 +691,13 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
                          entry->color.b);
             }
 #endif
+        } break;
+
+        case RenderGroupEntryType_RenderEntrySaturation: {
+            auto* entry{ reinterpret_cast<RenderEntrySaturation*>(data) };
+            baseAddress += sizeof(*entry);
+
+            ChangeSaturation(outputTarget, entry->saturation);
         } break;
 
             INVALID_DEFAULT_CASE;

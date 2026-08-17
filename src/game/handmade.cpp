@@ -1693,6 +1693,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     /// Rendering
 
+    // Funny stuff
+#if 0
+    PushSaturation(renderGroup, 0.5f + 0.5f * Sin(gameState->time * 7.0f));
+#endif
+
     RenderGroupToOutput(renderGroup, drawBuff, gameState);
 }
 

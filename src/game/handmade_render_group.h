@@ -22,6 +22,7 @@ enum RenderGroupEntryType {
     RenderGroupEntryType_RenderEntryRect,
     RenderGroupEntryType_RenderEntryBitmap,
     RenderGroupEntryType_RenderEntryCoordinateSystem,
+    RenderGroupEntryType_RenderEntrySaturation,
 };
 
 // Callers don't have to know about this now
@@ -65,6 +66,10 @@ struct RenderEntryCoordinateSystem {
     EnvironmentMap* bottom;
 
     //Array<Vec2, 16> points;
+};
+
+struct RenderEntrySaturation {
+    f32 saturation{};
 };
 
 struct RenderGroup {
