@@ -69,7 +69,7 @@ struct RenderEntryCoordinateSystem {
 };
 
 struct RenderEntrySaturation {
-    f32 saturation{};
+    f32 saturation;
 };
 
 struct RenderGroup {

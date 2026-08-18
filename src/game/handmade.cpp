@@ -412,7 +412,10 @@ MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
             const f32 nY{ (2.0f * bitmapUV.y) - 1.0f };
 
             const f32 rootTerm{ 1.0f - SquareF32(nX) - SquareF32(nY) };
-            Vec3 normal{ 0, 0, 1 };
+            const f32 tilt{ 1.0f / Sqrt(2) }; // 0,707...
+            // We need the tilt because if we have {0, 1, 1} the reflection points straight up. In
+            // that case we can never see the reflected vector
+            Vec3 normal{ 0, tilt, tilt };
             f32 nZ{};
             if (rootTerm >= 0.0f) {
                 nZ = Sqrt(rootTerm);
@@ -1629,7 +1632,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 angle{ //0.0f
                      gameState->time * 0.1f
     };
-#if 0
+#if 1
     const f32 disp{ Cos(angle * 5.0f) * 100.0f };
 #else
     const f32 disp{ 0 };
@@ -1685,9 +1688,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 
     EndSim(simRegion, gameState);
+
     EndTempMemory(simMemory);
     EndTempMemory(renderMemory); // Have to be in this order, not that great in the long run...
-
     ArenaCheck(&tranState->tranArena);
     ArenaCheck(&gameState->worldArena);
 

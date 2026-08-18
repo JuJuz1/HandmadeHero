@@ -226,15 +226,28 @@ BilinearSampleFromTex(LoadedBitmapInfo* texture, i32 x, i32 y) {
 
 NODISCARD
 INTERNAL inline Vec3
-SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 normal, f32 roughness, EnvironmentMap* map) {
+SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 sampleDir, f32 roughness, EnvironmentMap* map) {
     ASSERT(roughness >= 0.0f && roughness <= 1.0f);
     const i32 lodIndex{ RoundF32ToI32(roughness * (map->lod.size - 1)) };
     ASSERT(lodIndex < map->lod.size);
 
     auto* lod{ &map->lod[lodIndex] };
 
-    const f32 texelX{ lod->width / 2 + (normal.x * lod->width / 2) };
-    const f32 texelY{ lod->height / 2 + (normal.y * lod->height / 2) };
+    ASSERT(sampleDir.y > 0.0f);
+    const f32 distFromMapInZ{ 1.0f };
+    const f32 UVsPerMeter{ 0.01f }; // TODO: figure out
+    const f32 coefficient{ (UVsPerMeter * distFromMapInZ) / sampleDir.y };
+    const Vec2 offset{ Vec2{ sampleDir.x, sampleDir.z } * coefficient };
+
+    Vec2 uv{ screenSpaceUV + offset };
+    uv.x = Clamp01(uv.x);
+    uv.y = Clamp01(uv.y);
+
+    f32 texelX{ uv.x * static_cast<f32>(lod->width - 2) };
+    f32 texelY{ uv.y * static_cast<f32>(lod->height - 2) };
+
+    //const f32 texelX{ lod->width / 2 + (sampleDir.x * lod->width / 2) };
+    //const f32 texelY{ lod->height / 2 + (sampleDir.y * lod->height / 2) };
 
     // @Duplicate
     const i32 roundedX{ static_cast<i32>(texelX) };
@@ -413,11 +426,17 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                       (RoundF32ToU32(color.g * 255.0f) << 8) |
                       (RoundF32ToU32(color.b * 255.0f) << 0) };
 
-    i32 minX{ buff->width - 1 };
-    i32 minY{ buff->height - 1 };
+    const i32 widthMax{ buff->width - 1 };
+    const i32 heightMax{ buff->height - 1 };
+    const f32 widthMaxInv{ 1.0f / static_cast<f32>(buff->width - 1) };
+    const f32 heightMaxInv{ 1.0f / static_cast<f32>(buff->height - 1) };
+
+    i32 minX{ widthMax };
+    i32 minY{ heightMax };
     i32 maxX{};
     i32 maxY{};
 
+#if 1
     Array<Vec2, 4> points{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
     for (i32 i{}; i < points.size; ++i) {
         const i32 floorX{ FloorF32ToI32(points[i].x) };
@@ -438,6 +457,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
             maxY = ceilY;
         }
     }
+#endif
 
     if (minX < 0) {
         minX = 0;
@@ -506,24 +526,28 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                     normal.xyz = Normalize(normal.xyz);
 
 #if 1
+                    // Assumed to always be {0, 0, 1}, so we can simplify
+                    Vec3 bounceDir{ 2.0f * normal.z * normal.xyz };
+                    bounceDir.z -= 1.0f;
+
                     EnvironmentMap* farMap{};
-                    f32 tEnvMap{ normal.y };
-                    f32 tFarMap{ 0.0f };
+                    f32 tEnvMap{ bounceDir.y };
+                    f32 tFarMap{};
                     if (tEnvMap < -0.5f) {
                         farMap = bottom;
                         tFarMap = 1.0f - ((tEnvMap + 1.0f) * 2);
+                        bounceDir.y = -bounceDir.y;
                     } else if (tEnvMap > 0.5f) {
                         farMap = top;
                         tFarMap = (tEnvMap - 0.5f) * 2;
                     }
 
-                    const Vec2 screenSpaceUV{ static_cast<f32>(x) / static_cast<f32>(maxX),
-                                              static_cast<f32>(y) / static_cast<f32>(maxY) };
+                    const Vec2 screenSpaceUV{ x * widthMaxInv, y * heightMaxInv };
                     Vec3 lightColor{
                         //SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w, middle)
                     };
                     if (farMap) {
-                        const Vec3 farMapColor{ SampleEnvironmentMap(screenSpaceUV, normal.xyz,
+                        const Vec3 farMapColor{ SampleEnvironmentMap(screenSpaceUV, bounceDir,
                                                                      normal.w, farMap) };
                         lightColor = Lerp(lightColor, tFarMap, farMapColor);
                     }
