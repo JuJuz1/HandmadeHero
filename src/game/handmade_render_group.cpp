@@ -226,22 +226,29 @@ BilinearSampleFromTex(LoadedBitmapInfo* texture, i32 x, i32 y) {
 
 NODISCARD
 INTERNAL inline Vec3
-SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 sampleDir, f32 roughness, EnvironmentMap* map) {
+SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 sampleDir, f32 roughness, EnvironmentMap* map,
+                     f32 distFromMapInZ) {
+    /*
+       screenSpaceUV tells us where they ray is being cast from in normalized screen coordinates
+
+       sampleDir tells us what direction the cast is going, doesn't have to be normalized but y
+       needs to be > 0
+
+       roughness tells us which LODs of the map we sample from
+    */
+
     ASSERT(roughness >= 0.0f && roughness <= 1.0f);
     const i32 lodIndex{ RoundF32ToI32(roughness * (map->lod.size - 1)) };
     ASSERT(lodIndex < map->lod.size);
 
     auto* lod{ &map->lod[lodIndex] };
 
-    ASSERT(sampleDir.y > 0.0f);
-    const f32 distFromMapInZ{ 1.0f };
     const f32 UVsPerMeter{ 0.01f }; // TODO: figure out
     const f32 coefficient{ (UVsPerMeter * distFromMapInZ) / sampleDir.y };
     const Vec2 offset{ Vec2{ sampleDir.x, sampleDir.z } * coefficient };
 
     Vec2 uv{ screenSpaceUV + offset };
-    uv.x = Clamp01(uv.x);
-    uv.y = Clamp01(uv.y);
+    uv = Clamp01(uv);
 
     f32 texelX{ uv.x * static_cast<f32>(lod->width - 2) };
     f32 texelY{ uv.y * static_cast<f32>(lod->height - 2) };
@@ -475,6 +482,12 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     const f32 xAxisLenSqInv{ 1.0f / LengthSq(xAxis) };
     const f32 yAxisLenSqInv{ 1.0f / LengthSq(yAxis) };
 
+    f32 xAxisLen{ Length(xAxis) };
+    f32 yAxisLen{ Length(yAxis) };
+    Vec2 nXCoefficient{ (yAxisLen / xAxisLen) * xAxis };
+    Vec2 nYCoefficient{ (xAxisLen / yAxisLen) * yAxis };
+    f32 nZScale{ 0.5f * (xAxisLen + yAxisLen) };
+
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
 
@@ -522,7 +535,11 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
 
                     Vec4 normal{ Lerp(Lerp(normalA, fX, normalB), fY, Lerp(normalC, fX, normalD)) };
                     normal = UnscaleAndBiasNormal(normal);
-                    // TODO: needed?
+
+                    // Rotate the normals based on axises
+                    normal.xy = (normal.x * nXCoefficient) + (normal.y * nYCoefficient);
+                    // Compensate the size change for z
+                    normal.z *= nZScale;
                     normal.xyz = Normalize(normal.xyz);
 
 #if 1
@@ -530,13 +547,17 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                     Vec3 bounceDir{ 2.0f * normal.z * normal.xyz };
                     bounceDir.z -= 1.0f;
 
+                    // TODO: support top-down view and sideways
+                    bounceDir.z = -bounceDir.z;
+
                     EnvironmentMap* farMap{};
+                    f32 distFromMapInZ{ 2.0f };
                     f32 tEnvMap{ bounceDir.y };
                     f32 tFarMap{};
                     if (tEnvMap < -0.5f) {
                         farMap = bottom;
                         tFarMap = 1.0f - ((tEnvMap + 1.0f) * 2);
-                        bounceDir.y = -bounceDir.y;
+                        distFromMapInZ = -distFromMapInZ;
                     } else if (tEnvMap > 0.5f) {
                         farMap = top;
                         tFarMap = (tEnvMap - 0.5f) * 2;
@@ -547,8 +568,8 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                         //SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w, middle)
                     };
                     if (farMap) {
-                        const Vec3 farMapColor{ SampleEnvironmentMap(screenSpaceUV, bounceDir,
-                                                                     normal.w, farMap) };
+                        const Vec3 farMapColor{ SampleEnvironmentMap(
+                            screenSpaceUV, bounceDir, normal.w, farMap, distFromMapInZ) };
                         lightColor = Lerp(lightColor, tFarMap, farMapColor);
                     }
 

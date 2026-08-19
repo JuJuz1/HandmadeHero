@@ -5,7 +5,24 @@
 
 struct Vec4 {
     // Very cumbersome and bug-attracting stuff...
+
+    // TODO: these could be same as Vec3's:
+    // Vec2 xy;
+    // f32 ignored0;
+    // Instead of this madness
     union {
+        struct {
+            union {
+                Vec3 rgb;
+
+                struct {
+                    f32 r, g, b;
+                };
+            };
+
+            f32 a;
+        };
+
         struct {
             union {
                 Vec3 xyz;
@@ -20,14 +37,40 @@ struct Vec4 {
 
         struct {
             union {
-                Vec3 rgb;
+                Vec2 xy;
 
                 struct {
-                    f32 r, g, b;
+                    f32 x, y;
                 };
             };
 
-            f32 a;
+            f32 z, w;
+        };
+
+        struct {
+            f32 x;
+
+            union {
+                Vec2 yz;
+
+                struct {
+                    f32 y, z;
+                };
+            };
+
+            f32 w;
+        };
+
+        struct {
+            f32 x, y;
+
+            union {
+                Vec2 zw;
+
+                struct {
+                    f32 z, w;
+                };
+            };
         };
 
         f32 e[4];

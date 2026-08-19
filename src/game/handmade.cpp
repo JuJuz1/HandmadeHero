@@ -1639,7 +1639,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 #endif
 
     const Vec2 origin{ screenCenter };
-#if 0
+#if 1
     Vec2 xAxis{ Vec2{ Cos(angle * 3.0f), Sin(angle * 3.0f) } * 150.0f };
     //  (50 + (Cos(angle * 2.2f) * 50.0f)) }; // Scale via time
     Vec2 yAxis{ Perp(xAxis) };
