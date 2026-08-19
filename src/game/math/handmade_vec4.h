@@ -1,7 +1,7 @@
 #ifndef HANDMADE_VEC4_H
 #define HANDMADE_VEC4_H
 
-#include "game/handmade.h"
+//#include "game/handmade.h"
 
 struct Vec4 {
     // Very cumbersome and bug-attracting stuff...
@@ -9,7 +9,8 @@ struct Vec4 {
     // TODO: these could be same as Vec3's:
     // Vec2 xy;
     // f32 ignored0;
-    // Instead of this madness
+    // Instead of this madness, also doesn't work on clang...
+#if 0
     union {
         struct {
             union {
@@ -71,6 +72,53 @@ struct Vec4 {
                     f32 z, w;
                 };
             };
+        };
+
+        f32 e[4];
+    };
+#endif
+
+    union {
+        struct {
+            f32 x;
+            f32 y;
+            f32 z;
+            f32 w;
+        };
+
+        struct {
+            f32 r;
+            f32 g;
+            f32 b;
+            f32 a;
+        };
+
+        struct {
+            Vec3 rgb;
+            f32 ignored0;
+        };
+
+        struct {
+            Vec3 xyz;
+            f32 ignored1;
+        };
+
+        struct {
+            Vec2 xy;
+            f32 ignored2;
+            f32 ignored3;
+        };
+
+        struct {
+            f32 ignored4;
+            Vec2 yz;
+            f32 ignored5;
+        };
+
+        struct {
+            f32 ignored6;
+            f32 ignored7;
+            Vec2 zw;
         };
 
         f32 e[4];
