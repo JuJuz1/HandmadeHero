@@ -10,6 +10,7 @@ struct LoadedBitmapInfo {
 
 struct EnvironmentMap {
     Array<LoadedBitmapInfo, 4> lod;
+    f32 zPos;
 };
 
 struct RenderBasis {

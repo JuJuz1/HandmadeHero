@@ -435,6 +435,40 @@ MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
 }
 
 INTERNAL void
+MakeSphereDiffuseMap(LoadedBitmapInfo* bitmap, f32 cx = 1.0f, f32 cy = 1.0f) {
+    const f32 widthInv{ 1.0f / static_cast<f32>(bitmap->width - 1) };
+    const f32 heightInv{ 1.0f / static_cast<f32>(bitmap->height - 1) };
+
+    u8* row{ static_cast<u8*>(bitmap->memory) };
+    for (i32 y{}; y < bitmap->height; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{}; x < bitmap->width; ++x) {
+            const Vec2 bitmapUV{ widthInv * static_cast<f32>(x), heightInv * static_cast<f32>(y) };
+
+            const f32 nx{ cx * (2.0f * bitmapUV.x - 1.0f) };
+            const f32 ny{ cy * (2.0f * bitmapUV.y - 1.0f) };
+
+            const f32 rootTerm{ 1.0f - nx * nx - ny * ny };
+
+            f32 alpha{};
+            if (rootTerm >= 0.0f) {
+                alpha = 1.0f;
+            }
+
+            const Vec3 baseColor{};
+            alpha *= 255.0f;
+            const Vec4 color{ alpha * baseColor.r, alpha * baseColor.g, alpha * baseColor.b,
+                              alpha };
+
+            *pixel++ = (RoundF32ToU32(color.a) << 24) | (RoundF32ToU32(color.r) << 16) |
+                       (RoundF32ToU32(color.g) << 8) | (RoundF32ToU32(color.b) << 0);
+        }
+
+        row += bitmap->pitch;
+    }
+}
+
+INTERNAL void
 FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* groundBuff,
                 const WorldPosition* chunkPos) {
     ASSERT(chunkPos);
@@ -1026,11 +1060,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         tranState->groundBuffs =
             PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
 
+        tranState->groundBitmapTemplate =
+            MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
+        ASSERT(tranState->groundBitmapTemplate.memory);
+
         for (i32 i{}; i < tranState->groundBuffCount; ++i) {
             auto* groundBuff{ &tranState->groundBuffs[i] };
-            tranState->groundBitmapTemplate =
-                MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
-            ASSERT(tranState->groundBitmapTemplate.memory);
             groundBuff->bitmap = tranState->groundBitmapTemplate;
             groundBuff->pos = NullWorldPos();
         }
@@ -1042,6 +1077,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         gameState->testNormal = MakeEmptyBitmap(&tranState->tranArena, gameState->testDiffuse.width,
                                                 gameState->testDiffuse.height, false);
         MakeSphereNormalMap(&gameState->testNormal, 0.0f);
+        MakeSphereDiffuseMap(&gameState->testDiffuse);
 
         tranState->envMapWidth = 512;
         tranState->envMapHeight = 256;
@@ -1626,6 +1662,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
         }
     }
+
+    // Position maps
+    tranState->envMaps[0].zPos = -1.5f;
+    tranState->envMaps[1].zPos = 0.0f;
+    tranState->envMaps[2].zPos = 1.5f;
 
     // @Remove
     gameState->time += deltaTime;

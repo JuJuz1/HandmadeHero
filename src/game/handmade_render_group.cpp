@@ -227,46 +227,50 @@ BilinearSampleFromTex(LoadedBitmapInfo* texture, i32 x, i32 y) {
 NODISCARD
 INTERNAL inline Vec3
 SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 sampleDir, f32 roughness, EnvironmentMap* map,
-                     f32 distFromMapInZ) {
+                     f32 distanceFromMapInZ) {
     /*
-       screenSpaceUV tells us where they ray is being cast from in normalized screen coordinates
+       screenSpaceUV tells us where the ray is being cast from in normalized screen coordinates
 
-       sampleDir tells us what direction the cast is going, doesn't have to be normalized but y
-       needs to be > 0
+       sampleDir tells us what direction the cast is going, doesn't have to be normalized
 
        roughness tells us which LODs of the map we sample from
+
+       distanceFromMapInZ tells us how far the map is from the sample point in Z, in meters
     */
 
     ASSERT(roughness >= 0.0f && roughness <= 1.0f);
-    const i32 lodIndex{ RoundF32ToI32(roughness * (map->lod.size - 1)) };
+    ASSERT(sampleDir.y > 0.0f);
+
+    const i32 lodIndex{ RoundF32ToI32(roughness * static_cast<f32>(map->lod.size - 1)) };
     ASSERT(lodIndex < map->lod.size);
 
     auto* lod{ &map->lod[lodIndex] };
 
-    const f32 UVsPerMeter{ 0.01f }; // TODO: figure out
-    const f32 coefficient{ (UVsPerMeter * distFromMapInZ) / sampleDir.y };
+    // Compute the distance to the map and the scaling factor from meters to UVs
+    const f32 uvsPerMeter{
+        0.1f
+    }; // TODO: parameterize this, and should differ for X/Y based on map
+    const f32 coefficient{ (uvsPerMeter * distanceFromMapInZ) / sampleDir.y };
     const Vec2 offset{ Vec2{ sampleDir.x, sampleDir.z } * coefficient };
 
     Vec2 uv{ screenSpaceUV + offset };
     uv = Clamp01(uv);
 
-    f32 texelX{ uv.x * static_cast<f32>(lod->width - 2) };
-    f32 texelY{ uv.y * static_cast<f32>(lod->height - 2) };
+    // Bilinear sample again
+    const f32 texelX{ uv.x * static_cast<f32>(lod->width - 2) };
+    const f32 texelY{ uv.y * static_cast<f32>(lod->height - 2) };
 
-    //const f32 texelX{ lod->width / 2 + (sampleDir.x * lod->width / 2) };
-    //const f32 texelY{ lod->height / 2 + (sampleDir.y * lod->height / 2) };
-
-    // @Duplicate
     const i32 roundedX{ static_cast<i32>(texelX) };
     const i32 roundedY{ static_cast<i32>(texelY) };
+
     ASSERT(roundedX >= 0 && roundedX < lod->width);
     ASSERT(roundedY >= 0 && roundedY < lod->height);
 
-    const f32 fX{ static_cast<f32>(texelX - roundedX) };
-    const f32 fY{ static_cast<f32>(texelY - roundedY) };
+    const f32 fX{ texelX - static_cast<f32>(roundedX) };
+    const f32 fY{ texelY - static_cast<f32>(roundedY) };
 
     auto sample{ BilinearSampleFromTex(lod, roundedX, roundedY) };
-    Vec3 result{ SRGBBilinearBlend(sample, fX, fY).xyz };
+    const Vec3 result{ SRGBBilinearBlend(sample, fX, fY).xyz };
 
     return result;
 }
@@ -424,7 +428,7 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec4 color) {
 INTERNAL void
 DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
                LoadedBitmapInfo* texture, LoadedBitmapInfo* normalMap, EnvironmentMap* top,
-               EnvironmentMap* middle, EnvironmentMap* bottom) {
+               EnvironmentMap* middle, EnvironmentMap* bottom, f32 pixelsToMeters) {
     // Premultiply color
     color.rgb *= color.a;
     // AA RR GG BB
@@ -488,6 +492,10 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     Vec2 nYCoefficient{ (xAxisLen / yAxisLen) * yAxis };
     f32 nZScale{ 0.5f * (xAxisLen + yAxisLen) };
 
+    const f32 originZ{};
+    const f32 originY{ (origin + 0.5f * xAxis + 0.5f * yAxis).y };
+    const f32 fixedCastY{ originY * heightMaxInv };
+
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
 
@@ -550,26 +558,34 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                     // TODO: support top-down view and sideways
                     bounceDir.z = -bounceDir.z;
 
+                    const Vec2 screenSpaceUV{ x * widthMaxInv, fixedCastY };
+                    const f32 zDiff{ pixelsToMeters * (static_cast<f32>(y) - originY) };
+                    const f32 pZ{ originZ + zDiff };
+
                     EnvironmentMap* farMap{};
-                    f32 distFromMapInZ{ 2.0f };
-                    f32 tEnvMap{ bounceDir.y };
+                    const f32 tEnvMap{ bounceDir.y };
                     f32 tFarMap{};
+
                     if (tEnvMap < -0.5f) {
                         farMap = bottom;
-                        tFarMap = 1.0f - ((tEnvMap + 1.0f) * 2);
-                        distFromMapInZ = -distFromMapInZ;
+                        tFarMap = -1.0f - 2.0f * tEnvMap;
                     } else if (tEnvMap > 0.5f) {
                         farMap = top;
-                        tFarMap = (tEnvMap - 0.5f) * 2;
+                        tFarMap = 2.0f * (tEnvMap - 0.5f);
                     }
 
-                    const Vec2 screenSpaceUV{ x * widthMaxInv, y * heightMaxInv };
+                    tFarMap *= tFarMap;
+                    tFarMap *= tFarMap;
+
                     Vec3 lightColor{
-                        //SampleEnvironmentMap(screenSpaceUV, normal.xyz, normal.w, middle)
+                        // TODO: How do we sample from the middle map?
                     };
+
                     if (farMap) {
+                        const f32 distanceFromMapInZ{ farMap->zPos - pZ };
                         const Vec3 farMapColor{ SampleEnvironmentMap(
-                            screenSpaceUV, bounceDir, normal.w, farMap, distFromMapInZ) };
+                            screenSpaceUV, bounceDir, normal.w, farMap, distanceFromMapInZ) };
+
                         lightColor = Lerp(lightColor, tFarMap, farMapColor);
                     }
 
@@ -724,7 +740,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
 
             DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color,
                            entry->texture, entry->normalMap, entry->top, entry->middle,
-                           entry->bottom);
+                           entry->bottom, 1.0f / group->metersToPixels);
 
 #if 0
             for (i32 i{}; i < entry->points.size; ++i) {
