@@ -2,9 +2,10 @@
 set -euo pipefail
 
 # Basically a one-to-one copy of web_build.bat
+# MUST BE RUN FROM THE ROOT
 
 mkdir -p build/web
-pushd build/web
+pushd build/web > /dev/null
 
 useRealAssets=0
 
@@ -92,4 +93,4 @@ else
     cp ../../src/platform/web/web_handmade.h web_handmade.h
 fi
 
-popd
+popd > /dev/null

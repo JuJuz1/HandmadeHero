@@ -4,7 +4,7 @@ set -euo pipefail
 # MUST BE RUN FROM THE ROOT
 
 mkdir -p build
-pushd build
+pushd build > /dev/null
 
 # TODO: take a look at the optimization flags later
 # -O3 or 4? fpfastmath or similar, etc...
@@ -51,4 +51,5 @@ rm lock.tmp
 
 # Build platform
 clang++ $commonCompilerFlags ../src/platform/sdl/sdl_handmade.cpp -I ../src -o linux_handmade $sdl2
-popd
+
+popd > /dev/null
