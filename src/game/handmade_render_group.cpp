@@ -493,7 +493,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     f32 nZScale{ 0.5f * (xAxisLen + yAxisLen) };
 
     const f32 originZ{};
-    const f32 originY{ (origin + 0.5f * xAxis + 0.5f * yAxis).y };
+    const f32 originY{ (origin + (0.5f * xAxis) + (0.5f * yAxis)).y };
     const f32 fixedCastY{ originY * heightMaxInv };
 
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
@@ -716,12 +716,10 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
             baseAddress += sizeof(*entry);
 
-#if 0
             const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
 
             ASSERT(entry->bitmap);
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
-#endif
         } break;
         case RenderGroupEntryType_RenderEntryCoordinateSystem: {
             auto* entry{ reinterpret_cast<RenderEntryCoordinateSystem*>(data) };

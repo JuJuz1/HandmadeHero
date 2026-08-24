@@ -76,6 +76,12 @@ rem /wd4189 /wd4100
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4189 /wd4100
 
 set commonCompilerFlags=/MTd /Od /Zi
+rem TODO: make ASAN work
+rem /fsanitize=address
+rem if not exist ..\data\clang_rt.asan_dynamic-x86_64.dll (
+    rem copy ..\misc\clang_rt.asan_dynamic-x86_64.dll ..\data
+rem )
+
 set dllFlags=/LDd
 
 if "%1" == "rel" (

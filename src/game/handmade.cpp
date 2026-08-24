@@ -1060,13 +1060,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         tranState->groundBuffs =
             PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
 
-        tranState->groundBitmapTemplate =
-            MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
-        ASSERT(tranState->groundBitmapTemplate.memory);
-
         for (i32 i{}; i < tranState->groundBuffCount; ++i) {
             auto* groundBuff{ &tranState->groundBuffs[i] };
-            groundBuff->bitmap = tranState->groundBitmapTemplate;
+            groundBuff->bitmap =
+                MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
             groundBuff->pos = NullWorldPos();
         }
 
@@ -1272,6 +1269,32 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
+    /// Ground buffs
+    // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
+    // Is it because we don't want to lag 1 frame behind on these?
+
+#if 1
+    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
+        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+        ASSERT(groundBuff);
+        if (IsValidWorldPos(&groundBuff->pos)) {
+            //auto bitmap{ tranState->groundBitmapTemplate };
+            //bitmap.memory = groundBuff->memoryBitmap;
+            //ASSERT(bitmap.memory);
+            auto* bitmap{ &groundBuff->bitmap };
+            ASSERT(bitmap->memory);
+
+            const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
+            PushBitmap(renderGroup, bitmap, posDelta.xy, posDelta.z,
+                       Vec2{ bitmap->width * 0.5f, bitmap->height * 0.5f });
+            // We can just push the outline here as it overlaps with the just pushed ground buffer
+            // bitmaps, thickness is parametrized now
+            PushRectOutline(renderGroup, posDelta.xy, 0, world->chunkDimInMeters.xy,
+                            Vec4{ 1.0f, 1.0f, 0.0f, 1.0f }, 0.1f);
+        }
+    }
+#endif
+
     /// Drawing chunks
 
     const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
@@ -1279,6 +1302,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const Rect3 cameraBoundsInMeters{ RectCenterDim(
         Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
 
+#if 1
     {
         const WorldPosition minChunk{ MapIntoChunkSpace(
             world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
@@ -1334,6 +1358,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
         }
     }
+#endif
 
     // TODO: how big?
     const Vec3 simBoundsExpansion{ 15.0f, 15.0f, 15.0f };
@@ -1379,30 +1404,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height)
     //         }, 0.5f, 0.5f, 0.5f);
     //#endif
-
-    /// Ground buffs
-    // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
-    // Is it because we don't want to lag 1 frame behind on these?
-
-    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
-        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
-        ASSERT(groundBuff);
-        if (IsValidWorldPos(&groundBuff->pos)) {
-            //auto bitmap{ tranState->groundBitmapTemplate };
-            //bitmap.memory = groundBuff->memoryBitmap;
-            //ASSERT(bitmap.memory);
-            auto* bitmap{ &groundBuff->bitmap };
-            ASSERT(bitmap->memory);
-
-            const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
-            PushBitmap(renderGroup, bitmap, posDelta.xy, posDelta.z,
-                       Vec2{ bitmap->width * 0.5f, bitmap->height * 0.5f });
-            // We can just push the outline here as it overlaps with the just pushed ground buffer
-            // bitmaps, thickness is parametrized now
-            PushRectOutline(renderGroup, posDelta.xy, 0, world->chunkDimInMeters.xy,
-                            Vec4{ 1.0f, 1.0f, 0.0f, 1.0f }, 0.1f);
-        }
-    }
 
     /// Simulation
 
@@ -1634,6 +1635,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT("\n");
 #endif
 
+#if 0
     // @Debug
     {
         Vec4 mapColor[]{
@@ -1673,18 +1675,18 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const f32 angle{ //0.0f
                      gameState->time * 0.1f
     };
-#if 1
+#    if 1
     const f32 disp{ Cos(angle * 5.0f) * 100.0f };
-#else
+#    else
     const f32 disp{ 0 };
-#endif
+#    endif
 
     const Vec2 origin{ screenCenter };
-#if 1
+#    if 1
     Vec2 xAxis{ Vec2{ Cos(angle * 3.0f), Sin(angle * 3.0f) } * 150.0f };
     //  (50 + (Cos(angle * 2.2f) * 50.0f)) }; // Scale via time
     Vec2 yAxis{ Perp(xAxis) };
-#else
+#    else
     const f32 axisSize{ 150 };
     Vec2 xAxis{ axisSize, 0 };
     Vec2 yAxis{ 0, axisSize };
@@ -1694,14 +1696,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 //const Vec2 xAxis{ Vec2{ Cos(angle), Sin(angle) } * 100 };
 //const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } *
 //                  (100 + 50.0f * Sin(3.9f * angle)) }; // Skewing works now
-#endif
+#    endif
 
-#if 0
+#    if 0
     const Vec4 coordinateColor{ 0.5f + 0.5f * Sin(angle * 2.9f), 0.5f + 0.5f * Sin(angle * 3.9f),
                                 0.5f + 0.5f * Sin(angle * 0.9f), 0.5f + 0.5f * Sin(angle * 15.5f) };
-#else
+#    else
     const Vec4 coordinateColor{ Vec4::ONE };
-#endif
+#    endif
     auto* coordinateSystem{ PushCoordinateSystem(
         renderGroup, Vec2{ disp, 0 } + origin - 0.5f * xAxis - 0.5f * yAxis, xAxis, yAxis,
         coordinateColor, &gameState->testDiffuse, &gameState->testNormal, &tranState->envMaps[2],
@@ -1727,6 +1729,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             mapPos += yAxis + Vec2{ 0, 6.0f };
         }
     }
+#endif
 
     EndSim(simRegion, gameState);
 
