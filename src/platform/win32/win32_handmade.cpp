@@ -230,7 +230,7 @@ ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
 
     screenBuff->info.bmiHeader.biSize = sizeof(screenBuff->info.bmiHeader);
     screenBuff->info.bmiHeader.biWidth = screenBuff->width;
-    screenBuff->info.bmiHeader.biHeight = -screenBuff->height; // top-down by assigning negative
+    screenBuff->info.bmiHeader.biHeight = screenBuff->height; // top-down by assigning negative
     screenBuff->info.bmiHeader.biPlanes = 1;
     screenBuff->info.bmiHeader.biBitCount = 32; // 8 padding
     screenBuff->info.bmiHeader.biCompression = BI_RGB;

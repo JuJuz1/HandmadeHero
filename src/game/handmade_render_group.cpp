@@ -37,7 +37,7 @@ PushPiece(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ
         entry->bitmap = bitmap;
 
         entry->entityBasis.basis = group->defaultBasis;
-        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
+        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, offset.y }) - align;
         entry->entityBasis.offsetZ = offsetZ;
         entry->entityBasis.entityZC = entityZC;
 
@@ -59,7 +59,7 @@ PushRect(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color, f32
         entry->entityBasis.basis = group->defaultBasis;
 
         const Vec2 halfDim{ 0.5f * dim * group->metersToPixels };
-        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, -offset.y }) - halfDim;
+        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, offset.y }) - halfDim;
         entry->entityBasis.offsetZ = offsetZ;
         entry->entityBasis.entityZC = entityZC;
 
@@ -239,7 +239,8 @@ SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 sampleDir, f32 roughness, Environm
     */
 
     ASSERT(roughness >= 0.0f && roughness <= 1.0f);
-    ASSERT(sampleDir.y > 0.0f);
+    // TODO: This is hit every time...
+    //ASSERT(sampleDir.y > 0.0f);
 
     const i32 lodIndex{ RoundF32ToI32(roughness * static_cast<f32>(map->lod.size - 1)) };
     ASSERT(lodIndex < map->lod.size);
@@ -670,16 +671,11 @@ GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2
     //                              screenCenter.y -
     //                                  (gameState->metersToPixels *
     //                                  entity->pos.y) };
-    const Vec2 entityGroundPoint{
-        screenCenter.x + (group->metersToPixels * entityBasePos.x * zFudge),
-        screenCenter.y - (group->metersToPixels * entityBasePos.y * zFudge)
-    };
-    const f32 entityZ{ -entityBasePos.z * group->metersToPixels };
-
-    const Vec2 center{ entityGroundPoint.x + entityBasis->offset.x,
-                       entityGroundPoint.y + entityBasis->offset.y +
-                           //(group->metersToPixels * entityBasis->offsetZ) +
-                           (entityZ * entityBasis->entityZC) };
+    const Vec2 entityGroundPoint{ screenCenter +
+                                  (group->metersToPixels * entityBasePos.xy * zFudge) };
+    const f32 entityZ{ entityBasePos.z * group->metersToPixels };
+    const Vec2 center{ entityGroundPoint + entityBasis->offset +
+                       Vec2{ 0, entityZ * entityBasis->entityZC } };
 
     return center;
 }

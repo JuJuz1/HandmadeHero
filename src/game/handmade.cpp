@@ -93,6 +93,7 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         // It seems we have a value of 3 for compression always, and the masks change between files!
         // NOTE: can most likely support other compression values as well!
         ASSERT(bitMapHeader->compression == 3);
+        //ASSERT(bitMapHeader->height == 0);
 
         const u32 redMask{ bitMapHeader->redMask };
         const u32 greenMask{ bitMapHeader->greenMask };
@@ -161,8 +162,12 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         PRINT("Couldn't load bmp: %s\n", filename);
     }
 
+    result.pitch = result.width * bitmap_Bytes_Per_Pixel;
+
+#if 0
     result.pitch = -result.width * bitmap_Bytes_Per_Pixel;
     result.memory = static_cast<u8*>(result.memory) - (result.pitch * (result.height - 1));
+#endif
 
     return result;
 }
@@ -474,8 +479,8 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     ASSERT(chunkPos);
     ASSERT(IsValidWorldPos(chunkPos));
 
-    //PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
-    //      chunkPos->chunkZ);
+    PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
+          chunkPos->chunkZ);
 
     auto groundMemory{ BeginTempMemory(&tranState->tranArena) };
     // We do ground chunks in pixel space
@@ -503,7 +508,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
             // TODO: better, systemic random generation
             RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
 
-            const Vec2 center{ chunkOffsetX * width, -chunkOffsetY * height };
+            const Vec2 center{ chunkOffsetX * width, chunkOffsetY * height };
             for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
                 LoadedBitmapInfo* stamp;
                 if (RandChoice(&series, 2)) {
@@ -536,7 +541,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
             // TODO: better, systemic random generation
             RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
 
-            const Vec2 center{ chunkOffsetX * width, -chunkOffsetY * height };
+            const Vec2 center{ chunkOffsetX * width, chunkOffsetY * height };
             for (i32 grassIndex{}; grassIndex < 30; ++grassIndex) {
                 LoadedBitmapInfo* stamp;
                 stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
@@ -644,6 +649,19 @@ DrawHitpoints(const SimEntity* entity, RenderGroup* group) {
     }
 }
 
+NODISCARD
+INTERNAL inline Vec2
+TopDownAlign(LoadedBitmapInfo* bitmap, Vec2 align) {
+    ASSERT(bitmap);
+    align.y = static_cast<f32>(bitmap->height - 1) - align.y;
+    return align;
+}
+
+INTERNAL void
+SetTopDownAlign(HeroBitmaps* heroBitmaps, Vec2 align) {
+    heroBitmaps->align = TopDownAlign(&heroBitmaps->head, align);
+}
+
 INTERNAL void
 LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
     // Load the original art assets if one has preordered the game
@@ -695,7 +713,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_cape.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
     ++heroBitmaps;
 
     heroBitmaps->head =
@@ -704,7 +722,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_cape.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
     ++heroBitmaps;
 
     heroBitmaps->head =
@@ -713,7 +731,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_cape.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
     ++heroBitmaps;
 
     heroBitmaps->head =
@@ -722,7 +740,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_cape.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
 
 #else
 
@@ -743,7 +761,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_forward.bmp");
-    heroBitmaps->align = Vec2{ 48, 100 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 48, 100 });
     ++heroBitmaps;
 
     heroBitmaps->head =
@@ -752,7 +770,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_left.bmp");
-    heroBitmaps->align = Vec2{ 46, 104 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 46, 104 });
     ++heroBitmaps;
 
     heroBitmaps->head =
@@ -761,7 +779,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_backward.bmp");
-    heroBitmaps->align = Vec2{ 42, 100 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 42, 100 });
     ++heroBitmaps;
 
     heroBitmaps->head =
@@ -770,7 +788,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
     heroBitmaps->torso =
         DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_right.bmp");
-    heroBitmaps->align = Vec2{ 44, 104 };
+    SetTopDownAlign(heroBitmaps, Vec2{ 44, 104 });
 #endif
 }
 
@@ -1431,7 +1449,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         switch (entity->type) {
         case EntityType::WALL: {
             // Tree bitmaps
-            PushBitmap(renderGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
+            const Vec2 alignment{ TopDownAlign(&gameState->tree, Vec2{ 40, 80 }) };
+            PushBitmap(renderGroup, &gameState->tree, Vec2{}, 0, alignment);
         } break;
 
         case EntityType::STAIRWELL: {
@@ -1584,9 +1603,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 ClearCollisionRulesFor(gameState, entity->storageIndex);
             }
 
+            const Vec2 alignment{ TopDownAlign(&gameState->sword, Vec2{ 29, 10 }) };
             PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
                        0.0f);
-            PushBitmap(renderGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
+            PushBitmap(renderGroup, &gameState->sword, Vec2{}, 0, alignment);
         } break;
 
         case EntityType::SPACE: {
@@ -1635,7 +1655,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     PRINT("\n");
 #endif
 
-#if 0
+/// Normal map stuff
+#if 1
     // @Debug
     {
         Vec4 mapColor[]{

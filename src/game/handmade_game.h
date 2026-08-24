@@ -83,7 +83,6 @@ struct GroundBuff {
 struct TransientState {
     MemoryArena tranArena;
     i32 groundBuffCount;
-    LoadedBitmapInfo groundBitmapTemplate;
     GroundBuff* groundBuffs;
 
     // 0 bottom, 1 middle, 2 top
