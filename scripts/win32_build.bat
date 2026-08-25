@@ -86,11 +86,11 @@ set dllFlags=/LDd
 
 rem TODO: unpack arguments much better
 rem %1 is reserved for build mode TODO: FOR NOW
-if "%1" == "rel" (
+if "%~1" == "rel" (
     echo [CONFIG: RELEASE]
     set commonCompilerFlags=/MT /O2
     set dllFlags=/LD
-) else if "%1" == "release" (
+) else if "%~1" == "release" (
     echo [CONFIG: RELEASE]
     set commonCompilerFlags=/MT /O2
     set dllFlags=/LD
