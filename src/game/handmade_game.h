@@ -41,7 +41,6 @@ struct HeroBitmaps {
     LoadedBitmapInfo head;
     LoadedBitmapInfo cape;
     LoadedBitmapInfo torso;
-    Vec2 align;
 };
 
 /**

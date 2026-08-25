@@ -34,8 +34,8 @@ MakeEntitySpatial(SimEntity* entity, Vec3 p, Vec3 dP) {
 
 NODISCARD
 INTERNAL Vec3
-GetEntityGroundPoint(SimEntity* entity, Vec3 testPos) {
-    const Vec3 result{ testPos };
+GetEntityGroundPoint(SimEntity* entity, Vec3 forEntityPos) {
+    const Vec3 result{ forEntityPos };
 
     return result;
 }
@@ -44,7 +44,7 @@ GetEntityGroundPoint(SimEntity* entity, Vec3 testPos) {
 NODISCARD
 INTERNAL Vec3
 GetEntityGroundPoint(SimEntity* entity) {
-    const Vec3 result{ entity->pos };
+    const Vec3 result{ GetEntityGroundPoint(entity, entity->pos) };
 
     return result;
 }

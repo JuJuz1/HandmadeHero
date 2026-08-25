@@ -32,6 +32,14 @@ struct Vec3 {
 
     Vec3() = default;
 
+    template <typename T>
+    Vec3(Vec2 xy_, T z_)
+        : x{ static_cast<f32>(xy_.x) }, y{ static_cast<f32>(xy_.y) }, z{ static_cast<f32>(z_) } {}
+
+    template <typename T>
+    Vec3(T x_, Vec2 yz_)
+        : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(yz_.x) }, z{ static_cast<f32>(yz_.y) } {}
+
     template <typename T, typename U, typename V>
     Vec3(T x_, U y_, V z_)
         : x{ static_cast<f32>(x_) }, y{ static_cast<f32>(y_) }, z{ static_cast<f32>(z_) } {}

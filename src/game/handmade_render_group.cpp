@@ -28,8 +28,7 @@ PushRenderElement_(RenderGroup* group, i32 size, RenderGroupEntryType type) {
 }
 
 INTERNAL void
-PushPiece(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ, Vec2 align,
-          Vec4 color, f32 entityZC = 1.0f) {
+PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec3 offset, Vec4 color = Vec4::ONE) {
     //ASSERT(group->pieceCount < group->pieces.size);
     //RenderGroupEntry* piece{ &group->pieces[group->pieceCount++] };
     auto* entry{ PushRenderElement(group, RenderEntryBitmap) };
@@ -37,52 +36,35 @@ PushPiece(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ
         entry->bitmap = bitmap;
 
         entry->entityBasis.basis = group->defaultBasis;
-        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, offset.y }) - align;
-        entry->entityBasis.offsetZ = offsetZ;
-        entry->entityBasis.entityZC = entityZC;
+        entry->entityBasis.offset = (group->metersToPixels * offset) - Vec3{ bitmap->align, 0 };
 
         entry->color = color;
     }
 }
 
 INTERNAL void
-PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ, Vec2 align,
-           f32 alpha = 1.0f, f32 entityZC = 1.0f) {
-    PushPiece(group, bitmap, offset, offsetZ, align, Vec4{ 1.0f, 1.0f, 1.0f, alpha }, entityZC);
-}
-
-INTERNAL void
-PushRect(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color, f32 entityZC = 1.0f) {
+PushRect(RenderGroup* group, Vec3 offset, Vec2 dim, Vec4 color = Vec4::ONE) {
     // @Duplicate
     auto* entry{ PushRenderElement(group, RenderEntryRect) };
     if (entry) {
         entry->entityBasis.basis = group->defaultBasis;
-
-        const Vec2 halfDim{ 0.5f * dim * group->metersToPixels };
-        entry->entityBasis.offset = (group->metersToPixels * Vec2{ offset.x, offset.y }) - halfDim;
-        entry->entityBasis.offsetZ = offsetZ;
-        entry->entityBasis.entityZC = entityZC;
+        entry->entityBasis.offset = group->metersToPixels * (offset - Vec3{ dim * 0.5f, 0 });
 
         entry->dim = group->metersToPixels * dim;
-
         entry->color = color;
     }
 }
 
 INTERNAL void
-PushRectOutline(RenderGroup* group, Vec2 offset, f32 offsetZ, Vec2 dim, Vec4 color,
-                f32 thickness = 0.1f, f32 entityZC = 1.0f) {
+PushRectOutline(RenderGroup* group, Vec3 offset, Vec2 dim, Vec4 color = Vec4::ONE,
+                f32 thickness = 0.1f) {
     // Top bottom
-    PushRect(group, offset - Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{ dim.x, thickness }, color,
-             entityZC);
-    PushRect(group, offset + Vec2{ 0, dim.y * 0.5f }, offsetZ, Vec2{ dim.x, thickness }, color,
-             entityZC);
+    PushRect(group, offset - Vec3{ 0, dim.y * 0.5f, 0 }, Vec2{ dim.x, thickness }, color);
+    PushRect(group, offset + Vec3{ 0, dim.y * 0.5f, 0 }, Vec2{ dim.x, thickness }, color);
 
     // Left right
-    PushRect(group, offset - Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{ thickness, dim.y }, color,
-             entityZC);
-    PushRect(group, offset + Vec2{ dim.x * 0.5f, 0 }, offsetZ, Vec2{ thickness, dim.y }, color,
-             entityZC);
+    PushRect(group, offset - Vec3{ dim.x * 0.5f, 0, 0 }, Vec2{ thickness, dim.y }, color);
+    PushRect(group, offset + Vec3{ dim.x * 0.5f, 0, 0 }, Vec2{ thickness, dim.y }, color);
 }
 
 NODISCARD
@@ -126,8 +108,7 @@ PushSaturation(RenderGroup* group, f32 saturation) {
 INTERNAL void
 PushCollisionBox(RenderGroup* group, SimEntityCollisionVolumeGroup* collision, Vec4 color,
                  f32 scale) {
-    PushRect(group, collision->totalVolume.offsetPos.xy, 0.0f,
-             collision->totalVolume.dim.xy * scale, color);
+    PushRect(group, {}, collision->totalVolume.dim.xy * scale, color);
 }
 
 NODISCARD
@@ -663,19 +644,11 @@ AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, f32 metersToPixels) 
 NODISCARD
 INTERNAL Vec2
 GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenCenter) {
-    const Vec3 entityBasePos{ entityBasis->basis->pos };
-    const f32 zFudge{ 1.0f + 0.1f * (entityBasePos.z + entityBasis->offsetZ) };
-
-    //const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels
-    //* entity->pos.x),
-    //                              screenCenter.y -
-    //                                  (gameState->metersToPixels *
-    //                                  entity->pos.y) };
-    const Vec2 entityGroundPoint{ screenCenter +
-                                  (group->metersToPixels * entityBasePos.xy * zFudge) };
-    const f32 entityZ{ entityBasePos.z * group->metersToPixels };
-    const Vec2 center{ entityGroundPoint + entityBasis->offset +
-                       Vec2{ 0, entityZ * entityBasis->entityZC } };
+    const Vec3 entityBasePos{ group->metersToPixels * entityBasis->basis->pos };
+    const f32 zFudge{ 1.0f + (0.1f * entityBasePos.z) };
+    const Vec2 entityGroundPoint{ screenCenter + (zFudge * entityBasePos.xy) +
+                                  entityBasis->offset.xy };
+    const Vec2 center{ entityGroundPoint + Vec2(0, entityBasePos.z + entityBasis->offset.z) };
 
     return center;
 }

@@ -6,6 +6,7 @@ struct LoadedBitmapInfo {
     i32 width;
     i32 height;
     i32 pitch;
+    Vec2 align;
 };
 
 struct EnvironmentMap {
@@ -33,9 +34,7 @@ struct RenderGroupEntryHeader {
 
 struct RenderEntityBasis {
     RenderBasis* basis;
-    Vec2 offset;
-    f32 offsetZ;
-    f32 entityZC;
+    Vec3 offset;
 };
 
 struct RenderEntryClear {

@@ -44,6 +44,23 @@ OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {
     UNUSED_PARAMS(gameState, buff);
 }
 
+NODISCARD
+INTERNAL inline Vec2
+TopDownAlign(LoadedBitmapInfo* bitmap, Vec2 align) {
+    ASSERT(bitmap);
+    align.y = static_cast<f32>(bitmap->height - 1) - align.y;
+    return align;
+}
+
+INTERNAL void
+SetTopDownAlign(HeroBitmaps* heroBitmaps, Vec2 align) {
+    align = TopDownAlign(&heroBitmaps->head, align);
+
+    heroBitmaps->head.align = align;
+    heroBitmaps->cape.align = align;
+    heroBitmaps->torso.align = align;
+}
+
 // Struct packing to avoid manual work
 #pragma pack(push, 1)
 
@@ -76,7 +93,8 @@ struct BitmapHeader {
 
 NODISCARD
 INTERNAL LoadedBitmapInfo
-DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename) {
+DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename,
+             Vec2 align = {}) {
     LoadedBitmapInfo result{};
 
     auto readFileResult{ readFile(threadContext, filename) };
@@ -88,12 +106,13 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         result.memory = pixels;
         result.width = bitMapHeader->width;
         result.height = bitMapHeader->height;
+        result.align = TopDownAlign(&result, align); // Y is top-down aligned
 
         // IMPORTANT: Byte order of bmp is determined by the header!
         // It seems we have a value of 3 for compression always, and the masks change between files!
         // NOTE: can most likely support other compression values as well!
         ASSERT(bitMapHeader->compression == 3);
-        //ASSERT(bitMapHeader->height == 0);
+        ASSERT(bitMapHeader->height >= 0);
 
         const u32 redMask{ bitMapHeader->redMask };
         const u32 greenMask{ bitMapHeader->greenMask };
@@ -525,7 +544,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                PushBitmap(renderGroup, stamp, pos, 0.0f, Vec2{});
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 });
             }
         }
     }
@@ -551,7 +570,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                PushBitmap(renderGroup, stamp, pos, 0.0f, Vec2{});
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 });
             }
         }
     }
@@ -643,23 +662,10 @@ DrawHitpoints(const SimEntity* entity, RenderGroup* group) {
             }
 
             // TODO: Height
-            PushRect(group, hitPointPos, 0, hitpointDim, color, 0.0f);
+            PushRect(group, Vec3{ hitPointPos, 0 }, hitpointDim, color);
             hitPointPos += dPos;
         }
     }
-}
-
-NODISCARD
-INTERNAL inline Vec2
-TopDownAlign(LoadedBitmapInfo* bitmap, Vec2 align) {
-    ASSERT(bitmap);
-    align.y = static_cast<f32>(bitmap->height - 1) - align.y;
-    return align;
-}
-
-INTERNAL void
-SetTopDownAlign(HeroBitmaps* heroBitmaps, Vec2 align) {
-    heroBitmaps->align = TopDownAlign(&heroBitmaps->head, align);
 }
 
 INTERNAL void
@@ -674,6 +680,7 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     const auto readFileFunc{ memory->exports.DEBUGReadFile };
 
     // TODO: This should really be a runtime property...
+    // Will be at some point :)
 #if HANDMADE_USE_REAL_ASSETS
     gameState->grassBitmaps[0] =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/grass00.bmp");
@@ -699,13 +706,16 @@ LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     gameState->background =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_background.bmp");
 
-    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tree00.bmp");
-    gameState->shadow =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_shadow.bmp");
+    gameState->tree =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tree00.bmp", { 40, 80 });
+
+    gameState->shadow = DEBUGLoadBMP(threadContext, readFileFunc,
+                                     "original/test/test_hero_shadow.bmp", { 72, 182 });
 
     gameState->stairwell = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock02.bmp");
 
-    gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock03.bmp");
+    gameState->sword =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock03.bmp", { 29, 10 });
 
     heroBitmaps->head =
         DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_head.bmp");
@@ -1111,7 +1121,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         tranState->isInitialized = true;
     }
 
-    // Newly added member to platform's Input
+#if 0
     if (input->executableReloaded) {
         for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
              ++groundBuffIndex) {
@@ -1120,6 +1130,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             groundBuff->pos = NullWorldPos();
         }
     }
+#endif
 
     // Had a bug earlier with this not being initialized yet
     // Should probably assert a bunch more everywhere
@@ -1303,12 +1314,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             ASSERT(bitmap->memory);
 
             const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
-            PushBitmap(renderGroup, bitmap, posDelta.xy, posDelta.z,
-                       Vec2{ bitmap->width * 0.5f, bitmap->height * 0.5f });
+            bitmap->align = Vec2{ bitmap->width / 2, bitmap->height / 2 };
+            PushBitmap(renderGroup, bitmap, posDelta);
             // We can just push the outline here as it overlaps with the just pushed ground buffer
             // bitmaps, thickness is parametrized now
-            PushRectOutline(renderGroup, posDelta.xy, 0, world->chunkDimInMeters.xy,
-                            Vec4{ 1.0f, 1.0f, 0.0f, 1.0f }, 0.1f);
+            PushRectOutline(renderGroup, posDelta, world->chunkDimInMeters.xy, Vec4::ONE, 0.1f);
         }
     }
 #endif
@@ -1449,14 +1459,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         switch (entity->type) {
         case EntityType::WALL: {
             // Tree bitmaps
-            const Vec2 alignment{ TopDownAlign(&gameState->tree, Vec2{ 40, 80 }) };
-            PushBitmap(renderGroup, &gameState->tree, Vec2{}, 0, alignment);
+            PushBitmap(renderGroup, &gameState->tree, Vec3{});
         } break;
 
         case EntityType::STAIRWELL: {
-            PushRect(renderGroup, Vec2{}, 0, entity->walkableDim, Vec4{ 1, 1, 0, 1 }, 0.0f);
-            PushRect(renderGroup, Vec2{}, entity->walkableHeight, entity->walkableDim,
-                     Vec4{ 1, 0.5f, 0, 1 }, 0.0f);
+            PushRect(renderGroup, Vec3{}, entity->walkableDim, Vec4{ 1, 1, 0, 1 });
+            PushRect(renderGroup, Vec3{ 0, 0, entity->walkableHeight }, entity->walkableDim,
+                     Vec4{ 1, 0.5f, 0, 1 });
         } break;
 
         case EntityType::HERO: {
@@ -1512,19 +1521,17 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
-            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
-                       0.0f);
-            PushBitmap(renderGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
-            PushBitmap(renderGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
-            PushBitmap(renderGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{});
+            PushBitmap(renderGroup, &heroBitmaps->cape, Vec3{});
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{});
 
             DrawHitpoints(entity, renderGroup);
         } break;
 
         case EntityType::MONSTER: {
-            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
-                       0.0f);
-            PushBitmap(renderGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{});
 
             DrawHitpoints(entity, renderGroup);
         } break;
@@ -1586,10 +1593,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.15f * bobSin) };
             const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
-            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align,
-                       newShadowAlpha, 0.0f);
-            PushBitmap(renderGroup, &heroBitmaps->head, Vec2{}, bobStrength * bobSin,
-                       heroBitmaps->align);
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, newShadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{ 0, 0, bobStrength * bobSin });
         } break;
 
             // FIXME: this seems to not get called if we stand still and use the sword
@@ -1603,24 +1608,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 ClearCollisionRulesFor(gameState, entity->storageIndex);
             }
 
-            const Vec2 alignment{ TopDownAlign(&gameState->sword, Vec2{ 29, 10 }) };
-            PushBitmap(renderGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
-                       0.0f);
-            PushBitmap(renderGroup, &gameState->sword, Vec2{}, 0, alignment);
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &gameState->sword, Vec3{});
         } break;
 
         case EntityType::SPACE: {
             for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
                 const auto* volume{ &entity->collision->volumes[volumeIndex] };
                 // Outlines
-                PushRectOutline(renderGroup, volume->offsetPos.xy, 0, volume->dim.xy,
-                                Vec4{ 0.0f, 0.25f, 1.0f, 1.0f });
+                PushRectOutline(renderGroup,
+                                volume->offsetPos - Vec3{ 0, 0, volume->offsetPos.z * 0.5f },
+                                volume->dim.xy, Vec4{ 0.0f, 0.25f, 1.0f, 1.0f });
             }
         } break;
 
-        default: {
-            INVALID_CODE_PATH;
-        } break;
+            INVALID_DEFAULT_CASE;
         }
 
         //if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
@@ -1629,7 +1631,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             MoveEntity(gameState, simRegion, entity, moveSpec, ddP, deltaTime);
         }
 
-        renderBasis->pos = entity->pos;
+        renderBasis->pos = GetEntityGroundPoint(entity);
 
         // @Debug
         // Pink
@@ -1656,7 +1658,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 #endif
 
 /// Normal map stuff
-#if 1
+#if 0
     // @Debug
     {
         Vec4 mapColor[]{
