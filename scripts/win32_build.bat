@@ -84,6 +84,8 @@ rem )
 
 set dllFlags=/LDd
 
+rem TODO: unpack arguments much better
+rem %1 is reserved for build mode TODO: FOR NOW
 if "%1" == "rel" (
     echo [CONFIG: RELEASE]
     set commonCompilerFlags=/MT /O2
@@ -96,6 +98,8 @@ if "%1" == "rel" (
     echo [CONFIG: DEBUG]
     set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
 )
+
+rem TODO: clang?
 
 set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% /Zc:__cplusplus /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 
