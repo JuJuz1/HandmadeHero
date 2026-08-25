@@ -85,15 +85,15 @@ rem )
 set dllFlags=/LDd
 
 if "%1" == "rel" (
-    echo config: RELEASE
+    echo [CONFIG: RELEASE]
     set commonCompilerFlags=/MT /O2
     set dllFlags=/LD
 ) else if "%1" == "release" (
-    echo config: RELEASE
+    echo [CONFIG: RELEASE]
     set commonCompilerFlags=/MT /O2
     set dllFlags=/LD
 ) else (
-    echo config: DEBUG
+    echo [CONFIG: DEBUG]
     set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
 )
 

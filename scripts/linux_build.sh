@@ -26,12 +26,12 @@ commonCompilerFlags="-O0 -g"
 
 mode="${1:-debug}"
 if [[ $mode == "rel" || $mode == "release" ]]; then
-    echo "config: RELEASE"
+    echo "[CONFIG: RELEASE]"
     # -O3 when testing on the VM as it lags quite hard (-O0 debug)
     # TODO: other options?
     commonCompilerFlags="-O3"
 else
-    echo "config: DEBUG"
+    echo "[CONFIG: DEBUG]"
     commonCompilerDefines="$commonCompilerDefines -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1"
 fi
 

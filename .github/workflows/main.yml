@@ -7,6 +7,16 @@ on:
 jobs:
   build-win32:
     runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      # TODO?
+      matrix:
+        #compiler:
+          #- msvc
+          #- clang
+        mode:
+          - debug
+          - release
 
     steps:
       - uses: actions/checkout@v6
@@ -24,10 +34,20 @@ jobs:
       - name: Build Win32
         shell: cmd
         run: |
-          scripts\win32_build.bat
+          scripts\win32_build.bat "${{ matrix.mode }}"
 
   build-linux:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # TODO?
+      matrix:
+        #compiler:
+          #- gcc
+          #- clang
+        mode:
+          - debug
+          - release
 
     steps:
       - uses: actions/checkout@v6
@@ -48,11 +68,20 @@ jobs:
       - name: Build Linux
         run: |
           chmod +x ./scripts/linux_build.sh
-          ./scripts/linux_build.sh
+          ./scripts/linux_build.sh "${{ matrix.mode }}"
 
   build-macos:
     # See if we can do "macos-latest-large" without a paid Github version -> can not
     runs-on: macos-15-intel
+    strategy:
+      fail-fast: false
+      # TODO?
+      matrix:
+        #compiler:
+          #- clang
+        mode:
+          - debug
+          - release
 
     steps:
       - uses: actions/checkout@v6
@@ -73,7 +102,7 @@ jobs:
         # actions said to untap aws/tap
         run: |
           chmod +x ./scripts/macos_build.sh
-          ./scripts/macos_build.sh
+          ./scripts/macos_build.sh "${{ matrix.mode }}"
 
 # TODO: web
 # https://github.com/emscripten-core/setup-emsdk
