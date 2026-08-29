@@ -127,7 +127,11 @@ INTERNAL
 DEBUG_READ_FILE(DEBUGReadFile) {
     UNUSED_PARAMS(threadContext);
 
+    ASSERT(threadContext);
+    ASSERT(filename);
+
     DEBUGFileReadResult result{};
+
     // What an atrocious name for a function which requests to read a file...
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };

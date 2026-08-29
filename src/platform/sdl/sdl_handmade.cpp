@@ -70,6 +70,9 @@ DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
 }
 
 DEBUG_READ_FILE(DEBUGReadFile) {
+    ASSERT(threadContext);
+    ASSERT(filename);
+
     DEBUGFileReadResult result{};
 
     const i32 fileHandle{ open(filename, O_RDONLY) };
@@ -196,14 +199,15 @@ DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i
 
     if ((wndWidth >= screenBuff->width * 2) && (wndHeight >= screenBuff->height * 2)) {
         destRect = SDL_Rect{ 0, 0, 2 * screenBuff->width, 2 * screenBuff->height };
-        SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     } else {
         const i32 offsetX{ 50 };
         const i32 offsetY{ 50 };
 
         destRect = SDL_Rect{ offsetX, offsetY, screenBuff->width, screenBuff->height };
-        SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     }
+
+    SDL_RenderCopyEx(renderer, screenBuff->texture, &srcRect, &destRect, 0, nullptr,
+                     SDL_FLIP_VERTICAL);
 
     SDL_RenderPresent(renderer);
 }
