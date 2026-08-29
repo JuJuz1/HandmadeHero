@@ -144,6 +144,7 @@ struct GameState {
 
     // @Debug
     f32 zOffset; // Camera modifier
+    f32 globalAlpha;
 
     bool32 showCollisionBoxes;
     bool32 allowUnlimitedJumps;

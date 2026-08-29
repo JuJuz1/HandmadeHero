@@ -38,7 +38,7 @@ PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec3 offset, Vec4 color
         entry->entityBasis.basis = group->defaultBasis;
         entry->entityBasis.offset = (group->metersToPixels * offset) - Vec3{ bitmap->align, 0 };
 
-        entry->color = color;
+        entry->color = color * group->globalAlpha;
     }
 }
 
@@ -51,7 +51,9 @@ PushRect(RenderGroup* group, Vec3 offset, Vec2 dim, Vec4 color = Vec4::ONE) {
         entry->entityBasis.offset = group->metersToPixels * (offset - Vec3{ dim * 0.5f, 0 });
 
         entry->dim = group->metersToPixels * dim;
-        entry->color = color;
+        // TODO: global alpha for rects
+        entry->color = color //* group->globalAlpha
+            ;
     }
 }
 
@@ -640,6 +642,8 @@ AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, f32 metersToPixels) 
     result->maxPushBufferSize = maxPushBufferSize;
     result->pushBufferSize = 0;
 
+    result->globalAlpha = 1.0f;
+
     return result;
 }
 
@@ -657,7 +661,10 @@ GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2
     const f32 zFudge{ 1.0f + (0.0015f * entityBasePos.z) };
     const Vec2 entityGroundPoint{ screenCenter +
                                   zFudge * (entityBasePos.xy + entityBasis->offset.xy) };
-    const Vec2 center{ entityGroundPoint + Vec2(0, entityBasePos.z + entityBasis->offset.z) };
+    // Now z offset doesn't affect the scaling? Have to really nail down on this to get it right
+    const Vec2 center{
+        entityGroundPoint //+ Vec2(0, entityBasePos.z + entityBasis->offset.z)
+    };
 
     result.pos = center;
     result.scale = zFudge;

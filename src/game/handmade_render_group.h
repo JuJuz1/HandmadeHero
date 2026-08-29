@@ -75,6 +75,7 @@ struct RenderEntrySaturation {
 struct RenderGroup {
     RenderBasis* defaultBasis;
     f32 metersToPixels;
+    f32 globalAlpha;
 
     u8* pushBufferBase;
     i32 pushBufferSize;

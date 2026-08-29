@@ -327,9 +327,9 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             }
 #endif
             // Fully smooth scrolling
-            const f32 camOffsetZ{ newCameraPos.offset_.z };
+            //const f32 camOffsetZ{ newCameraPos.offset_.z };
             newCameraPos = stored->pos;
-            newCameraPos.offset_.z = camOffsetZ;
+            //newCameraPos.offset_.z = camOffsetZ;
 
             gameState->cameraPos = newCameraPos;
         }

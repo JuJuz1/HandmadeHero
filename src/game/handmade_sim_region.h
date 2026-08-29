@@ -158,18 +158,22 @@ struct SimRegion {
     Rect3 bounds;
     Rect3 updatableBounds;
 
+    // Camera position relative to the origin of this region
+    Vec3 cameraPos;
+
+    SimEntity* entities;
+    i32 entityCount;
+    i32 maxEntityCount;
+
+    Array<SimEntityHash, 4096> hash;
+
     f32 maxEntityRadius;
     f32 maxEntityVelocity;
 
+    // @Debug
     f32 maxRecordedEntityVelocitySq; // Stored in MoveEntity
     i32 maxRecordedEntityVelocityIndex;
     EntityType maxRecordedEntityVelocityType;
-
-    i32 maxEntityCount;
-    i32 entityCount;
-    SimEntity* entities;
-
-    Array<SimEntityHash, 4096> hash;
 };
 
 #endif // HANDMADE_SIM_REGION_H

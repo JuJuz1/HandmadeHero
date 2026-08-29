@@ -58,3 +58,18 @@ ZeroMem(void* ptr, memory_index size) {
         *byte++ = 0;
     }
 }
+
+NODISCARD
+INTERNAL bool32
+IsMemZeroed(void* ptr, memory_index size) {
+    bool32 result{ true };
+    u8* byte{ static_cast<u8*>(ptr) };
+    while (size--) {
+        if (*byte != 0) {
+            result = false;
+            break;
+        }
+    }
+
+    return result;
+}

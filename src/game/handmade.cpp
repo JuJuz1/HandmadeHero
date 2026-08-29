@@ -1068,13 +1068,20 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         // TODO: Seperate tranState resetting from this full reset?
         ZeroMem(memory->transientStorage, memory->transientStorageSize);
         tranState->isInitialized = false;
+
+        ASSERT(IsMemZeroed(memory->permanentStorage, memory->permanentStorageSize));
+        ASSERT(IsMemZeroed(memory->transientStorage, memory->transientStorageSize));
     }
 
     if (!memory->isInitialized) {
+        ASSERT(IsMemZeroed(memory->permanentStorage, memory->permanentStorageSize));
+
         InitGameState(threadContext, gameState, memory, screenBuff);
     }
 
     if (!tranState->isInitialized) {
+        ASSERT(IsMemZeroed(memory->transientStorage, memory->transientStorageSize));
+
         ArenaInit(&tranState->tranArena,
                   static_cast<u8*>(memory->transientStorage) + sizeof(TransientState),
                   memory->transientStorageSize - sizeof(TransientState));
@@ -1324,11 +1331,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
+    const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
+    const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
+    const Rect3 cameraBoundsInMeters{ RectCenterDim(
+        Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
+
     /// Ground buffs
     // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
     // Is it because we don't want to lag 1 frame behind on these?
 
-#if 1
+#if 0
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
         ASSERT(groundBuff);
@@ -1353,16 +1365,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             //PushRectOutline(renderGroup, {}, world->chunkDimInMeters.xy);
         }
     }
-#endif
 
     /// Drawing chunks
 
-    const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
-    const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
-    const Rect3 cameraBoundsInMeters{ RectCenterDim(
-        Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
-
-#if 1
     {
         const WorldPosition minChunk{ MapIntoChunkSpace(
             world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
@@ -1427,6 +1432,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     TempMemory simMemory{ BeginTempMemory(&tranState->tranArena) };
     auto* simRegion{ BeginSim(gameState, &tranState->tranArena, world, gameState->cameraPos,
                               cameraBoundsSim, deltaTime) };
+    // We can adjust the sim region center now
+    const WorldPosition simCenterPos{ gameState->cameraPos };
+    const Vec3 cameraPos{ SubtractWorldPos(simRegion->world, &gameState->cameraPos,
+                                           &simCenterPos) };
 
 // @Debug printing
 #if 0
@@ -1485,6 +1494,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         RenderBasis* renderBasis{ PushStruct(&tranState->tranArena, RenderBasis) };
         renderGroup->defaultBasis = renderBasis;
+
+        // Alpha for entities' visibility
+        const auto cameraRelGroundPos{ GetEntityGroundPoint(entity) - cameraPos };
+        renderGroup->globalAlpha = Clamp01(1.5f - cameraRelGroundPos.z);
 
         auto* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 
@@ -1678,6 +1691,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         //    PRINT_F32("Z", entity->z);
         //}
     }
+
+    renderGroup->globalAlpha = 1.0f;
 
 // @Debug
 #if 0
