@@ -862,14 +862,6 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     // TODO: store in GameState?
     RandSeries series{ RandSeed(1234) };
 
-    bool32 doorLeft{};
-    bool32 doorRight{};
-    bool32 doorTop{};
-    bool32 doorBottom{};
-
-    bool32 doorUp{};
-    bool32 doorDown{};
-
     const i32 screenBaseX{};
     const i32 screenBaseY{};
     const i32 screenBaseZ{};
@@ -878,76 +870,77 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     i32 screenY{ screenBaseY };
     i32 absTileZ{ screenBaseZ };
 
+    // TODO: Replace all this with real world generation!
+    bool32 doorLeft{};
+    bool32 doorRight{};
+    bool32 doorTop{};
+    bool32 doorBottom{};
+    bool32 doorUp{};
+    bool32 doorDown{};
+
     i32 wallsAdded{};
     i32 stairsAdded{};
 
-    // How many rooms to create
-    const i32 screenCount{ 50 };
+    for (i32 screenIndex{}; screenIndex < 2000; ++screenIndex) {
+#if 1
+        u32 doorDirection{ RandChoice(&series, (doorUp || doorDown) ? 2 : 4) };
+#else
+        const u32 doorDirection{ RandChoice(&series, 2) };
+#endif
 
-    // Generating tile values
-    for (i32 screenIndex{}; screenIndex < screenCount; ++screenIndex) {
-        u32 doorDirection;
-        // Lateral only
-        if (doorUp || doorDown) {
-            doorDirection = RandChoice(&series, 2);
-        } else {
-            doorDirection = RandChoice(&series, 3);
-        }
         // @Remove
-        //u32 doorDirection{ RandChoice(&series, 2) };
+        doorDirection = 3;
 
         bool32 createdZDoor{};
-        // doorDirection of 2 means the room is blocked and has a door going up
-        // Atm this logic means we can only have 2 layers (z of 0 or 1)
-        if (doorDirection == 2) {
+
+        if (doorDirection == 3) {
             createdZDoor = true;
-            if (absTileZ == screenBaseZ) {
-                doorUp = true;
-            } else {
-                doorDown = true;
-            }
+            doorDown = true;
+        } else if (doorDirection == 2) {
+            createdZDoor = true;
+            doorUp = true;
         } else if (doorDirection == 1) {
             doorRight = true;
         } else {
             doorTop = true;
         }
 
-#if 1
         AddStandardRoom(gameState, (screenX * tiles_Per_Width) + (tiles_Per_Width / 2),
                         (screenY * tiles_Per_Height) + (tiles_Per_Height / 2), absTileZ);
-#endif
 
         for (i32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
             for (i32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
-                const i32 absTileX{ (screenX * tiles_Per_Width) + tileX };
-                const i32 absTileY{ (screenY * tiles_Per_Height) + tileY };
+                const i32 absTileX{ screenX * tiles_Per_Width + tileX };
+                const i32 absTileY{ screenY * tiles_Per_Height + tileY };
 
-                // Door
-                u32 tileValue{ 2 };
-                if (tileX == 0 && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
-                    tileValue = blocked_Tile_Value;
+                bool32 shouldBeDoor{};
+
+                if ((tileX == 0) && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
+                    shouldBeDoor = true;
                 }
-                if (tileX == (tiles_Per_Width - 1) &&
+
+                if ((tileX == (tiles_Per_Width - 1)) &&
                     (!doorRight || (tileY != (tiles_Per_Height / 2)))) {
-                    tileValue = blocked_Tile_Value;
-                }
-                if (tileY == 0 && (!doorBottom || (tileX != tiles_Per_Width / 2))) {
-                    tileValue = blocked_Tile_Value;
-                }
-                if (tileY == (tiles_Per_Height - 1) &&
-                    (!doorTop || (tileX != tiles_Per_Width / 2))) {
-                    tileValue = blocked_Tile_Value;
+                    shouldBeDoor = true;
                 }
 
-                if (tileValue == blocked_Tile_Value) {
-                    // TODO: @Remove eventually
-                    //if (screenIndex == 0) {
-                    const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
-                    //}
+                if ((tileY == 0) && (!doorBottom || (tileX != (tiles_Per_Width / 2)))) {
+                    shouldBeDoor = true;
+                }
 
-                    ++wallsAdded;
+                if ((tileY == (tiles_Per_Height - 1)) &&
+                    (!doorTop || (tileX != (tiles_Per_Width / 2)))) {
+                    shouldBeDoor = true;
+                }
+
+                if (shouldBeDoor) {
+                    if ((tileY % 2) || (tileX % 2)) {
+                        AddWall(gameState, absTileX, absTileY, absTileZ);
+                        ++wallsAdded;
+                    }
                 } else if (createdZDoor) {
-                    if (tileX == 10 && tileY == 5) {
+                    if (((absTileZ % 2) && (tileX == 10) && (tileY == 5)) ||
+                        (!(absTileZ % 2) && (tileX == 4) && (tileY == 5))) {
                         AddStair(gameState, absTileX, absTileY, doorDown ? absTileZ - 1 : absTileZ);
                         ++stairsAdded;
                     }
@@ -958,9 +951,6 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
         doorLeft = doorRight;
         doorBottom = doorTop;
 
-        doorRight = false;
-        doorTop = false;
-
         if (createdZDoor) {
             doorDown = !doorDown;
             doorUp = !doorUp;
@@ -969,18 +959,17 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
             doorDown = false;
         }
 
-        if (doorDirection == 2) {
-            if (absTileZ == screenBaseZ) {
-                absTileZ += 1;
-            } else {
-                absTileZ = screenBaseZ;
-            }
-        }
-        // Advance screens if we didn't make a vertical floor (door)
-        else if (doorDirection == 1) {
-            ++screenX;
+        doorRight = false;
+        doorTop = false;
+
+        if (doorDirection == 3) {
+            absTileZ -= 1;
+        } else if (doorDirection == 2) {
+            absTileZ += 1;
+        } else if (doorDirection == 1) {
+            screenX += 1;
         } else {
-            ++screenY;
+            screenY += 1;
         }
     }
 
@@ -1002,7 +991,7 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
     for (i32 i{}; i < familiarCount; ++i) {
         const i32 familiarOffsetX{ RandRange(&series, -7, 7) };
-        const i32 familiarOffsetY{ RandRange(&series, -3, 1) };
+        const i32 familiarOffsetY{ RandRange(&series, -3, -1) };
         if (familiarOffsetX && familiarOffsetY) {
             AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
                         cameraTileZ);
@@ -1017,6 +1006,8 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     //cameraTileY,
     //                                                       cameraTileZ) };
     //SetCamera(gameState, cameraPos);
+
+    PRINT("Entity count after InitGameState: %d\n", gameState->lowEntityCount);
 
     // TODO: maybe make platform set this?
     memory->isInitialized = true;
@@ -1333,8 +1324,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
     const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
-    const Rect3 cameraBoundsInMeters{ RectCenterDim(
+    Rect3 cameraBoundsInMeters{ RectCenterDim(
         Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
+    cameraBoundsInMeters.min.z = -3.0f * gameState->typicalFloorHeight;
+    cameraBoundsInMeters.max.z = 2.0f * gameState->typicalFloorHeight;
 
     /// Ground buffs
     // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
@@ -1425,8 +1418,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 #endif
 
-    // TODO: how big?
-    const Vec3 simBoundsExpansion{ 15.0f, 15.0f, 15.0f };
+    // TODO: how big? upper and bottom floors?
+    const Vec3 simBoundsExpansion{ 15.0f, 15.0f, 0 };
     const Rect3 cameraBoundsSim{ AddRadiusTo(cameraBoundsInMeters, simBoundsExpansion) };
 
     TempMemory simMemory{ BeginTempMemory(&tranState->tranArena) };
@@ -1497,7 +1490,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         // Alpha for entities' visibility
         const auto cameraRelGroundPos{ GetEntityGroundPoint(entity) - cameraPos };
-        renderGroup->globalAlpha = Clamp01(1.5f - cameraRelGroundPos.z);
+
+        // TODO: tune these according to cameraBoundsInMeters
+        // NOTE: order of declarations is the logical order
+        const f32 fadeEndZTop{ 0.85f * gameState->typicalFloorHeight };
+        const f32 fadeStartZTop{ 0.5f * gameState->typicalFloorHeight };
+        // The ground is here between these
+        const f32 fadeStartZBottom{ -2.0f * gameState->typicalFloorHeight };
+        const f32 fadeEndZBottom{ -2.25f * gameState->typicalFloorHeight };
+        renderGroup->globalAlpha = 1.0f;
+
+        if (cameraRelGroundPos.z > fadeStartZTop) {
+            renderGroup->globalAlpha =
+                Clamp01MapToRange(fadeEndZTop, cameraRelGroundPos.z, fadeStartZTop);
+        } else if (cameraRelGroundPos.z < fadeStartZBottom) {
+            renderGroup->globalAlpha =
+                Clamp01MapToRange(fadeEndZBottom, cameraRelGroundPos.z, fadeStartZBottom);
+        }
 
         auto* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 

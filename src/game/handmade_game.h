@@ -107,7 +107,8 @@ struct GameState {
     WorldPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    Array<LowEntity, 4096> lowEntities; // Holds all entities
+    // Big!
+    Array<LowEntity, 100'000> lowEntities; // Holds all entities
     i32 lowEntityCount;
 
     Array<ControlledHero, ARRAY_COUNT(Input::playerInputs)> controlledHeroes;

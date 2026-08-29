@@ -111,3 +111,19 @@ Clamp01(Vec3 value) {
 
     return result;
 }
+
+/**
+ * Tells where t is located between min and max clamped to [0, 1], so the %
+ */
+NODISCARD
+INTERNAL inline f32
+Clamp01MapToRange(f32 min, f32 t, f32 max) {
+    f32 result{};
+    const f32 range{ max - min };
+    ASSERT(range != 0.0f);
+    if (range != 0.0f) {
+        result = Clamp01((t - min) / range);
+    }
+
+    return result;
+}

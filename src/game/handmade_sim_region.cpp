@@ -152,9 +152,9 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
 
     simRegion->world = world;
     simRegion->origin = origin;
+    // TODO: Z is 0 for now!
     simRegion->updatableBounds =
-        AddRadiusTo(bounds, Vec3{ simRegion->maxEntityRadius, simRegion->maxEntityRadius,
-                                  simRegion->maxEntityRadius });
+        AddRadiusTo(bounds, Vec3{ simRegion->maxEntityRadius, simRegion->maxEntityRadius, 0 });
     simRegion->bounds =
         AddRadiusTo(simRegion->updatableBounds, Vec3{ safetyMargin, safetyMargin, safetyMarginZ });
 

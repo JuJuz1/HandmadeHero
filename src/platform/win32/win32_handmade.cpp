@@ -94,8 +94,23 @@ DEBUG_PRINT(DEBUGPrint) {
 
 #else
 
+//INTERNAL
+//DEBUG_PRINT(DEBUGPrint) {}
+
+// TODO: non-internal builds print for now
 INTERNAL
-DEBUG_PRINT(DEBUGPrint) {}
+DEBUG_PRINT(DEBUGPrint) {
+    UNUSED_PARAMS(threadContext);
+
+    char buff[1024];
+
+    va_list args;
+    va_start(args, format);
+    _vsnprintf_s(buff, sizeof(buff), format, args);
+    va_end(args);
+
+    OutputDebugStringA(buff);
+}
 
 #endif
 
