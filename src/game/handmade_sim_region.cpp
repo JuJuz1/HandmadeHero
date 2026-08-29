@@ -295,7 +295,8 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, &newPos);
         ++movedCount;
 
-        // Camera position
+        /// Camera position
+
         if (entity->storageIndex == gameState->cameraFollowingEntityIndex) {
             WorldPosition newCameraPos{ gameState->cameraPos };
             newCameraPos.chunkZ = stored->pos.chunkZ;

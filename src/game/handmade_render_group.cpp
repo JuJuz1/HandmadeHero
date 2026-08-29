@@ -411,6 +411,8 @@ INTERNAL void
 DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
                LoadedBitmapInfo* texture, LoadedBitmapInfo* normalMap, EnvironmentMap* top,
                EnvironmentMap* middle, EnvironmentMap* bottom, f32 pixelsToMeters) {
+    ASSERT(texture);
+
     // Premultiply color
     color.rgb *= color.a;
     // AA RR GG BB
@@ -641,21 +643,32 @@ AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, f32 metersToPixels) 
     return result;
 }
 
+struct RenderEntityBasisPosResult {
+    Vec2 pos;
+    f32 scale;
+};
+
 NODISCARD
-INTERNAL Vec2
+INTERNAL RenderEntityBasisPosResult
 GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenCenter) {
+    RenderEntityBasisPosResult result{};
+
     const Vec3 entityBasePos{ group->metersToPixels * entityBasis->basis->pos };
-    const f32 zFudge{ 1.0f + (0.1f * entityBasePos.z) };
-    const Vec2 entityGroundPoint{ screenCenter + (zFudge * entityBasePos.xy) +
-                                  entityBasis->offset.xy };
+    const f32 zFudge{ 1.0f + (0.0015f * entityBasePos.z) };
+    const Vec2 entityGroundPoint{ screenCenter +
+                                  zFudge * (entityBasePos.xy + entityBasis->offset.xy) };
     const Vec2 center{ entityGroundPoint + Vec2(0, entityBasePos.z + entityBasis->offset.z) };
 
-    return center;
+    result.pos = center;
+    result.scale = zFudge;
+
+    return result;
 }
 
 INTERNAL void
 RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameState* gameState) {
     const Vec2 screenCenter{ outputTarget->width * 0.5f, outputTarget->height * 0.5f };
+    const f32 pixelsToMeters{ 1.0f / group->metersToPixels };
 
     for (i32 baseAddress{}; baseAddress < group->pushBufferSize;) {
         auto* header{ reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
@@ -677,18 +690,23 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryRect*>(data) };
             baseAddress += sizeof(*entry);
 
-            const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
+            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
 
-            DrawRect(outputTarget, pos, pos + entry->dim, entry->color);
+            DrawRect(outputTarget, basis.pos, basis.pos + (entry->dim * basis.scale), entry->color);
         } break;
         case RenderGroupEntryType_RenderEntryBitmap: {
             auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
             baseAddress += sizeof(*entry);
 
-            const Vec2 pos{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
+            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
 
-            ASSERT(entry->bitmap);
+#if 0
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
+#else
+            DrawRectSlowly(outputTarget, basis.pos, Vec2{ entry->bitmap->width, 0 } * basis.scale,
+                           Vec2{ 0, entry->bitmap->height } * basis.scale, entry->color,
+                           entry->bitmap, nullptr, nullptr, nullptr, nullptr, pixelsToMeters);
+#endif
         } break;
         case RenderGroupEntryType_RenderEntryCoordinateSystem: {
             auto* entry{ reinterpret_cast<RenderEntryCoordinateSystem*>(data) };
@@ -707,7 +725,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
 
             DrawRectSlowly(outputTarget, entry->origin, entry->xAxis, entry->yAxis, entry->color,
                            entry->texture, entry->normalMap, entry->top, entry->middle,
-                           entry->bottom, 1.0f / group->metersToPixels);
+                           entry->bottom, pixelsToMeters);
 
 #if 0
             for (i32 i{}; i < entry->points.size; ++i) {

@@ -143,6 +143,8 @@ struct GameState {
     f32 time;
 
     // @Debug
+    f32 zOffset; // Camera modifier
+
     bool32 showCollisionBoxes;
     bool32 allowUnlimitedJumps;
     bool32 requestFullGameReset; // Full game reset

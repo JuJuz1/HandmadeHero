@@ -1146,6 +1146,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
         const auto* buttons{ &input->playerInputs[controllerIndex] };
         auto* controlled{ &gameState->controlledHeroes[controllerIndex] };
+
+        const bool32 shiftPressed{ ActionPressed(&buttons->shift) };
+        const bool32 ctrlPressed{ ActionPressed(&buttons->ctrl) };
+
         if (controlled->entityIndex == 0) {
             if (ActionJustPressed(&buttons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
@@ -1181,7 +1185,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Jump
             if (ActionJustPressed(&buttons->space)) {
-                if (ActionPressed(&buttons->ctrl)) {
+                if (ctrlPressed) {
                     gameState->allowUnlimitedJumps = !gameState->allowUnlimitedJumps;
                     if (gameState->allowUnlimitedJumps) {
                         PRINT("Unlimited jumps!\n");
@@ -1196,16 +1200,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             // Sprint
-            if (ActionPressed(&buttons->shift)) {
+            if (shiftPressed) {
                 controlled->sprint = true;
             }
 
             // Reset position if we get stuck
             if (ActionJustPressed(&buttons->R)) {
                 // Shift means resetting the sword
-                if (ActionPressed(&buttons->shift)) {
+                if (shiftPressed) {
                     // Full reset of game, at the start of the next frame
-                    if (ActionPressed(&buttons->ctrl)) {
+                    if (ctrlPressed) {
                         // TODO: store in controlledHero or no?
                         gameState->requestFullGameReset = true;
                         PRINT("Full game reset requested!\n");
@@ -1224,13 +1228,14 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             }
 
             if (ActionJustPressed(&buttons->F)) {
-                if (ActionPressed(&buttons->shift)) {
+                if (shiftPressed) {
                     controlled->requestFamiliarReset = true;
                 } else {
                     controlled->requestFamiliarStopFollow = true;
                 }
             }
 
+#if 0
             // Sword
             if (ActionJustPressed(&buttons->actionUp)) {
                 controlled->dSword.y = 1.0f;
@@ -1244,10 +1249,31 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             if (ActionJustPressed(&buttons->actionRight)) {
                 controlled->dSword.x = 1.0f;
             }
+#else
+            // @Debug
+            f32 zoomRate{};
+
+            if (ActionPressed(&buttons->actionUp)) {
+                if (shiftPressed) {
+                    zoomRate = 5.0f;
+                } else {
+                    zoomRate = 1.0f;
+                }
+            }
+            if (ActionPressed(&buttons->actionDown)) {
+                if (shiftPressed) {
+                    zoomRate = -5.0f;
+                } else {
+                    zoomRate = -1.0f;
+                }
+            }
+
+            gameState->zOffset += zoomRate * deltaTime;
+#endif
 
             // @Debug
             if (ActionJustPressed(&buttons->right)) {
-                if (ActionPressed(&buttons->ctrl)) {
+                if (ctrlPressed) {
                     gameState->showCollisionBoxes = !gameState->showCollisionBoxes;
                 }
             }
@@ -1315,10 +1341,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
             bitmap->align = Vec2{ bitmap->width / 2, bitmap->height / 2 };
-            PushBitmap(renderGroup, bitmap, posDelta);
+
+            auto* basis{ PushStruct(&tranState->tranArena, RenderBasis) };
+            renderGroup->defaultBasis = basis;
+            basis->pos = posDelta + Vec3{ 0, 0, gameState->zOffset };
+
+            PushBitmap(renderGroup, bitmap, {});
             // We can just push the outline here as it overlaps with the just pushed ground buffer
             // bitmaps, thickness is parametrized now
-            PushRectOutline(renderGroup, posDelta, world->chunkDimInMeters.xy, Vec4::ONE, 0.1f);
+            // @Re-enable
+            //PushRectOutline(renderGroup, {}, world->chunkDimInMeters.xy);
         }
     }
 #endif
@@ -1631,7 +1663,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             MoveEntity(gameState, simRegion, entity, moveSpec, ddP, deltaTime);
         }
 
-        renderBasis->pos = GetEntityGroundPoint(entity);
+        // @Debug
+        renderBasis->pos = GetEntityGroundPoint(entity) + Vec3{ 0, 0, gameState->zOffset };
 
         // @Debug
         // Pink
