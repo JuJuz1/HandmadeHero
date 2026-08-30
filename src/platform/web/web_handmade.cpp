@@ -1,5 +1,21 @@
 /*
     Web platform layer
+    TODO: this file shares a lot of code identical in sdl_handmade.cpp
+    Consider pulling shared SDL code to a file and include to Linux and Mac platform layers also!
+
+    For example:
+        - input handling
+        - displaying the buffer in the window (rendering)
+
+    Known problems:
+        - Resetting the game fully (F5) many times in a row results in a crash due to:
+        Aborted(Cannot enlarge memory arrays to size 134381568 bytes (OOM). Either (1) compile with
+        -sINITIAL_MEMORY=X with X higher than the current value 134217728, (2) compile with
+        -sALLOW_MEMORY_GROWTH which allows increasing the size at runtime, or (3) if you want malloc
+        to return NULL (0) instead of this abort, compile with -sABORTING_MALLOC=0)
+
+        It's due to loading the art assets again, shouldn't probably do that anyways but we do free
+        the memory malloced for the art asset files so this should not happen
 */
 
 #if !HANDMADE_WEB
@@ -17,10 +33,11 @@
 #include <emscripten.h>
 
 #include "game/handmade.h"
+#include "game/handmade_input.h"
 
 #include "web_handmade.h"
 
-// Game!
+// Game! no DLL here
 #include "game/handmade.cpp"
 
 static_assert(sizeof(void*) == 4, "We are targeting 32-bit for now");
@@ -49,43 +66,16 @@ INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    printf("%s", message);
-}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%d\n", valueName, value);
-}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%u\n", valueName, value);
-}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%f\n", valueName, value);
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
 }
 
 #else
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {}
 
 #endif // HANDMADE_INTERNAL
 
@@ -179,12 +169,13 @@ ResizeTexture(OffScreenBuffer* screenBuff, SDL_Renderer* renderer, i32 w, i32 h)
     screenBuff->width = w;
     screenBuff->height = h;
     screenBuff->bytesPerPixel = 4;
-    screenBuff->pitch = w * 4;
 
     screenBuff->texture =
-        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
+        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+                          screenBuff->width, screenBuff->height);
 
-    screenBuff->memory = malloc(screenBuff->pitch * h);
+    screenBuff->memory = malloc(screenBuff->width * screenBuff->height * screenBuff->bytesPerPixel);
+    screenBuff->pitch = screenBuff->width * screenBuff->bytesPerPixel;
 }
 
 INTERNAL void
@@ -197,14 +188,15 @@ DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i
 
     if ((wndWidth >= screenBuff->width * 2) && (wndHeight >= screenBuff->height * 2)) {
         destRect = SDL_Rect{ 0, 0, 2 * screenBuff->width, 2 * screenBuff->height };
-        SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     } else {
         constexpr i32 offsetX{ 50 };
         constexpr i32 offsetY{ 50 };
 
         destRect = SDL_Rect{ offsetX, offsetY, screenBuff->width, screenBuff->height };
-        SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     }
+
+    SDL_RenderCopyEx(renderer, screenBuff->texture, &srcRect, &destRect, 0, nullptr,
+                     SDL_FLIP_VERTICAL);
 
     SDL_RenderPresent(renderer);
 }
@@ -243,52 +235,72 @@ ProcessPendingEvents(Input* input) {
 
             switch (scancode) {
             case SDL_SCANCODE_W: {
-                ProcessInputEvent(&input->playerInputs->up, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->up, isDown);
             } break;
             case SDL_SCANCODE_S: {
-                ProcessInputEvent(&input->playerInputs->down, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->down, isDown);
             } break;
             case SDL_SCANCODE_A: {
-                ProcessInputEvent(&input->playerInputs->left, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->left, isDown);
             } break;
             case SDL_SCANCODE_D: {
-                ProcessInputEvent(&input->playerInputs->right, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
+                //case SDL_SCANCODE_UP: {
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].up, isDown);
+                //} break;
+                //case SDL_SCANCODE_DOWN: {
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].down, isDown);
+                //} break;
+                //case SDL_SCANCODE_LEFT: {
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].left, isDown);
+                //} break;
+                //case SDL_SCANCODE_RIGHT: {
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].right, isDown);
+                //} break;
+
             case SDL_SCANCODE_UP: {
-                ProcessInputEvent(&input->playerInputs->actionUp, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
             case SDL_SCANCODE_DOWN: {
-                ProcessInputEvent(&input->playerInputs->actionDown, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
             case SDL_SCANCODE_LEFT: {
-                ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
             case SDL_SCANCODE_RIGHT: {
-                ProcessInputEvent(&input->playerInputs->actionRight, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
             case SDL_SCANCODE_SPACE: {
-                ProcessInputEvent(&input->playerInputs->space, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
             case SDL_SCANCODE_Q: {
-                ProcessInputEvent(&input->playerInputs->Q, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
             case SDL_SCANCODE_E: {
-                ProcessInputEvent(&input->playerInputs->E, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
             case SDL_SCANCODE_R: {
-                ProcessInputEvent(&input->playerInputs->R, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
+            } break;
+            case SDL_SCANCODE_F: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F, isDown);
             } break;
 
             case SDL_SCANCODE_LSHIFT:
             case SDL_SCANCODE_RSHIFT: {
-                ProcessInputEvent(&input->playerInputs->shift, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
+            } break;
+            case SDL_SCANCODE_LCTRL:
+            case SDL_SCANCODE_RCTRL: {
+                hm_input::ProcessInputEvent(&input->playerInputs->ctrl, isDown);
             } break;
             case SDL_SCANCODE_RETURN: {
-                ProcessInputEvent(&input->playerInputs->enter, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;
 
             case SDL_SCANCODE_F11: {
@@ -307,6 +319,34 @@ ProcessPendingEvents(Input* input) {
 
                     gIsGamePaused = !gIsGamePaused;
                 }
+            } break;
+
+            case SDL_SCANCODE_F1: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F1, isDown);
+            } break;
+            case SDL_SCANCODE_F2: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F2, isDown);
+            } break;
+            case SDL_SCANCODE_F3: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F3, isDown);
+            } break;
+            case SDL_SCANCODE_F5: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F5, isDown);
+            } break;
+            case SDL_SCANCODE_F6: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F6, isDown);
+            } break;
+            case SDL_SCANCODE_F7: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F7, isDown);
+            } break;
+            case SDL_SCANCODE_F8: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F8, isDown);
+            } break;
+            case SDL_SCANCODE_F9: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F9, isDown);
+            } break;
+            case SDL_SCANCODE_F10: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F10, isDown);
             } break;
 
             default: {
@@ -392,11 +432,12 @@ WebMainLoop() {
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
         screenBuff.height = gScreenBuff.height;
-        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
         // Game call
         UpdateAndRender(&threadContext, &gGameMemory, &screenBuff, &gInput);
+
+        // TODO: audio
 
         const auto wndDimension{ hm_web::GetWindowdimension(gWindow) };
         hm_web::DisplayBufferWindow(gRenderer, &gScreenBuff, wndDimension.width,
@@ -425,8 +466,8 @@ main() {
 
     // TODO: take a look at increasing max size, currently seems to be 16 MB
     // Increased to 32 MB by compile option
-    gGameMemory.permanentStorageSize = MEGABYTES(4);
-    gGameMemory.transientStorageSize = MEGABYTES(16);
+    gGameMemory.permanentStorageSize = MEGABYTES(32);
+    gGameMemory.transientStorageSize = MEGABYTES(64);
 
     const u32 totalSize{ gGameMemory.permanentStorageSize + gGameMemory.transientStorageSize };
     gGameMemory.permanentStorage = malloc(totalSize);
@@ -438,9 +479,6 @@ main() {
     }
 
     // Platform exports
-    gGameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
-    gGameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
-    gGameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
     gGameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
 
     gGameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;

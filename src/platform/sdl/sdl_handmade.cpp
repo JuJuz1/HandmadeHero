@@ -171,13 +171,13 @@ ResizeTexture(OffScreenBuffer* screenBuff, SDL_Renderer* renderer, i32 w, i32 h)
                screenBuff->width * screenBuff->height * screenBuff->bytesPerPixel);
     }
 
-    screenBuff->width = w;
-    screenBuff->height = h;
-    screenBuff->bytesPerPixel = 4;
-
     if (screenBuff->texture) {
         SDL_DestroyTexture(screenBuff->texture);
     }
+
+    screenBuff->width = w;
+    screenBuff->height = h;
+    screenBuff->bytesPerPixel = 4;
 
     screenBuff->texture =
         SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,

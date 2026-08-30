@@ -57,8 +57,9 @@ else
 fi
 
 commonCompilerFlags="$commonCompilerDefines $commonCompilerFlags $commonCompilerWarnings"
-# 32 MB
-initialMemory=33554432
+# 32 MB: 33554432
+# 128 MB: 134217728
+initialMemory=134217728
 
 echo
 
@@ -70,6 +71,7 @@ fi
 
 echo "web_handmade.cpp"
 echo emcc $commonCompilerFlags ../../src/platform/web/web_handmade.cpp -I ../../src -sUSE_SDL=2 -sINITIAL_MEMORY=$initialMemory -o web_handmade.html
+echo
 
 if ! emcc $commonCompilerFlags ../../src/platform/web/web_handmade.cpp -I ../../src -sUSE_SDL=2 -sINITIAL_MEMORY=$initialMemory -o web_handmade.html; then
     buildFailed=1

@@ -520,7 +520,8 @@ GetExePathAndFilename(AllState* allState) {
 
 INTERNAL void
 BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, i32 destCount) {
-    CatStrings(allState->exePath.data_, allState->exeFilename - allState->exePath.data_, filename,
+    CatStrings(allState->exePath.data_,
+               static_cast<i32>(allState->exeFilename - allState->exePath.data_), filename,
                StrLength(filename), dest, destCount);
 }
 
