@@ -32,7 +32,7 @@ struct GameCode {
 };
 
 // IMPORTANT: Take care of stack size limit
-GLOBAL constexpr i32 file_Name_Count{ 1024 };
+GLOBAL const i32 file_Name_Count{ 1024 };
 
 struct ReplayBuffer {
     i32 fileHandle;
@@ -42,8 +42,8 @@ struct ReplayBuffer {
     bool32 isRecordedAtLeastOnce;
 };
 
-GLOBAL constexpr i32 replay_Buffer_Not_Recording{ -1 };
-GLOBAL constexpr i32 replay_Buffer_Not_Playing{ -1 };
+GLOBAL const i32 replay_Buffer_Not_Recording{ -1 };
+GLOBAL const i32 replay_Buffer_Not_Playing{ -1 };
 
 struct AllState {
     void* gameMemory;

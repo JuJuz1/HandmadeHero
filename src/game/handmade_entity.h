@@ -8,28 +8,57 @@ IsSet(const SimEntity* simEntity, i32 flag) {
 }
 
 INTERNAL void
-AddFlag(SimEntity* simEntity, i32 flag) {
+AddFlags(SimEntity* simEntity, i32 flag) {
     simEntity->flags |= flag;
 }
 
 INTERNAL void
-ClearFlag(SimEntity* simEntity, i32 flag) {
+ClearFlags(SimEntity* simEntity, i32 flag) {
     simEntity->flags &= ~flag;
 }
 
-GLOBAL constexpr Vec3 invalid_Pos{ 100000.0f, 100000.0f, 100000.0f };
+GLOBAL const Vec3 invalid_Pos{ 100000.0f, 100000.0f, 100000.0f };
 
 INTERNAL void
 MakeEntityNonSpatial(SimEntity* entity) {
-    AddFlag(entity, SimEntityFlags::NON_SPATIAL);
+    AddFlags(entity, SimEntityFlags::NON_SPATIAL);
     entity->pos = invalid_Pos;
 }
 
 INTERNAL void
 MakeEntitySpatial(SimEntity* entity, Vec3 p, Vec3 dP) {
-    ClearFlag(entity, SimEntityFlags::NON_SPATIAL);
+    ClearFlags(entity, SimEntityFlags::NON_SPATIAL);
     entity->pos = p;
     entity->velocity = dP;
+}
+
+NODISCARD
+INTERNAL Vec3
+GetEntityGroundPoint(SimEntity* entity, Vec3 forEntityPos) {
+    const Vec3 result{ forEntityPos };
+
+    return result;
+}
+
+// @Old
+NODISCARD
+INTERNAL Vec3
+GetEntityGroundPoint(SimEntity* entity) {
+    const Vec3 result{ GetEntityGroundPoint(entity, entity->pos) };
+
+    return result;
+}
+
+NODISCARD
+INTERNAL f32
+GetStairGround(SimEntity* entity, Vec3 atGroundPoint) {
+    ASSERT(entity->type == EntityType::STAIRWELL);
+
+    const Rect2 regionRect{ RectCenterDim(entity->pos.xy, entity->walkableDim) };
+    const Vec2 bary{ Clamp01(GetBarycentric(regionRect, atGroundPoint.xy)) };
+    const f32 result{ entity->pos.z + (bary.y * entity->walkableHeight) };
+
+    return result;
 }
 
 #endif // HANDMADE_ENTITY_H

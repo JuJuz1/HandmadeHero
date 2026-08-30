@@ -7,14 +7,21 @@ struct MemoryArena {
     u8* base;
     memory_index size;
     memory_index used;
+
+    i32 tempCount;
 };
 
-//INTERNAL void InitializeArena(MemoryArena* arena, u8* base, memory_index size);
+struct TempMemory {
+    MemoryArena* arena;
+    memory_index used;
+};
 
-//#define PushSize(arena, type) (type*)PushSize_(arena, sizeof(type))
-//#define PushArray(arena, count, type) (type*)PushSize_(arena, (count) * sizeof(type))
+//INTERNAL void ArenaInit(MemoryArena* arena, u8* base, memory_index size);
+
+//#define PushStruct(arena, type) (type*)PushStruct_(arena, sizeof(type))
+//#define PushArray(arena, count, type) (type*)PushStruct_(arena, (count) * sizeof(type))
 
 //NODISCARD
-//INTERNAL void* PushSize_(MemoryArena* arena, memory_index size);
+//INTERNAL void* PushStruct_(MemoryArena* arena, memory_index size);
 
 #endif // HANDMADE_MEMORY_H

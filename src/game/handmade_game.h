@@ -28,30 +28,19 @@
 
 #include "handmade_entity.h"
 
-GLOBAL constexpr i32 tiles_Per_Width{ 17 };
-GLOBAL constexpr i32 tiles_Per_Height{ 9 };
+#include "handmade_input.h"
 
-struct LoadedBitmapInfo {
-    u32* pixels;
-    i32 width;
-    i32 height;
-};
+#include "handmade_render_group.h"
+
+GLOBAL const i32 tiles_Per_Width{ 17 };
+GLOBAL const i32 tiles_Per_Height{ 9 };
+
+GLOBAL const i32 bitmap_Bytes_Per_Pixel{ 4 };
 
 struct HeroBitmaps {
     LoadedBitmapInfo head;
     LoadedBitmapInfo cape;
     LoadedBitmapInfo torso;
-    Vec2 align;
-};
-
-struct EntityVisiblePiece {
-    LoadedBitmapInfo* bitmap;
-    Vec2 offset;
-    f32 offsetZ;
-    f32 entityZC;
-
-    f32 r, g, b, a;
-    Vec2 dimension;
 };
 
 /**
@@ -66,15 +55,41 @@ struct ControlledHero {
 
     bool32 sprint; // Shift
 
-    bool32 requestReset;      // Reset pos
-    bool32 requestResetSword; // Reset sword pos
+    bool32 requestHeroReset;          // Reset pos
+    bool32 requestSwordReset;         // Reset sword pos
+    bool32 requestFamiliarStopFollow; // Reset familiar
+    bool32 requestFamiliarReset;
+};
+
+enum class PairWiseCollisionRuleFlag {
+    SHOULD_COLLIDE = 1,
+    TEMPORARY,
 };
 
 struct PairWiseCollisionRule {
-    bool32 shouldCollide;
+    bool32 canCollide;
     i32 storageIndexA;
     i32 storageIndexB;
     PairWiseCollisionRule* nextInHash;
+};
+
+struct GroundBuff {
+    // An invalid pos tells use that this ground buffer has not been filled (used yet)
+    WorldPosition pos; // Center of the bitmap!
+    LoadedBitmapInfo bitmap;
+};
+
+struct TransientState {
+    MemoryArena tranArena;
+    i32 groundBuffCount;
+    GroundBuff* groundBuffs;
+
+    // 0 bottom, 1 middle, 2 top
+    Array<EnvironmentMap, 3> envMaps;
+    i32 envMapWidth;
+    i32 envMapHeight;
+
+    bool32 isInitialized;
 };
 
 /**
@@ -82,21 +97,31 @@ struct PairWiseCollisionRule {
  */
 struct GameState {
     MemoryArena worldArena;
+    //MemoryArena transientArena;
+
     World* world;
-    f32 metersToPixels; // TODO: should this be here?
+
+    f32 typicalFloorHeight;
 
     WorldPosition cameraPos;
     i32 cameraFollowingEntityIndex; // By default the first player (index 1)
 
-    Array<LowEntity, 4096> lowEntities; // Holds all entities
+    // Big!
+    Array<LowEntity, 100'000> lowEntities; // Holds all entities
     i32 lowEntityCount;
 
     Array<ControlledHero, ARRAY_COUNT(Input::playerInputs)> controlledHeroes;
+
+    Array<LoadedBitmapInfo, 2> grassBitmaps;
+    Array<LoadedBitmapInfo, 4> stoneBitmaps;
+    Array<LoadedBitmapInfo, 3> tuftBitmaps;
 
     Array<HeroBitmaps, 4> heroBitmaps;
     LoadedBitmapInfo background;
     LoadedBitmapInfo tree;
     LoadedBitmapInfo shadow;
+
+    LoadedBitmapInfo stairwell;
 
     LoadedBitmapInfo sword;
 
@@ -105,16 +130,36 @@ struct GameState {
     // Must be power of two!
     Array<PairWiseCollisionRule*, 256> collisionRuleHash;
     PairWiseCollisionRule* firstFreeCollisionRule;
-};
 
-// TODO: this should just be a part of the renderer...
-struct EntityVisiblePieceGroup {
-    GameState* gameState;
-    Array<EntityVisiblePiece, 8> pieces;
-    i32 pieceCount;
+    SimEntityCollisionVolumeGroup* nullCollision;
+    SimEntityCollisionVolumeGroup* swordCollision;
+    SimEntityCollisionVolumeGroup* stairwellCollision;
+    SimEntityCollisionVolumeGroup* heroCollision;
+    SimEntityCollisionVolumeGroup* monsterCollision;
+    SimEntityCollisionVolumeGroup* familiarCollision;
+    SimEntityCollisionVolumeGroup* wallCollision;
+    SimEntityCollisionVolumeGroup* standardRoomCollision;
+
+    f32 time;
+
+    // @Debug
+    f32 zOffset; // Camera modifier
+    f32 globalAlpha;
+
+    bool32 showCollisionBoxes;
+    bool32 allowUnlimitedJumps;
+    bool32 requestFullGameReset; // Full game reset
+
+    LoadedBitmapInfo testDiffuse;
+    LoadedBitmapInfo testNormal;
 };
 
 /// Here we can put functions which many other files need to call ///
+
+INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
+
+INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
+                               bool32 CanCollide); // TODO: PairWiseCollisionRuleFlag flags
 
 NODISCARD
 INTERNAL LowEntity*
@@ -129,10 +174,5 @@ GetLowEntity(GameState* gameState, i32 lowIndex) {
 
     return lowEntity;
 }
-
-INTERNAL void ClearCollisionRulesFor(GameState* gameState, i32 storageIndex);
-
-INTERNAL void AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB,
-                               bool32 shouldCollide);
 
 #endif // HANDMADE_GAME_H

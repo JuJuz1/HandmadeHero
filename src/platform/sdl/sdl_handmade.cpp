@@ -24,6 +24,7 @@
 #include <x86intrin.h> // Cpu intrinsics
 
 #include "game/handmade.h"
+#include "game/handmade_input.h"
 
 #include "sdl_handmade.h"
 
@@ -49,43 +50,16 @@ INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    printf("%s", message);
-}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%d\n", valueName, value);
-}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%u\n", valueName, value);
-}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {
-    UNUSED_PARAMS(threadContext);
-
-    printf("%s%f\n", valueName, value);
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
 }
 
 #else
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {}
 
 #endif // HANDMADE_INTERNAL
 
@@ -96,6 +70,9 @@ DEBUG_FREE_FILE_MEMORY(DEBUGFreeFileMemory) {
 }
 
 DEBUG_READ_FILE(DEBUGReadFile) {
+    ASSERT(threadContext);
+    ASSERT(filename);
+
     DEBUGFileReadResult result{};
 
     const i32 fileHandle{ open(filename, O_RDONLY) };
@@ -222,14 +199,15 @@ DisplayBufferWindow(SDL_Renderer* renderer, const OffScreenBuffer* screenBuff, i
 
     if ((wndWidth >= screenBuff->width * 2) && (wndHeight >= screenBuff->height * 2)) {
         destRect = SDL_Rect{ 0, 0, 2 * screenBuff->width, 2 * screenBuff->height };
-        SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     } else {
-        constexpr i32 offsetX{ 50 };
-        constexpr i32 offsetY{ 50 };
+        const i32 offsetX{ 50 };
+        const i32 offsetY{ 50 };
 
         destRect = SDL_Rect{ offsetX, offsetY, screenBuff->width, screenBuff->height };
-        SDL_RenderCopy(renderer, screenBuff->texture, &srcRect, &destRect);
     }
+
+    SDL_RenderCopyEx(renderer, screenBuff->texture, &srcRect, &destRect, 0, nullptr,
+                     SDL_FLIP_VERTICAL);
 
     SDL_RenderPresent(renderer);
 }
@@ -420,14 +398,6 @@ HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bo
 }
 
 INTERNAL void
-ProcessInputEvent(Button* button, bool32 isDown) {
-    if (button->endedDown != isDown) {
-        button->endedDown = isDown;
-        ++button->halfTransitionCount;
-    }
-}
-
-INTERNAL void
 ProcessPendingEvents(Input* input, AllState* allState) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -457,68 +427,76 @@ ProcessPendingEvents(Input* input, AllState* allState) {
 
             switch (scancode) {
             case SDL_SCANCODE_W: {
-                ProcessInputEvent(&input->playerInputs->up, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->up, isDown);
             } break;
             case SDL_SCANCODE_S: {
-                ProcessInputEvent(&input->playerInputs->down, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->down, isDown);
             } break;
             case SDL_SCANCODE_A: {
-                ProcessInputEvent(&input->playerInputs->left, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->left, isDown);
             } break;
             case SDL_SCANCODE_D: {
-                ProcessInputEvent(&input->playerInputs->right, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
                 //case SDL_SCANCODE_UP: {
-                //    ProcessInputEvent(&input->playerInputs[1].up, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].up, isDown);
                 //} break;
                 //case SDL_SCANCODE_DOWN: {
-                //    ProcessInputEvent(&input->playerInputs[1].down, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].down, isDown);
                 //} break;
                 //case SDL_SCANCODE_LEFT: {
-                //    ProcessInputEvent(&input->playerInputs[1].left, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].left, isDown);
                 //} break;
                 //case SDL_SCANCODE_RIGHT: {
-                //    ProcessInputEvent(&input->playerInputs[1].right, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].right, isDown);
                 //} break;
 
             case SDL_SCANCODE_UP: {
-                ProcessInputEvent(&input->playerInputs->actionUp, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
             case SDL_SCANCODE_DOWN: {
-                ProcessInputEvent(&input->playerInputs->actionDown, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
             case SDL_SCANCODE_LEFT: {
-                ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
             case SDL_SCANCODE_RIGHT: {
-                ProcessInputEvent(&input->playerInputs->actionRight, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
             case SDL_SCANCODE_SPACE: {
-                ProcessInputEvent(&input->playerInputs->space, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
             case SDL_SCANCODE_Q: {
-                ProcessInputEvent(&input->playerInputs->Q, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
             case SDL_SCANCODE_E: {
-                ProcessInputEvent(&input->playerInputs->E, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
             case SDL_SCANCODE_R: {
-                ProcessInputEvent(&input->playerInputs->R, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
+            } break;
+            case SDL_SCANCODE_F: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F, isDown);
             } break;
 
             case SDL_SCANCODE_LSHIFT:
             case SDL_SCANCODE_RSHIFT: {
-                ProcessInputEvent(&input->playerInputs->shift, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
+            } break;
+            case SDL_SCANCODE_LCTRL:
+            case SDL_SCANCODE_RCTRL: {
+                hm_input::ProcessInputEvent(&input->playerInputs->ctrl, isDown);
             } break;
             case SDL_SCANCODE_RETURN: {
-                ProcessInputEvent(&input->playerInputs->enter, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;
 
             case SDL_SCANCODE_F4: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F4, isDown);
                 if (isDown) {
                     if (altPressed) {
                         gIsGameRunning = false;
@@ -526,6 +504,7 @@ ProcessPendingEvents(Input* input, AllState* allState) {
                 }
             } break;
             case SDL_SCANCODE_F11: {
+                printf("VK_F11 toggle fullscreen\n");
                 if (isDown) {
                     SDL_Window* window{ SDL_GetWindowFromID(event.window.windowID) };
                     if (window) {
@@ -583,9 +562,37 @@ ProcessPendingEvents(Input* input, AllState* allState) {
             } break;
 
             case SDL_SCANCODE_Z: {
-                ProcessInputEvent(&input->playerInputs->Z, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Z, isDown);
             } break;
 #endif
+
+            case SDL_SCANCODE_F1: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F1, isDown);
+            } break;
+            case SDL_SCANCODE_F2: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F2, isDown);
+            } break;
+            case SDL_SCANCODE_F3: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F3, isDown);
+            } break;
+            case SDL_SCANCODE_F5: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F5, isDown);
+            } break;
+            case SDL_SCANCODE_F6: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F6, isDown);
+            } break;
+            case SDL_SCANCODE_F7: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F7, isDown);
+            } break;
+            case SDL_SCANCODE_F8: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F8, isDown);
+            } break;
+            case SDL_SCANCODE_F9: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F9, isDown);
+            } break;
+            case SDL_SCANCODE_F10: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F10, isDown);
+            } break;
 
             default: {
                 if (isDown) {
@@ -729,8 +736,8 @@ main() {
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO);
 
-    constexpr i32 startingWidth{ 960 };
-    constexpr i32 startingHeight{ 540 };
+    const i32 startingWidth{ 960 };
+    const i32 startingHeight{ 540 };
 
     char name[64]{ "Handmade Hero" };
 #if HANDMADE_INTERNAL
@@ -798,9 +805,6 @@ main() {
     }
 
     // Platform exports
-    gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
-    gameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
     gameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
 
     gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
@@ -836,7 +840,7 @@ main() {
     allState.isReplayLooping = true;
 
     gPerfCounterFreq = SDL_GetPerformanceFrequency();
-    printf("PerfCounterFreq: %llu\n", gPerfCounterFreq);
+    printf("PerfCounterFreq: %lu\n", gPerfCounterFreq);
 
     u64 lastCounter{ hm_sdl::GetWallClock() };
     u64 lastCycleCount{ _rdtsc() };
@@ -847,20 +851,17 @@ main() {
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
+        gameInput.executableReloaded = false;
         const time_t newDllWriteTime{ hm_sdl::GetLastWriteTime(srcDllPath.data_) };
         if (game.lastWritetime != newDllWriteTime) {
             hm_sdl::UnloadGameCode(&game);
             game = hm_sdl::LoadGameCode(srcDllPath.data_, lockFilePath.data_);
+            gameInput.executableReloaded = true;
         }
 
-        // Keyboard input
+        /// Keyboard input
 
-        for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput.playerInputs);
-             ++controllerIndex) {
-            for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
-                gameInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
-            }
-        }
+        hm_input::ClearInputTransitionCounts(&gameInput);
 
         hm_sdl::ProcessPendingEvents(&gameInput, &allState);
 
@@ -874,7 +875,6 @@ main() {
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
         screenBuff.height = gScreenBuff.height;
-        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
         if (allState.recordingIndex != hm_sdl::replay_Buffer_Not_Recording) {

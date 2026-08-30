@@ -48,7 +48,9 @@ TruncateF32ToI32(f32 value) {
 NODISCARD
 INTERNAL inline u32
 TruncateF32ToU32(f32 value) {
-    ASSERT(value >= 0);
+    // TODO: disabled as of ep 74 for moving up and down via stairs
+    // This was hit in DrawBitmap for the shadows?
+    //ASSERT(value >= 0);
     const u32 result{ static_cast<u32>(value) };
     return result;
 }

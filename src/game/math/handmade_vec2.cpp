@@ -131,10 +131,11 @@ Length(Vec2 v) {
     return result;
 }
 
+// Is this even "good" code :D?
 NODISCARD
 INTERNAL inline bool32
 IsNormalized(Vec2 v) {
-    constexpr f32 eps{ 0.001f };
+    const f32 eps{ 0.001f };
     const bool32 result{ AbsF32(LengthSq(v) - 1.0f) < eps };
     return result;
 }
@@ -143,6 +144,7 @@ IsNormalized(Vec2 v) {
 NODISCARD
 INTERNAL inline Vec2
 Normalize(Vec2 v) {
+    // TODO: @Cleanup
     if (IsNormalized(v)) {
         return v;
     }
@@ -163,5 +165,19 @@ Reflect(Vec2 v, Vec2 n) {
     ASSERT(IsNormalized(n));
 
     const Vec2 result{ v - (2.0f * Dot(v, n) * n) };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec2
+Perp(Vec2 v) {
+    const Vec2 result{ -v.y, v.x };
+    return (result);
+}
+
+NODISCARD
+INTERNAL Vec2
+Lerp(Vec2 a, f32 t, Vec2 b) {
+    const Vec2 result{ (1 - t) * a + t * b };
     return result;
 }

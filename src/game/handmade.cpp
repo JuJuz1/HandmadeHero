@@ -26,98 +26,42 @@ GLOBAL GameMemory* gMemory;
 
 // NOTE: just a hacky way to print things from game code
 // TODO: think of a better way!
-#define PRINT(message) (*gMemory->exports.DEBUGPrint)(gThreadContext, message)
-#define PRINT_I32(message, value) (*gMemory->exports.DEBUGPrintInt)(gThreadContext, message, value)
-#define PRINT_U32(message, value) (*gMemory->exports.DEBUGPrintUInt)(gThreadContext, message, value)
-#define PRINT_F32(message, value)                                                                  \
-    (*gMemory->exports.DEBUGPrintFloat)(gThreadContext, message, value)
+// TODO: relies on gnu extension on clang, not perfect but will suffice
+#define PRINT(format, ...) (*gMemory->exports.DEBUGPrint)(gThreadContext, format, ##__VA_ARGS__)
 
 // clang-format off
 #include "game/handmade_world.cpp"
 #include "game/handmade_sim_region.cpp"
 #include "game/handmade_entity.cpp"
+#include "game/handmade_render_group.cpp"
 // clang-format on
-
-namespace hm_input {
-
-/**
- * Returns true if the button was just pressed during the frame
- */
-NODISCARD
-INTERNAL bool32
-ActionJustPressed(const Button* button) {
-    const bool32 result{ button->endedDown && button->halfTransitionCount > 0 };
-    return result;
-}
-
-/**
- * Returns true if the button was pressed during the frame
- * As this returns true for the first frame as well, ActionJustPressed and ActionPressed both return
- * true for the first frame for the same button
- */
-NODISCARD
-INTERNAL bool32
-ActionPressed(const Button* button) {
-    const bool32 result{ button->endedDown };
-    return result;
-}
-
-/**
- * Returns true if the button was just released during the frame
- */
-NODISCARD
-INTERNAL bool32
-ActionReleased(const Button* button) {
-    const bool32 result{ !button->endedDown && button->halfTransitionCount > 0 };
-    return result;
-}
-
-} //namespace hm_input
 
 /**
  * Write the sound data to buff
  */
 INTERNAL void
-OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {}
+OutputSound(const GameState* gameState, const SoundOutputBuffer* buff) {
+    UNUSED_PARAMS(gameState, buff);
+}
+
+NODISCARD
+INTERNAL inline Vec2
+TopDownAlign(LoadedBitmapInfo* bitmap, Vec2 align) {
+    ASSERT(bitmap);
+    align.y = static_cast<f32>(bitmap->height - 1) - align.y;
+    align.x = SafeRatio0(align.x, static_cast<f32>(bitmap->width));
+    align.y = SafeRatio0(align.y, static_cast<f32>(bitmap->height));
+
+    return align;
+}
 
 INTERNAL void
-DrawRectangle(const OffScreenBuffer* screenBuff, Vec2 min, Vec2 max, f32 r, f32 g, f32 b) {
-    i32 roundedMinX{ RoundF32ToI32(min.x) };
-    i32 roundedMinY{ RoundF32ToI32(min.y) };
-    i32 roundedMaxX{ RoundF32ToI32(max.x) };
-    i32 roundedMaxY{ RoundF32ToI32(max.y) };
+SetTopDownAlign(HeroBitmaps* heroBitmaps, Vec2 align) {
+    align = TopDownAlign(&heroBitmaps->head, align);
 
-    if (roundedMinX < 0) {
-        roundedMinX = 0;
-    }
-    if (roundedMinY < 0) {
-        roundedMinY = 0;
-    }
-
-    if (roundedMaxX > screenBuff->width) {
-        roundedMaxX = screenBuff->width;
-    }
-    if (roundedMaxY > screenBuff->height) {
-        roundedMaxY = screenBuff->height;
-    }
-
-    // AA RR GG BB
-    const i32 color{ (RoundF32ToI32(r * 255.0f) << 16) | (RoundF32ToI32(g * 255.0f) << 8) |
-                     (RoundF32ToI32(b * 255.0f) << 0) };
-
-    u8* memory{ static_cast<u8*>(screenBuff->memory) };
-    u8* row{ memory + (roundedMinX * screenBuff->bytesPerPixel) +
-             (roundedMinY * screenBuff->pitch) };
-
-    for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
-        // Not including fill pixel
-        u32* pixel{ reinterpret_cast<u32*>(row) };
-        for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            *pixel++ = color;
-        }
-
-        row += screenBuff->pitch;
-    }
+    heroBitmaps->head.alignPercentage = align;
+    heroBitmaps->cape.alignPercentage = align;
+    heroBitmaps->torso.alignPercentage = align;
 }
 
 // Struct packing to avoid manual work
@@ -150,8 +94,10 @@ struct BitmapHeader {
 
 #pragma pack(pop)
 
+NODISCARD
 INTERNAL LoadedBitmapInfo
-DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename) {
+DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename,
+             Vec2 align = {}) {
     LoadedBitmapInfo result{};
 
     auto readFileResult{ readFile(threadContext, filename) };
@@ -160,14 +106,18 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         u32* pixels{ reinterpret_cast<u32*>(static_cast<u8*>(readFileResult.content) +
                                             bitMapHeader->bitMapOffset) };
 
-        result.pixels = pixels;
+        result.memory = pixels;
         result.width = bitMapHeader->width;
         result.height = bitMapHeader->height;
+        result.alignPercentage = TopDownAlign(&result, align); // Y is top-down aligned
+        result.widthOverHeight =
+            SafeRatio0(static_cast<f32>(result.width), static_cast<f32>(result.height));
 
         // IMPORTANT: Byte order of bmp is determined by the header!
         // It seems we have a value of 3 for compression always, and the masks change between files!
         // NOTE: can most likely support other compression values as well!
         ASSERT(bitMapHeader->compression == 3);
+        ASSERT(bitMapHeader->height >= 0);
 
         const u32 redMask{ bitMapHeader->redMask };
         const u32 greenMask{ bitMapHeader->greenMask };
@@ -177,107 +127,90 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
 
         // Can also use _rotl
         // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/rotl-rotl64-rotr-rotr64?view=msvc-170
-        const BitscanResult redShift{ FindLeastSignificantBitSet(redMask) };
-        const BitscanResult greenShift{ FindLeastSignificantBitSet(greenMask) };
-        const BitscanResult blueShift{ FindLeastSignificantBitSet(blueMask) };
-        const BitscanResult alphaShift{ FindLeastSignificantBitSet(alphaMask) };
+        const auto redShift{ FindLeastSignificantBitSet(redMask) };
+        const auto greenShift{ FindLeastSignificantBitSet(greenMask) };
+        const auto blueShift{ FindLeastSignificantBitSet(blueMask) };
+        const auto alphaShift{ FindLeastSignificantBitSet(alphaMask) };
 
         ASSERT(redShift.found);
         ASSERT(greenShift.found);
         ASSERT(blueShift.found);
         ASSERT(alphaShift.found);
 
-        u32* srcDest{ pixels };
+        const i32 redShiftDown{ static_cast<i32>(redShift.index) };
+        const i32 greenShiftDown{ static_cast<i32>(greenShift.index) };
+        const i32 blueShiftDown{ static_cast<i32>(blueShift.index) };
+        const i32 alphaShiftDown{ static_cast<i32>(alphaShift.index) };
 
+        u32* srcDest{ pixels };
         for (i32 y{}; y < bitMapHeader->height; ++y) {
             for (i32 x{}; x < bitMapHeader->width; ++x) {
-                const u32 C{ *srcDest };
-                // TODO: episode 52, use rotateleft and right?
-                *srcDest++ = ((((C >> alphaShift.index) & 0xFF) << 24) |
-                              (((C >> redShift.index) & 0xFF) << 16) |
-                              (((C >> greenShift.index) & 0xFF) << 8) |
-                              (((C >> blueShift.index) & 0xFF) << 0));
+                const u32 color{ *srcDest };
+
+                Vec4 texel{ static_cast<f32>((color & redMask) >> redShiftDown),
+                            static_cast<f32>((color & greenMask) >> greenShiftDown),
+                            static_cast<f32>((color & blueMask) >> blueShiftDown),
+                            static_cast<f32>((color & alphaMask) >> alphaShiftDown) };
+
+                // @Speed
+                // TODO: this is now much slower and slows startup A LOT!
+                texel = SRGB255ToLinear1(texel);
+
+// Premultiplied alpha
+#if 0
+// Old way
+               const f32 an{ a / 255.0f };
+                r = r * an;
+                g = g * an;
+                b = b * an;
+#else
+                texel.rgb *= texel.a;
+#endif
+                texel = Linear1ToSRGB255(texel);
+
+// TODO: episode 52, use rotateleft and right?
+#if 0
+                *srcDest++ = ((((color >> alphaShift.index) & 0xFF) << 24) |
+                              (((color >> redShift.index) & 0xFF) << 16) |
+                              (((color >> greenShift.index) & 0xFF) << 8) |
+                              (((color >> blueShift.index) & 0xFF) << 0));
+#else
+                *srcDest++ = ((static_cast<u32>(texel.a + 0.5f) << 24) |
+                              (static_cast<u32>(texel.r + 0.5f) << 16) |
+                              (static_cast<u32>(texel.g + 0.5f) << 8) |
+                              (static_cast<u32>(texel.b + 0.5f) << 0));
+#endif
             }
         }
     } else {
-        PRINT("Couldn't load bmp!\n");
+        PRINT("Couldn't load bmp: %s\n", filename);
     }
+
+    result.pitch = result.width * bitmap_Bytes_Per_Pixel;
+
+#if 0
+    result.pitch = -result.width * bitmap_Bytes_Per_Pixel;
+    result.memory = static_cast<u8*>(result.memory) - (result.pitch * (result.height - 1));
+#endif
 
     return result;
 }
 
-INTERNAL void
-DrawBitmap(const OffScreenBuffer* screenBuff, const LoadedBitmapInfo* bitmap, f32 xPos, f32 yPos,
-           f32 CAlpha = 1.0f) {
-    // TODO: never have this case? use a placeholder instead?
-    if (!bitmap->pixels) {
-        return;
-    }
+// @Remove
+NODISCARD
+INTERNAL WorldPosition
+ChunkPositionFromTilePosition(World* world, i32 tileX, i32 tileY, i32 tileZ,
+                              Vec3 additionalOffset = {}) {
+    const f32 tileSideInMeters{ 1.4f };
+    const f32 tileDepthInMeters{ 3.0f };
 
-    i32 roundedMinX{ RoundF32ToI32(xPos) };
-    i32 roundedMinY{ RoundF32ToI32(yPos) };
-    i32 roundedMaxX{ roundedMinX + bitmap->width };
-    i32 roundedMaxY{ roundedMinY + bitmap->height };
+    const Vec3 tileDim{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
+    const Vec3 offset{ tileDim * Vec3{ tileX, tileY, tileZ } };
+    WorldPosition basePos{};
+    const WorldPosition result{ MapIntoChunkSpace(world, basePos, offset + additionalOffset) };
+    ASSERT(IsCanonical(world, result.offset_));
 
-    i32 srcOffsetX{};
-    if (roundedMinX < 0) {
-        srcOffsetX = -roundedMinX;
-        roundedMinX = 0;
-    }
-
-    i32 srcOffsetY{};
-    if (roundedMinY < 0) {
-        srcOffsetY = -roundedMinY;
-        roundedMinY = 0;
-    }
-
-    if (roundedMaxX > screenBuff->width) {
-        roundedMaxX = screenBuff->width;
-    }
-    if (roundedMaxY > screenBuff->height) {
-        roundedMaxY = screenBuff->height;
-    }
-
-    // Start from the last row (top row of the image) as the bitmap is stored bottom up
-    u32* srcRow{ bitmap->pixels + (bitmap->width * (bitmap->height - 1)) };
-    // Handle offsets to fix top and left side clipping
-    srcRow += -(bitmap->width * srcOffsetY) + srcOffsetX;
-
-    u8* destRow{ static_cast<u8*>(screenBuff->memory) + (roundedMinY * screenBuff->pitch) +
-                 (roundedMinX * screenBuff->bytesPerPixel) };
-
-    for (i32 y{ roundedMinY }; y < roundedMaxY; ++y) {
-        u32* dest{ reinterpret_cast<u32*>(destRow) };
-        u32* src{ srcRow };
-        for (i32 x{ roundedMinX }; x < roundedMaxX; ++x) {
-            f32 alpha{ static_cast<f32>((*src >> 24) & 0xFF) / 255.0f };
-            alpha *= CAlpha;
-
-            const f32 srcRed{ static_cast<f32>((*src >> 16) & 0xFF) };
-            const f32 srcGreen{ static_cast<f32>((*src >> 8) & 0xFF) };
-            const f32 srcBlue{ static_cast<f32>((*src >> 0) & 0xFF) };
-
-            const f32 destRed{ static_cast<f32>((*dest >> 16) & 0xFF) };
-            const f32 destGreen{ static_cast<f32>((*dest >> 8) & 0xFF) };
-            const f32 destBlue{ static_cast<f32>((*dest >> 0) & 0xFF) };
-
-            // Linear blend
-            const f32 resultRed{ ((1.0f - alpha) * destRed) + (alpha * srcRed) };
-            const f32 resultGreen{ ((1.0f - alpha) * destGreen) + (alpha * srcGreen) };
-            const f32 resultBlue{ ((1.0f - alpha) * destBlue) + (alpha * srcBlue) };
-
-            *dest = { (TruncateF32ToU32(resultRed + 0.5f) << 16) |
-                      (TruncateF32ToU32(resultGreen + 0.5f) << 8) |
-                      (TruncateF32ToU32(resultBlue + 0.5f) << 0) };
-
-            ++dest;
-            ++src;
-        }
-
-        destRow += screenBuff->pitch;
-        // Move to the start of the above row
-        srcRow += -bitmap->width;
-    }
+    return result;
 }
 
 struct AddLowEntityResult {
@@ -288,7 +221,7 @@ struct AddLowEntityResult {
 /**
  * Adds an entity to the low entity array
  */
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     ASSERT(gameState->lowEntityCount < gameState->lowEntities.size);
@@ -296,17 +229,27 @@ AddLowEntity(GameState* gameState, EntityType type, WorldPosition pos) {
     const i32 entityIndex{ gameState->lowEntityCount++ };
     auto* lowEntity{ &gameState->lowEntities[entityIndex] };
 
-    // No need for this maybe
+    // TODO: No need to clear maybe
     *lowEntity = LowEntity{};
     lowEntity->sim.type = type;
-    lowEntity->pos = NullWorldPos();
+    lowEntity->sim.collision = gameState->nullCollision;
     lowEntity->startingPos = pos;
+    lowEntity->pos = NullWorldPos();
 
-    ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, pos);
+    ChangeEntityLocation(gameState->world, &gameState->worldArena, entityIndex, lowEntity, &pos);
 
     AddLowEntityResult result{ lowEntity, entityIndex };
 
     return result;
+}
+
+NODISCARD
+INTERNAL AddLowEntityResult
+AddGroundedEntity(GameState* gameState, EntityType type, WorldPosition pos,
+                  SimEntityCollisionVolumeGroup* collision) {
+    auto entity{ AddLowEntity(gameState, type, pos) };
+    entity.lowEntity->sim.collision = collision;
+    return entity;
 }
 
 INTERNAL void
@@ -327,12 +270,11 @@ AddSword(GameState* gameState) {
     auto sword{ AddLowEntity(gameState, EntityType::SWORD, NullWorldPos()) };
     auto* lowEntity{ sword.lowEntity };
 
-    PRINT_I32("New sword: ", sword.lowIndex);
+    PRINT("New sword: %d\n", sword.lowIndex);
 
-    lowEntity->sim.dim.y = 0.75f;
-    lowEntity->sim.dim.x = 0.3f;
+    lowEntity->sim.collision = gameState->swordCollision;
     // TODO: needed?
-    //AddFlag(&lowEntity->sim, SimEntityFlags::NON_SPATIAL);
+    AddFlags(&lowEntity->sim, SimEntityFlags::NON_SPATIAL | SimEntityFlags::MOVEABLE);
 
     return sword;
 }
@@ -340,15 +282,13 @@ AddSword(GameState* gameState) {
 NODISCARD
 INTERNAL AddLowEntityResult
 AddPlayer(GameState* gameState) {
-    WorldPosition pos{ gameState->cameraPos };
-    auto player{ AddLowEntity(gameState, EntityType::HERO, pos) };
+    const auto pos{ gameState->cameraPos };
+    const auto player{ AddGroundedEntity(gameState, EntityType::HERO, pos,
+                                         gameState->heroCollision) };
     auto* lowEntity{ player.lowEntity };
-    PRINT_I32("New player: ", player.lowIndex);
+    PRINT("New player: %d\n", player.lowIndex);
 
-    lowEntity->sim.dim.y = 0.5f;  // 1.4f;
-    lowEntity->sim.dim.x = 0.75f; // entity->dimension.y * 0.75f;
-
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     InitHitpoints(lowEntity, 3);
 
@@ -369,371 +309,286 @@ AddPlayer(GameState* gameState) {
     return player;
 }
 
-NODISCARD
+//NODISCARD
+INTERNAL AddLowEntityResult
+AddStair(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto stair{ AddGroundedEntity(gameState, EntityType::STAIRWELL, pos,
+                                  gameState->stairwellCollision) };
+    auto* lowEntity{ stair.lowEntity };
+
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    lowEntity->sim.walkableDim = lowEntity->sim.collision->totalVolume.dim.xy;
+    lowEntity->sim.walkableHeight = gameState->typicalFloorHeight;
+
+    return stair;
+}
+
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddWall(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
-
-    auto wall{ AddLowEntity(gameState, EntityType::WALL, pos) };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto wall{ AddGroundedEntity(gameState, EntityType::WALL, pos, gameState->wallCollision) };
     auto* lowEntity{ wall.lowEntity };
 
-    lowEntity->sim.dim.y = gameState->world->tileSideInMeters;
-    lowEntity->sim.dim.x = gameState->world->tileSideInMeters;
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES);
 
     return wall;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddMonster(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto monster{ AddGroundedEntity(gameState, EntityType::MONSTER, pos,
+                                    gameState->monsterCollision) };
 
-    auto monster{ AddLowEntity(gameState, EntityType::MONSTER, pos) };
     auto* lowEntity{ monster.lowEntity };
-
-    lowEntity->sim.dim.y = 0.75f;
-    lowEntity->sim.dim.x = 0.6f;
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
     InitHitpoints(lowEntity, 5);
 
     return monster;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL AddLowEntityResult
 AddFamiliar(GameState* gameState, i32 tileX, i32 tileY, i32 tileZ) {
-    WorldPosition pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, tileX, tileY, tileZ) };
+    auto familiar{ AddGroundedEntity(gameState, EntityType::FAMILIAR, pos,
+                                     gameState->familiarCollision) };
 
-    auto familiar{ AddLowEntity(gameState, EntityType::FAMILIAR, pos) };
     auto* lowEntity{ familiar.lowEntity };
+    AddFlags(&lowEntity->sim, SimEntityFlags::COLLIDES | SimEntityFlags::MOVEABLE);
 
-    lowEntity->sim.dim.y = 0.5f;
-    lowEntity->sim.dim.x = 1.0f;
-    AddFlag(&lowEntity->sim, SimEntityFlags::COLLIDES);
+    // TODO: change to true when we get the stop follow to work
+    lowEntity->sim.followingHero = false;
 
     return familiar;
 }
 
+NODISCARD
+INTERNAL SimEntityCollisionVolumeGroup*
+MakeSimpleCollision(GameState* gameState, f32 dimX, f32 dimY, f32 dimZ) {
+    auto* collision{ PushStruct(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
+    collision->volumeCount = 1;
+    collision->volumes = PushArray(&gameState->worldArena, 1, SimEntityCollisionVolume);
+    collision->totalVolume.dim = Vec3{ dimX, dimY, dimZ };
+    collision->totalVolume.offsetPos = Vec3{ 0, 0, 0.5f * dimZ };
+    collision->volumes[0] = collision->totalVolume;
+
+    return collision;
+}
+
+NODISCARD
+INTERNAL SimEntityCollisionVolumeGroup*
+MakeNullCollision(GameState* gameState) {
+    auto* collision{ PushStruct(&gameState->worldArena, SimEntityCollisionVolumeGroup) };
+    collision->volumeCount = 0;
+    collision->volumes = nullptr;
+    collision->totalVolume.offsetPos = {};
+    // Negative?
+    collision->totalVolume.dim = {};
+    return collision;
+}
+
+INTERNAL AddLowEntityResult
+AddStandardRoom(GameState* gameState, i32 absTileX, i32 absTileY, i32 absTileZ) {
+    auto pos{ ChunkPositionFromTilePosition(gameState->world, absTileX, absTileY, absTileZ) };
+    auto entity{ AddGroundedEntity(gameState, EntityType::SPACE, pos,
+                                   gameState->standardRoomCollision) };
+    AddFlags(&entity.lowEntity->sim, SimEntityFlags::TRAVERSABLE);
+
+    return entity;
+}
+
 INTERNAL void
-LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
-    // Load the original art assets if one has preordered the game
-    // Although with a quick search one can find these on some public repo on Github...
+ClearBitmap(LoadedBitmapInfo* bitmap) {
+    if (bitmap->memory) {
+        ZeroMem(bitmap, bitmap->width * bitmap->height * bitmap_Bytes_Per_Pixel);
+    }
+}
 
-    HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[0] };
+NODISCARD
+INTERNAL LoadedBitmapInfo
+MakeEmptyBitmap(MemoryArena* arena, i32 width, i32 height, bool32 clearToZero = true) {
+    LoadedBitmapInfo result{};
 
-    // NOTE: should come up with a better way of getting the offsets for the correct align
+    result.width = width;
+    result.height = height;
+    result.pitch = width * bitmap_Bytes_Per_Pixel;
+    const i32 totalSize{ width * height * bitmap_Bytes_Per_Pixel };
+    result.memory = PushSize(arena, totalSize);
+    if (clearToZero) {
+        ClearBitmap(&result);
+    }
 
-    const auto readFileFunc{ memory->exports.DEBUGReadFile };
+    return result;
+}
 
-    // TODO: This should really be a runtime property...
-#if HANDMADE_USE_REAL_ASSETS
-    gameState->background =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_background.bmp");
+INTERNAL void
+MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
+    const f32 invWidth{ 1.0f / (bitmap->width - 1) };
+    const f32 invHeight{ 1.0f / (bitmap->height - 1) };
 
-    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tree00.bmp");
-    gameState->shadow =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_shadow.bmp");
+    u8* row{ static_cast<u8*>(bitmap->memory) };
+    for (i32 y{}; y < bitmap->height; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{}; x < bitmap->width; ++x) {
+            const Vec2 bitmapUV{ invWidth * static_cast<f32>(x), invHeight * static_cast<f32>(y) };
 
-    gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock03.bmp");
+            const f32 nX{ (2.0f * bitmapUV.x) - 1.0f };
+            const f32 nY{ (2.0f * bitmapUV.y) - 1.0f };
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_head.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_cape.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
-    ++heroBitmaps;
+            const f32 rootTerm{ 1.0f - SquareF32(nX) - SquareF32(nY) };
+            const f32 tilt{ 1.0f / Sqrt(2) }; // 0,707...
+            // We need the tilt because if we have {0, 1, 1} the reflection points straight up. In
+            // that case we can never see the reflected vector
+            Vec3 normal{ 0, tilt, tilt };
+            f32 nZ{};
+            if (rootTerm >= 0.0f) {
+                nZ = Sqrt(rootTerm);
+                normal = Vec3(nX, nY, nZ);
+            }
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_head.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_cape.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
-    ++heroBitmaps;
+            const Vec4 color{ 255.0f * 0.5f * (normal.x + 1.0f), 255.0f * 0.5f * (normal.y + 1.0f),
+                              255.0f * 0.5f * (normal.z + 1.0f), 255.0f * roughness };
+            *pixel++ =
+                ((static_cast<u32>(color.a + 0.5f) << 24) |
+                 (static_cast<u32>(color.r + 0.5f) << 16) |
+                 (static_cast<u32>(color.g + 0.5f) << 8) | (static_cast<u32>(color.b + 0.5f) << 0));
+        }
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_head.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_cape.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
-    ++heroBitmaps;
+        row += bitmap->pitch;
+    }
+}
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_head.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_cape.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_torso.bmp");
-    heroBitmaps->align = Vec2{ 72, 182 };
+INTERNAL void
+MakeSphereDiffuseMap(LoadedBitmapInfo* bitmap, f32 cx = 1.0f, f32 cy = 1.0f) {
+    const f32 widthInv{ 1.0f / static_cast<f32>(bitmap->width - 1) };
+    const f32 heightInv{ 1.0f / static_cast<f32>(bitmap->height - 1) };
 
-#else
+    u8* row{ static_cast<u8*>(bitmap->memory) };
+    for (i32 y{}; y < bitmap->height; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{}; x < bitmap->width; ++x) {
+            const Vec2 bitmapUV{ widthInv * static_cast<f32>(x), heightInv * static_cast<f32>(y) };
 
-    gameState->background =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/test_background.bmp");
+            const f32 nx{ cx * (2.0f * bitmapUV.x - 1.0f) };
+            const f32 ny{ cy * (2.0f * bitmapUV.y - 1.0f) };
 
-    // TODO: these just fail because we don't have a the bitmaps yet
-    // Doesn't crash the game though
-    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/tree.bmp");
-    gameState->shadow = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/shadow.bmp");
+            const f32 rootTerm{ 1.0f - nx * nx - ny * ny };
 
-    //gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/sword.bmp");
+            f32 alpha{};
+            if (rootTerm >= 0.0f) {
+                alpha = 1.0f;
+            }
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_forward.bmp");
+            const Vec3 baseColor{};
+            alpha *= 255.0f;
+            const Vec4 color{ alpha * baseColor.r, alpha * baseColor.g, alpha * baseColor.b,
+                              alpha };
 
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_forward.bmp");
-    heroBitmaps->align = Vec2{ 48, 100 };
-    ++heroBitmaps;
+            *pixel++ = (RoundF32ToU32(color.a) << 24) | (RoundF32ToU32(color.r) << 16) |
+                       (RoundF32ToU32(color.g) << 8) | (RoundF32ToU32(color.b) << 0);
+        }
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_left.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_left.bmp");
-    heroBitmaps->align = Vec2{ 46, 104 };
-    ++heroBitmaps;
+        row += bitmap->pitch;
+    }
+}
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_backward.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_backward.bmp");
-    heroBitmaps->align = Vec2{ 42, 100 };
-    ++heroBitmaps;
+INTERNAL void
+FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* groundBuff,
+                const WorldPosition* chunkPos) {
+    ASSERT(chunkPos);
+    ASSERT(IsValidWorldPos(chunkPos));
 
-    heroBitmaps->head =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_right.bmp");
-    heroBitmaps->cape =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
-    heroBitmaps->torso =
-        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_right.bmp");
-    heroBitmaps->align = Vec2{ 44, 104 };
+    PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
+          chunkPos->chunkZ);
+
+    auto groundMemory{ BeginTempMemory(&tranState->tranArena) };
+    // We do ground chunks in pixel space
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2)) };
+
+    //ScreenClear(renderGroup, Vec4{ 1.0f, 1.0f, 0.0f, 1.0f });
+
+    // Load the template but draw onto the pointer copied from the groundBuff
+    // Not anymore as we had no way of storing the bitmap when using this new deferred method
+    auto* buff{ &groundBuff->bitmap };
+    //buff = groundBuff->bitmap;
+    groundBuff->pos = *chunkPos;
+
+    // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
+    //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
+    const f32 width{ static_cast<f32>(buff->width) };
+    const f32 height{ static_cast<f32>(buff->height) };
+
+    for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
+        for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
+            const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };
+            const i32 chunkY{ chunkPos->chunkY + chunkOffsetY };
+            const i32 chunkZ{ chunkPos->chunkZ };
+
+            // TODO: better, systemic random generation
+            RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
+
+            const Vec2 center{ chunkOffsetX * width, chunkOffsetY * height };
+            for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
+                LoadedBitmapInfo* stamp;
+                if (RandChoice(&series, 2)) {
+                    stamp =
+                        &gameState->grassBitmaps[RandChoice(&series, gameState->grassBitmaps.size)];
+                } else {
+                    stamp =
+                        &gameState->stoneBitmaps[RandChoice(&series, gameState->stoneBitmaps.size)];
+                }
+
+                const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+                // Normalize to [-1, 1] via f(x) = 2x - 1
+                const Vec2 offset{ RandUnilateral(&series) * width,
+                                   RandUnilateral(&series) * height };
+                const Vec2 pos{ center + offset - bitmapCenter };
+
+                // TODO: height
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 1.0f);
+            }
+        }
+    }
+
+// Detail tufts on top of the "ground"
+#if 1
+    for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
+        for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
+            const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };
+            const i32 chunkY{ chunkPos->chunkY + chunkOffsetY };
+            const i32 chunkZ{ chunkPos->chunkZ };
+
+            // TODO: better, systemic random generation
+            RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
+
+            const Vec2 center{ chunkOffsetX * width, chunkOffsetY * height };
+            for (i32 grassIndex{}; grassIndex < 30; ++grassIndex) {
+                LoadedBitmapInfo* stamp;
+                stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
+
+                const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
+                const Vec2 offset{ RandUnilateral(&series) * width,
+                                   RandUnilateral(&series) * height };
+                const Vec2 pos{ center + offset - bitmapCenter };
+
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 1.0f);
+            }
+        }
+    }
 #endif
-}
 
-INTERNAL void
-InitializeGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
-    // TODO: maybe make platform set this
-    memory->isInitialized = true;
-
-    // NOTE: reserve slot 0 for null entity
-    // TODO: consider removing if there is no use case as this has caused a bit of problems with
-    // all sorts of stuff
-    AddLowEntity(gameState, EntityType::NON_EXISTENT, NullWorldPos());
-
-    // Changed to false after initializing one player
-    gameState->startWithAPlayer = true;
-
-    LoadArtAssets(threadContext, gameState, memory);
-
-    InitializeArena(&gameState->worldArena,
-                    static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
-                    memory->permanentStorageSize - sizeof(GameState));
-
-    gameState->world = PushSize(&gameState->worldArena, World);
-    World* world{ gameState->world };
-    InitializeWorld(world, 1.4f);
-
-    u32 randomNumIndex{};
-
-    bool32 doorLeft{};
-    bool32 doorRight{};
-    bool32 doorTop{};
-    bool32 doorBottom{};
-
-    bool32 doorUp{};
-    bool32 doorDown{};
-
-    const i32 screenBaseX{};
-    const i32 screenBaseY{};
-    const i32 screenBaseZ{};
-
-    i32 screenX{ screenBaseX };
-    i32 screenY{ screenBaseY };
-    i32 absTileZ{ screenBaseZ };
-
-    i32 wallsAdded{};
-
-    // How many rooms to create
-    constexpr i32 screenCount{ 50 };
-
-    // Generating tile values
-    for (u32 screen{}; screen < screenCount; ++screen) {
-        ASSERT(randomNumIndex < hm_random::randomNumbers.size);
-        u32 randomChoice;
-        // Lateral only
-        //if (doorUp || doorDown) {
-        // TODO: remove comments
-        randomChoice = hm_random::randomNumbers[randomNumIndex++] % 2;
-        //} else {
-        //    randomChoice = hm_random::randomNumbers[randomNumIndex++] % 3;
-        //}
-
-        bool32 createdZDoor{};
-        // randomChoice of 2 means the room is blocked and has a door going up
-        // Atm this logic means we can only have 2 layers (z of 0 or 1)
-        if (randomChoice == 2) {
-            createdZDoor = true;
-            if (absTileZ == screenBaseZ) {
-                doorUp = true;
-            } else {
-                doorDown = true;
-            }
-        } else if (randomChoice == 1) {
-            doorRight = true;
-        } else {
-            doorTop = true;
-        }
-
-        for (i32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
-            for (i32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
-                const i32 absTileX{ (screenX * tiles_Per_Width) + tileX };
-                const i32 absTileY{ (screenY * tiles_Per_Height) + tileY };
-
-                u32 tileValue{ 2 };
-                if (tileX == 0 && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
-                    tileValue = blocked_Tile_Value;
-                }
-                if (tileX == (tiles_Per_Width - 1) &&
-                    (!doorRight || (tileY != (tiles_Per_Height / 2)))) {
-                    tileValue = blocked_Tile_Value;
-                }
-                if (tileY == 0 && (!doorBottom || (tileX != tiles_Per_Width / 2))) {
-                    tileValue = blocked_Tile_Value;
-                }
-                if (tileY == (tiles_Per_Height - 1) &&
-                    (!doorTop || (tileX != tiles_Per_Width / 2))) {
-                    tileValue = blocked_Tile_Value;
-                }
-
-                if (tileX == 10 && tileY == 6) {
-                    if (doorUp) {
-                        tileValue = 4;
-                    }
-                    if (doorDown) {
-                        tileValue = 5;
-                    }
-                }
-
-                if (tileValue == blocked_Tile_Value) {
-                    const auto wall{ AddWall(gameState, absTileX, absTileY, absTileZ) };
-                    ++wallsAdded;
-                }
-            }
-        }
-
-        doorLeft = doorRight;
-        doorBottom = doorTop;
-
-        doorRight = false;
-        doorTop = false;
-
-        if (createdZDoor) {
-            doorDown = !doorDown;
-            doorUp = !doorUp;
-        } else {
-            doorUp = false;
-            doorDown = false;
-        }
-
-        if (randomChoice == 2) {
-            if (absTileZ == screenBaseZ) {
-                absTileZ += 1;
-            } else {
-                absTileZ = screenBaseZ;
-            }
-        }
-        // Advance screens if we didn't make a vertical floor (door)
-        else if (randomChoice == 1) {
-            ++screenX;
-        } else {
-            ++screenY;
-        }
-    }
-
-    if (wallsAdded > 0) {
-        PRINT_I32("Walls added: ", wallsAdded);
-    }
-
-    const i32 cameraTileX{ screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2) };
-    const i32 cameraTileY{ screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2) };
-    const i32 cameraTileZ{ screenBaseZ };
-    WorldPosition newCameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
-                                                              cameraTileZ) };
-    gameState->cameraPos = newCameraPos;
-
-    // Add other entities
-
-    AddMonster(gameState, cameraTileX + 2, cameraTileY, cameraTileZ);
-
-    //constexpr i32 familiarCount{ 1 }; // 10
-
-    //for (i32 i{}; i < familiarCount; ++i) {
-    //    const i32 familiarOffsetX{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 7 };
-    //    const i32 familiarOffsetY{ (hm_random::randomNumbers[randomNumIndex++] % 10) - 3 };
-    //    if (familiarOffsetX && familiarOffsetY) {
-    //        AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
-    //                    cameraTileZ);
-    //    }
-    //}
-
-    AddFamiliar(gameState, cameraTileX - 2, cameraTileY + 1, cameraTileZ);
-
-    // Atm SetCamera has to be called at the end if there is no player at the start
-    // This is because we don't call SetCamera after this function if there is no player
-    //WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
-    //                                                       cameraTileZ) };
-    //SetCamera(gameState, cameraPos);
-}
-
-INTERNAL void
-PushPiece(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
-          Vec2 align, Vec2 dimension, Vec4 color, f32 entityZC = 1.0f) {
-    ASSERT(group->pieceCount < group->pieces.size);
-    EntityVisiblePiece* piece{ &group->pieces[group->pieceCount++] };
-
-    piece->bitmap = bitmap;
-    piece->offset = (group->gameState->metersToPixels * Vec2{ offset.x, -offset.y }) - align;
-    piece->offsetZ = group->gameState->metersToPixels * offsetZ;
-    piece->entityZC = entityZC;
-
-    piece->dimension = dimension;
-
-    piece->r = color.r;
-    piece->g = color.g;
-    piece->b = color.b;
-    piece->a = color.a;
-}
-
-INTERNAL void
-PushBitmap(EntityVisiblePieceGroup* group, LoadedBitmapInfo* bitmap, Vec2 offset, f32 offsetZ,
-           Vec2 align, f32 alpha = 1.0f, f32 entityZC = 1.0f) {
-    PushPiece(group, bitmap, offset, offsetZ, align, Vec2{}, Vec4{ 1.0f, 1.0f, 1.0f, alpha },
-              entityZC);
-}
-
-INTERNAL void
-PushRect(EntityVisiblePieceGroup* group, Vec2 offset, f32 offsetZ, Vec2 dimension, Vec4 color,
-         f32 entityZC = 1.0f) {
-    PushPiece(group, nullptr, offset, offsetZ, Vec2{}, dimension, color, entityZC);
+    RenderGroupToOutput(renderGroup, buff, gameState);
+    EndTempMemory(groundMemory);
 }
 
 INTERNAL void
 ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
-    PRINT("ClearCollisionRulesFor\n");
-    PRINT_I32("Index: ", storageIndex);
+    PRINT("ClearCollisionRulesFor, index: %d\n", storageIndex);
 
     // @Speed
     // TODO: better way to remove collision rather than walking through the whole map!
@@ -754,11 +609,8 @@ ClearCollisionRulesFor(GameState* gameState, i32 storageIndex) {
 }
 
 INTERNAL void
-AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 shouldCollide) {
-    PRINT("AddCollisionRule\n");
-    PRINT_I32("A: ", storageIndexA);
-    PRINT_I32("B: ", storageIndexB);
-    PRINT_I32("Collide: ", shouldCollide);
+AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, bool32 canCollide) {
+    PRINT("AddCollisionRule A: %d, B: %d, collide: %d\n", storageIndexA, storageIndexB, canCollide);
 
     if (storageIndexA > storageIndexB) {
         const i32 temp{ storageIndexA };
@@ -783,7 +635,7 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
             gameState->firstFreeCollisionRule = found->nextInHash;
         } else {
             // Push to head always
-            found = PushSize(&gameState->worldArena, PairWiseCollisionRule);
+            found = PushStruct(&gameState->worldArena, PairWiseCollisionRule);
         }
 
         found->nextInHash = gameState->collisionRuleHash[hashBucket];
@@ -796,60 +648,509 @@ AddCollisionRule(GameState* gameState, i32 storageIndexA, i32 storageIndexB, boo
     if (found) {
         found->storageIndexA = storageIndexA;
         found->storageIndexB = storageIndexB;
-        found->shouldCollide = shouldCollide;
+        found->canCollide = canCollide;
     }
 }
 
 INTERNAL void
-DrawHitpoints(SimEntity* entity, EntityVisiblePieceGroup* group) {
+DrawHitpoints(const SimEntity* entity, RenderGroup* group) {
     if (entity->hitPointMax >= 1) {
-        constexpr Vec2 hitPointdimension{ 0.2f, 0.2f };
-        constexpr f32 spacingX{ hitPointdimension.x * 1.5f };
+        const Vec2 hitpointDim{ 0.2f, 0.2f };
+        const f32 spacingX{ hitpointDim.x * 1.5f };
         Vec2 hitPointPos{ -0.5f * (entity->hitPointMax - 1) * spacingX, -0.25f };
-        constexpr Vec2 dPos{ spacingX, 0.0f };
+        const Vec2 dPos{ spacingX, 0.0f };
 
         for (i32 i{}; i < entity->hitPointMax; ++i) {
-            HitPoint* hitPoint{ &entity->hitPoints[i] };
+            const HitPoint* hitPoint{ &entity->hitPoints[i] };
             Vec4 color{ 1.0f, 0.0f, 0.0f, 1.0f };
             if (hitPoint->filledAmount == 0) {
                 color = Vec4{ 0.2f, 0.2f, 0.2f, 1.0f };
             }
 
             // TODO: Height
-            PushRect(group, hitPointPos, 0, hitPointdimension, color, 0.0f);
+            PushRect(group, Vec3{ hitPointPos, 0 }, hitpointDim, color);
             hitPointPos += dPos;
         }
     }
 }
 
+INTERNAL void
+LoadArtAssets(ThreadContext* threadContext, GameState* gameState, GameMemory* memory) {
+    // Load the original art assets if one has preordered the game
+    // Although with a quick search one can find these on some public repo on Github...
+
+    HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[0] };
+
+    // NOTE: should come up with a better way of getting the offsets for the correct align
+
+    const auto readFileFunc{ memory->exports.DEBUGReadFile };
+
+    // TODO: This should really be a runtime property...
+    // Will be at some point :)
+#if HANDMADE_USE_REAL_ASSETS
+    gameState->grassBitmaps[0] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/grass00.bmp");
+    gameState->grassBitmaps[1] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/grass01.bmp");
+
+    gameState->stoneBitmaps[0] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground00.bmp");
+    gameState->stoneBitmaps[1] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground01.bmp");
+    gameState->stoneBitmaps[2] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground02.bmp");
+    gameState->stoneBitmaps[3] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/ground03.bmp");
+
+    gameState->tuftBitmaps[0] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tuft00.bmp");
+    gameState->tuftBitmaps[1] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tuft01.bmp");
+    gameState->tuftBitmaps[2] =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tuft02.bmp");
+
+    gameState->background =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_background.bmp");
+
+    gameState->tree =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/tree00.bmp", { 40, 80 });
+
+    gameState->shadow = DEBUGLoadBMP(threadContext, readFileFunc,
+                                     "original/test/test_hero_shadow.bmp", { 72, 182 });
+
+    gameState->stairwell = DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock02.bmp");
+
+    gameState->sword =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test2/rock03.bmp", { 29, 10 });
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_front_torso.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
+    ++heroBitmaps;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_left_torso.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
+    ++heroBitmaps;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_back_torso.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
+    ++heroBitmaps;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_head.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_cape.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "original/test/test_hero_right_torso.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 72, 182 });
+
+#else
+
+    gameState->background =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/test_background.bmp");
+
+    // TODO: these just fail because we don't have a the bitmaps yet
+    // Doesn't crash the game though
+    gameState->tree = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/tree.bmp");
+    gameState->shadow = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/shadow.bmp");
+
+    //gameState->sword = DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test2/sword.bmp");
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_forward.bmp");
+
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_forward.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 48, 100 });
+    ++heroBitmaps;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_left.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_left.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 46, 104 });
+    ++heroBitmaps;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_backward.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_backward.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 42, 100 });
+    ++heroBitmaps;
+
+    heroBitmaps->head =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_head_right.bmp");
+    heroBitmaps->cape =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_cape_placeholder.bmp");
+    heroBitmaps->torso =
+        DEBUGLoadBMP(threadContext, readFileFunc, "handmade/test/player_torso_right.bmp");
+    SetTopDownAlign(heroBitmaps, Vec2{ 44, 104 });
+#endif
+}
+
+INTERNAL void
+InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* memory,
+              OffScreenBuffer* screenBuff) {
+    ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
+    ArenaInit(&gameState->worldArena,
+              static_cast<u8*>(memory->permanentStorage) + sizeof(GameState),
+              memory->permanentStorageSize - sizeof(GameState));
+    PRINT("GameState size: %d (%.3f mb)\n", sizeof(GameState),
+          sizeof(GameState) / (1024.0f * 1024.0f));
+
+    gameState->world = PushStruct(&gameState->worldArena, World);
+    World* world{ gameState->world };
+
+    gameState->typicalFloorHeight = 3.0f;
+
+    const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
+    const i32 groundBuffHeight{ 256 };
+
+    // @Remove
+    const f32 pixelsToMeters{ 1.0f / 42.0f };
+    const Vec3 chunkDimInMeters{ pixelsToMeters * groundBuffWidth,
+                                 pixelsToMeters * groundBuffHeight, gameState->typicalFloorHeight };
+    InitWorld(world, chunkDimInMeters);
+
+    // IMPORTANT: This now determines the actual pixel size of the tiles!
+    //const i32 tileSideInPixels{ 60 };
+    //gameState->metersToPixels = static_cast<f32>(tileSideInPixels) /
+    //world->tileSideInMeters;
+
+    // NOTE: reserve slot 0 for null entity
+    // TODO: consider removing if there is no use case as this has caused a bit of problems
+    // with all sorts of stuff
+    AddLowEntity(gameState, EntityType::NON_EXISTENT, NullWorldPos());
+
+    // @Remove
+    const f32 tileSideInMeters{ 1.4f };
+    const f32 tileDepthInMeters{ 3.0f };
+
+    gameState->nullCollision = MakeNullCollision(gameState);
+    gameState->swordCollision = MakeSimpleCollision(gameState, 0.8f, 0.75f, 0.1f);
+    gameState->stairwellCollision = MakeSimpleCollision(
+        gameState, tileSideInMeters, tileSideInMeters * 2.0f, tileDepthInMeters * 1.1f);
+    gameState->monsterCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
+    gameState->familiarCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
+    gameState->heroCollision = MakeSimpleCollision(gameState, 1.0f, 0.5f, 0.5f);
+    gameState->wallCollision =
+        MakeSimpleCollision(gameState, tileSideInMeters, tileSideInMeters, tileDepthInMeters);
+    gameState->standardRoomCollision =
+        MakeSimpleCollision(gameState, tileSideInMeters * tiles_Per_Width,
+                            tileSideInMeters * tiles_Per_Height, tileDepthInMeters * 0.9f);
+
+    // Changed to false after initializing one player
+    gameState->startWithAPlayer = true;
+    gameState->allowUnlimitedJumps = true;
+
+    LoadArtAssets(threadContext, gameState, memory);
+
+    // TODO: store in GameState?
+    RandSeries series{ RandSeed(1234) };
+
+    const i32 screenBaseX{};
+    const i32 screenBaseY{};
+    const i32 screenBaseZ{};
+
+    i32 screenX{ screenBaseX };
+    i32 screenY{ screenBaseY };
+    i32 absTileZ{ screenBaseZ };
+
+    // TODO: Replace all this with real world generation!
+    bool32 doorLeft{};
+    bool32 doorRight{};
+    bool32 doorTop{};
+    bool32 doorBottom{};
+    bool32 doorUp{};
+    bool32 doorDown{};
+
+    i32 wallsAdded{};
+    i32 stairsAdded{};
+
+    for (i32 screenIndex{}; screenIndex < 2000; ++screenIndex) {
+#if 1
+        u32 doorDirection{ RandChoice(&series, (doorUp || doorDown) ? 2 : 4) };
+#else
+        const u32 doorDirection{ RandChoice(&series, 2) };
+#endif
+
+        // @Remove
+        doorDirection = 3;
+
+        bool32 createdZDoor{};
+
+        if (doorDirection == 3) {
+            createdZDoor = true;
+            doorDown = true;
+        } else if (doorDirection == 2) {
+            createdZDoor = true;
+            doorUp = true;
+        } else if (doorDirection == 1) {
+            doorRight = true;
+        } else {
+            doorTop = true;
+        }
+
+        AddStandardRoom(gameState, (screenX * tiles_Per_Width) + (tiles_Per_Width / 2),
+                        (screenY * tiles_Per_Height) + (tiles_Per_Height / 2), absTileZ);
+
+        for (i32 tileY{}; tileY < tiles_Per_Height; ++tileY) {
+            for (i32 tileX{}; tileX < tiles_Per_Width; ++tileX) {
+                const i32 absTileX{ screenX * tiles_Per_Width + tileX };
+                const i32 absTileY{ screenY * tiles_Per_Height + tileY };
+
+                bool32 shouldBeDoor{};
+
+                if ((tileX == 0) && (!doorLeft || (tileY != (tiles_Per_Height / 2)))) {
+                    shouldBeDoor = true;
+                }
+
+                if ((tileX == (tiles_Per_Width - 1)) &&
+                    (!doorRight || (tileY != (tiles_Per_Height / 2)))) {
+                    shouldBeDoor = true;
+                }
+
+                if ((tileY == 0) && (!doorBottom || (tileX != (tiles_Per_Width / 2)))) {
+                    shouldBeDoor = true;
+                }
+
+                if ((tileY == (tiles_Per_Height - 1)) &&
+                    (!doorTop || (tileX != (tiles_Per_Width / 2)))) {
+                    shouldBeDoor = true;
+                }
+
+                if (shouldBeDoor) {
+                    if ((tileY % 2) || (tileX % 2)) {
+                        AddWall(gameState, absTileX, absTileY, absTileZ);
+                        ++wallsAdded;
+                    }
+                } else if (createdZDoor) {
+                    if (((absTileZ % 2) && (tileX == 10) && (tileY == 5)) ||
+                        (!(absTileZ % 2) && (tileX == 4) && (tileY == 5))) {
+                        AddStair(gameState, absTileX, absTileY, doorDown ? absTileZ - 1 : absTileZ);
+                        ++stairsAdded;
+                    }
+                }
+            }
+        }
+
+        doorLeft = doorRight;
+        doorBottom = doorTop;
+
+        if (createdZDoor) {
+            doorDown = !doorDown;
+            doorUp = !doorUp;
+        } else {
+            doorUp = false;
+            doorDown = false;
+        }
+
+        doorRight = false;
+        doorTop = false;
+
+        if (doorDirection == 3) {
+            absTileZ -= 1;
+        } else if (doorDirection == 2) {
+            absTileZ += 1;
+        } else if (doorDirection == 1) {
+            screenX += 1;
+        } else {
+            screenY += 1;
+        }
+    }
+
+    PRINT("Walls added: %d\n", wallsAdded);
+    PRINT("Stairs added: %d\n", stairsAdded);
+
+    const i32 cameraTileX{ screenBaseX * tiles_Per_Width + (tiles_Per_Width / 2) };
+    const i32 cameraTileY{ screenBaseY * tiles_Per_Height + (tiles_Per_Height / 2) };
+    const i32 cameraTileZ{ screenBaseZ };
+    WorldPosition newCameraPos{ ChunkPositionFromTilePosition(world, cameraTileX, cameraTileY,
+                                                              cameraTileZ) };
+    gameState->cameraPos = newCameraPos;
+
+    // Add other entities
+
+    AddMonster(gameState, cameraTileX + 4, cameraTileY, cameraTileZ);
+
+    const i32 familiarCount{ 1 }; // 10
+
+    for (i32 i{}; i < familiarCount; ++i) {
+        const i32 familiarOffsetX{ RandRange(&series, -7, 7) };
+        const i32 familiarOffsetY{ RandRange(&series, -3, -1) };
+        if (familiarOffsetX && familiarOffsetY) {
+            AddFamiliar(gameState, cameraTileX + familiarOffsetX, cameraTileY + familiarOffsetY,
+                        cameraTileZ);
+        }
+    }
+
+    //AddFamiliar(gameState, cameraTileX - 2, cameraTileY + 1, cameraTileZ);
+
+    // Atm SetCamera has to be called at the end if there is no player at the start
+    // This is because we don't call SetCamera after this function if there is no player
+    //WorldPosition cameraPos{ ChunkPositionFromTilePosition(world, cameraTileX,
+    //cameraTileY,
+    //                                                       cameraTileZ) };
+    //SetCamera(gameState, cameraPos);
+
+    PRINT("Entity count after InitGameState: %d\n", gameState->lowEntityCount);
+
+    // TODO: maybe make platform set this?
+    memory->isInitialized = true;
+}
+
+#if 0
+INTERNAL void
+RequestGroundBuffers(GameState* gameState, TransientState* tranState, WorldPosition* centerPos,
+                     Rect3 bounds) {
+    bounds = AddOffsetTo(bounds, centerPos->offset_);
+    centerPos->offset_ = Vec3{};
+    //for () {
+    //}
+
+    FillGroundChunk(gameState, tranState, tranState->groundBuffs, &gameState->cameraPos);
+}
+#endif
+
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
-    ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
     // NOTE: this macro depends on the order of the buttons inside InputButtons
-    ASSERT(&input->playerInputs[0].Z - &input->playerInputs[0].buttons[0] ==
+    ASSERT(&input->playerInputs[0].terminator - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
-    ASSERT(&input->mouseButtons.x2 - &input->mouseButtons.buttons[0] ==
+    ASSERT(&input->mouseButtons.terminator - &input->mouseButtons.buttons[0] ==
            ARRAY_COUNT(input->mouseButtons.buttons) - 1);
 
     // TODO: Find another way preferrably
     gThreadContext = threadContext;
     gMemory = memory;
 
+    const f32 deltaTime{ input->frameDeltaTime };
+
     GameState* gameState{ static_cast<GameState*>(memory->permanentStorage) };
-    if (!memory->isInitialized) {
-        InitializeGameState(threadContext, gameState, memory);
+    ASSERT(sizeof(TransientState) <= memory->transientStorageSize);
+    // Funny, casey uses C-style casts so he had a nasty typo, he accidentally had the size
+    // here not the actual start of the storage -> DON'T use C-style casts!
+    //TransientState* tranState{ (TransientState*)memory->transientStorageSize };
+    // static_cast would not allow the cast here, we would have to use reinterpret_cast
+    TransientState* tranState{ static_cast<TransientState*>(memory->transientStorage) };
+
+    if (gameState->requestFullGameReset) {
+        PRINT("FULL RESET!\n");
+        gameState->requestFullGameReset = false;
+
+        //*gameState = {};
+        ZeroMem(memory->permanentStorage, memory->permanentStorageSize);
+        memory->isInitialized = false;
+
+        // TODO: Seperate tranState resetting from this full reset?
+        ZeroMem(memory->transientStorage, memory->transientStorageSize);
+        tranState->isInitialized = false;
+
+        ASSERT(IsMemZeroed(memory->permanentStorage, memory->permanentStorageSize));
+        ASSERT(IsMemZeroed(memory->transientStorage, memory->transientStorageSize));
     }
+
+    if (!memory->isInitialized) {
+        ASSERT(IsMemZeroed(memory->permanentStorage, memory->permanentStorageSize));
+
+        InitGameState(threadContext, gameState, memory, screenBuff);
+    }
+
+    if (!tranState->isInitialized) {
+        ASSERT(IsMemZeroed(memory->transientStorage, memory->transientStorageSize));
+
+        ArenaInit(&tranState->tranArena,
+                  static_cast<u8*>(memory->transientStorage) + sizeof(TransientState),
+                  memory->transientStorageSize - sizeof(TransientState));
+
+        /// Ground buffs
+        // @Duplicate
+        const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
+        const i32 groundBuffHeight{ 256 };
+
+        tranState->groundBuffCount = 64; // 128
+        tranState->groundBuffs =
+            PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
+
+        for (i32 i{}; i < tranState->groundBuffCount; ++i) {
+            auto* groundBuff{ &tranState->groundBuffs[i] };
+            groundBuff->bitmap =
+                MakeEmptyBitmap(&tranState->tranArena, groundBuffWidth, groundBuffHeight, false);
+            groundBuff->pos = NullWorldPos();
+        }
+
+        gameState->testDiffuse = MakeEmptyBitmap(&tranState->tranArena, 256, 256, false);
+        DrawRect(&gameState->testDiffuse, Vec2{},
+                 Vec2{ gameState->testDiffuse.width, gameState->testDiffuse.height },
+                 Vec4{ 0.5, 0.5, 0.5, 1 });
+        gameState->testNormal = MakeEmptyBitmap(&tranState->tranArena, gameState->testDiffuse.width,
+                                                gameState->testDiffuse.height, false);
+        MakeSphereNormalMap(&gameState->testNormal, 0.0f);
+        MakeSphereDiffuseMap(&gameState->testDiffuse);
+
+        tranState->envMapWidth = 512;
+        tranState->envMapHeight = 256;
+
+        for (i32 i{}; i < tranState->envMaps.size; ++i) {
+            auto* map{ &tranState->envMaps[i] };
+            i32 width{ tranState->envMapWidth };
+            i32 height{ tranState->envMapHeight };
+            for (i32 lodIndex{}; lodIndex < map->lod.size; ++lodIndex) {
+                map->lod[lodIndex] = MakeEmptyBitmap(&tranState->tranArena, width, height, false);
+                width >>= 1;
+                height >>= 1;
+            }
+        }
+
+        tranState->isInitialized = true;
+    }
+
+#if 0
+    if (input->executableReloaded) {
+        for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
+             ++groundBuffIndex) {
+            auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+            //groundBuff->memoryBitmap = nullptr; // We assign memory locations for these above
+            groundBuff->pos = NullWorldPos();
+        }
+    }
+#endif
 
     World* world{ gameState->world };
 
-    const f32 delta{ input->frameDeltaTime };
-
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
          ++controllerIndex) {
-        const InputButtons* buttons{ &input->playerInputs[controllerIndex] };
+        // TODO: Why are we namespacing if we end up doing this...
+        using namespace hm_input;
+
+        const auto* buttons{ &input->playerInputs[controllerIndex] };
         auto* controlled{ &gameState->controlledHeroes[controllerIndex] };
+
+        const bool32 shiftPressed{ ActionPressed(&buttons->shift) };
+        const bool32 ctrlPressed{ ActionPressed(&buttons->ctrl) };
+
         if (controlled->entityIndex == 0) {
-            if (hm_input::ActionJustPressed(&buttons->enter) || gameState->startWithAPlayer) {
+            if (ActionJustPressed(&buttons->enter) || gameState->startWithAPlayer) {
                 if (gameState->startWithAPlayer) {
                     gameState->startWithAPlayer = false;
                 }
@@ -868,70 +1169,131 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             // Need to check the type as we have the null entity...
             //if (controllingEntity.low->type != EntityType::NON_EXISTENT) {
-            if (hm_input::ActionPressed(&buttons->up)) {
+            if (ActionPressed(&buttons->up)) {
                 controlled->ddP.y = 1.0f;
             }
-            if (hm_input::ActionPressed(&buttons->down)) {
+            if (ActionPressed(&buttons->down)) {
                 controlled->ddP.y = -1.0f;
             }
-            if (hm_input::ActionPressed(&buttons->left)) {
+            if (ActionPressed(&buttons->left)) {
                 controlled->ddP.x = -1.0f;
             }
-            if (hm_input::ActionPressed(&buttons->right)) {
+            if (ActionPressed(&buttons->right)) {
                 controlled->ddP.x = 1.0f;
             }
 
             // Jump
-            if (hm_input::ActionJustPressed(&buttons->space)) {
-                if (controlled->dZ == 0.0f) {
-                    controlled->dZ = 3.0f;
+            if (ActionJustPressed(&buttons->space)) {
+                if (ctrlPressed) {
+                    gameState->allowUnlimitedJumps = !gameState->allowUnlimitedJumps;
+                    if (gameState->allowUnlimitedJumps) {
+                        PRINT("Unlimited jumps!\n");
+                    } else {
+                        PRINT("No multiple jumps!\n");
+                    }
+                } else {
+                    if (controlled->dZ == 0.0f) {
+                        controlled->dZ = 3.0f;
+                    }
                 }
             }
 
             // Sprint
-            if (hm_input::ActionPressed(&buttons->shift)) {
+            if (shiftPressed) {
                 controlled->sprint = true;
             }
 
             // Reset position if we get stuck
-            if (hm_input::ActionJustPressed(&buttons->R)) {
+            if (ActionJustPressed(&buttons->R)) {
                 // Shift means resetting the sword
-                if (hm_input::ActionPressed(&buttons->shift)) {
-                    controlled->requestResetSword = true;
+                if (shiftPressed) {
+                    // Full reset of game, at the start of the next frame
+                    if (ctrlPressed) {
+                        // TODO: store in controlledHero or no?
+                        gameState->requestFullGameReset = true;
+                        PRINT("Full game reset requested!\n");
+                    } else {
+                        controlled->requestSwordReset = true;
+                    }
+
                 } else {
-                    controlled->requestReset = true;
+                    controlled->requestHeroReset = true;
                 }
             }
 
+            if (ActionJustPressed(&buttons->F5)) {
+                gameState->requestFullGameReset = true;
+                PRINT("Full game reset requested!\n");
+            }
+
+            if (ActionJustPressed(&buttons->F)) {
+                if (shiftPressed) {
+                    controlled->requestFamiliarReset = true;
+                } else {
+                    controlled->requestFamiliarStopFollow = true;
+                }
+            }
+
+#if 0
             // Sword
-            if (hm_input::ActionJustPressed(&buttons->actionUp)) {
+            if (ActionJustPressed(&buttons->actionUp)) {
                 controlled->dSword.y = 1.0f;
             }
-            if (hm_input::ActionJustPressed(&buttons->actionDown)) {
+            if (ActionJustPressed(&buttons->actionDown)) {
                 controlled->dSword.y = -1.0f;
             }
-            if (hm_input::ActionJustPressed(&buttons->actionLeft)) {
+            if (ActionJustPressed(&buttons->actionLeft)) {
                 controlled->dSword.x = -1.0f;
             }
-            if (hm_input::ActionJustPressed(&buttons->actionRight)) {
+            if (ActionJustPressed(&buttons->actionRight)) {
                 controlled->dSword.x = 1.0f;
+            }
+#else
+            // @Debug
+            f32 zoomRate{};
+
+            if (ActionPressed(&buttons->actionUp)) {
+                if (shiftPressed) {
+                    zoomRate = 5.0f;
+                } else {
+                    zoomRate = 1.0f;
+                }
+            }
+            if (ActionPressed(&buttons->actionDown)) {
+                if (shiftPressed) {
+                    zoomRate = -5.0f;
+                } else {
+                    zoomRate = -1.0f;
+                }
+            }
+
+            gameState->zOffset += zoomRate * deltaTime;
+#endif
+
+            // @Debug
+            if (ActionJustPressed(&buttons->right)) {
+                if (ctrlPressed) {
+                    gameState->showCollisionBoxes = !gameState->showCollisionBoxes;
+                }
             }
 
             // The separation of handling input and moving the player is not yet clear
             //MoveEntity(gameState, controllingEntity, controllerIndex, inputButtons,
-            //           acceleration, delta);
+            //           acceleration, deltaTime);
 
             // TODO: disabled for now
             // Only the first player can do certain operations
             // Switching z index
             //if (controllerIndex == 0) {
-            //    if (hm_input::ActionJustPressed(&inputButtons->Z)) {
-            //        if (hm_input::ActionPressed(&inputButtons->shift)) {
+            //    if (ActionJustPressed(&inputButtons->Z)) {
+            //        if (ActionPressed(&inputButtons->shift)) {
             //            controllingEntity.low->pos.chunkZ =
-            //                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, -1);
+            //                WorldPositionModifyZChecked(world,
+            //                &controllingEntity.low->pos, -1);
             //        } else {
             //            controllingEntity.low->pos.chunkZ =
-            //                WorldPositionModifyZChecked(world, &controllingEntity.low->pos, 1);
+            //                WorldPositionModifyZChecked(world,
+            //                &controllingEntity.low->pos, 1);
             //        }
             //    }
             //}
@@ -939,27 +1301,137 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
-    // IMPORTANT: This now determines the actual pixel size of the tiles!
-    constexpr i32 tileSideInPixels{ 60 };
-    gameState->metersToPixels = static_cast<f32>(tileSideInPixels) / world->tileSideInMeters;
+    /// Render stuff
+    auto renderMemory{ BeginTempMemory(&tranState->tranArena) };
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4)) };
 
-    // Simulate regions
+    // Copy the OS sent screen buff info into our format
+    LoadedBitmapInfo drawBuff_{};
+    LoadedBitmapInfo* drawBuff{ &drawBuff_ };
+    drawBuff->width = screenBuff->width;
+    drawBuff->height = screenBuff->height;
+    drawBuff->pitch = screenBuff->pitch;
+    drawBuff->memory = screenBuff->memory;
 
-    constexpr i32 tileSpanX{ tiles_Per_Width * 3 };
-    constexpr i32 tileSpanY{ tiles_Per_Height * 3 };
-    constexpr i32 tileSpanZ{ 1 };
-    const Rect3 cameraBounds{ RectCenterDim(Vec3{}, Vec3{ static_cast<f32>(tileSpanX),
-                                                          static_cast<f32>(tileSpanY),
-                                                          static_cast<f32>(tileSpanZ) } *
-                                                        gameState->world->tileSideInMeters) };
+    // Clear screen
+    //DrawRect(drawBuff, Vec2{},
+    //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
+    //         0.0f, 1.0f);
+    const Vec4 clearColor{ 0.25f, 0.25f, 0.25f, 1.0f };
+    ScreenClear(renderGroup, clearColor);
 
-    MemoryArena simArena;
-    InitializeArena(&simArena, memory->transientStorage, memory->transientStorageSize);
-    auto* simRegion{ BeginSim(gameState, &simArena, gameState->world, gameState->cameraPos,
-                              cameraBounds, delta) };
+    const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
-    /// Debug printing
+    const f32 pixelsToMeters{ 1.0f / 42.0f };
+    const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
+    const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
+    Rect3 cameraBoundsInMeters{ RectCenterDim(
+        Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
+    cameraBoundsInMeters.min.z = -3.0f * gameState->typicalFloorHeight;
+    cameraBoundsInMeters.max.z = 2.0f * gameState->typicalFloorHeight;
 
+    /// Ground buffs
+    // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
+    // Is it because we don't want to lag 1 frame behind on these?
+
+#if 0
+    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
+        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+        ASSERT(groundBuff);
+        if (IsValidWorldPos(&groundBuff->pos)) {
+            //auto bitmap{ tranState->groundBitmapTemplate };
+            //bitmap.memory = groundBuff->memoryBitmap;
+            //ASSERT(bitmap.memory);
+            auto* bitmap{ &groundBuff->bitmap };
+            ASSERT(bitmap->memory);
+
+            const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
+            bitmap->align = Vec2{ bitmap->width / 2, bitmap->height / 2 };
+
+            auto* basis{ PushStruct(&tranState->tranArena, RenderBasis) };
+            renderGroup->defaultBasis = basis;
+            basis->pos = posDelta + Vec3{ 0, 0, gameState->zOffset };
+
+            PushBitmap(renderGroup, bitmap, {});
+            // We can just push the outline here as it overlaps with the just pushed ground buffer
+            // bitmaps, thickness is parametrized now
+            // @Re-enable
+            //PushRectOutline(renderGroup, {}, world->chunkDimInMeters.xy);
+        }
+    }
+
+    /// Drawing chunks
+
+    {
+        const WorldPosition minChunk{ MapIntoChunkSpace(
+            world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
+        const WorldPosition maxChunk{ MapIntoChunkSpace(
+            world, gameState->cameraPos, Vec3{ GetMaxCorner(cameraBoundsInMeters) }) };
+
+        for (i32 chunkZ{ minChunk.chunkZ }; chunkZ <= maxChunk.chunkZ; ++chunkZ) {
+            for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
+                for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
+                    //auto* chunk{ GetWorldChunk(world, chunkX, chunkY, chunkZ) };
+                    //if (chunk) {
+                    const auto chunkCenter{ CenteredChunkPoint(chunkX, chunkY, chunkZ) };
+
+                    const Vec3 relCenterPos{ SubtractWorldPos(world, &chunkCenter,
+                                                              &gameState->cameraPos) };
+                    const Vec2 screenPos{
+                        screenCenter.x + (relCenterPos.x * gameState->metersToPixels),
+                        screenCenter.y - (relCenterPos.y * gameState->metersToPixels)
+                    };
+                    const Vec2 screenDim{ world->chunkDimInMeters.xy * gameState->metersToPixels };
+
+                    // @Speed, it's terrible!
+                    f32 furthestBuffLengthSq{};
+                    GroundBuff* furthestBuff{};
+                    for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount;
+                         ++groundBuffIndex) {
+                        auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
+                        if (AreOnSameChunk(world, &groundBuff->pos, &chunkCenter)) {
+                            furthestBuff = nullptr;
+                            break;
+                        } else if (IsValidWorldPos(&groundBuff->pos)) {
+                            // Check if we evict this already filled buff for a new one
+                            const Vec3 relPos{ SubtractWorldPos(world, &groundBuff->pos,
+                                                                &gameState->cameraPos) };
+                            const f32 buffDistSq{ LengthSq(relPos.xy) };
+                            if (furthestBuffLengthSq < buffDistSq) {
+                                furthestBuffLengthSq = buffDistSq;
+                                furthestBuff = groundBuff;
+                            }
+                        } else {
+                            // Found an empty one!
+                            furthestBuffLengthSq = F32_MAX;
+                            furthestBuff = groundBuff;
+                            // break here?
+                        }
+                    }
+
+                    if (furthestBuff) {
+                        FillGroundChunk(gameState, tranState, furthestBuff, &chunkCenter);
+                    }
+                }
+                //}
+            }
+        }
+    }
+#endif
+
+    // TODO: how big? upper and bottom floors?
+    const Vec3 simBoundsExpansion{ 15.0f, 15.0f, 0 };
+    const Rect3 cameraBoundsSim{ AddRadiusTo(cameraBoundsInMeters, simBoundsExpansion) };
+
+    TempMemory simMemory{ BeginTempMemory(&tranState->tranArena) };
+    auto* simRegion{ BeginSim(gameState, &tranState->tranArena, world, gameState->cameraPos,
+                              cameraBoundsSim, deltaTime) };
+    // We can adjust the sim region center now
+    const WorldPosition simCenterPos{ gameState->cameraPos };
+    const Vec3 cameraPos{ SubtractWorldPos(simRegion->world, &gameState->cameraPos,
+                                           &simCenterPos) };
+
+// @Debug printing
 #if 0
     const auto player{ GetLowEntity(gameState, gameState->cameraFollowingEntityIndex) };
     if (IsValidWorldPos(player->pos)) {
@@ -984,38 +1456,28 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     PRINT_F32("Camera pos offset X: ", gameState->cameraPos.offset_.y);
     PRINT_F32("Camera pos offset Y: ", gameState->cameraPos.offset_.x);
-
 #endif
 
     /// Background
-#if 0
-    DrawBitmap(screenBuff, &gameState->background, 0, 0);
-#else
-    DrawRectangle(screenBuff, Vec2{},
-                  Vec2{ static_cast<f32>(screenBuff->width), static_cast<f32>(screenBuff->height) },
-                  0.5f, 0.5f, 0.5f);
-#endif
 
-    // Drawing entities
-
-    const Vec2 screenCenter{ screenBuff->width * 0.5f, screenBuff->height * 0.5f };
-
-    // Every entity has its own one of these
-    EntityVisiblePieceGroup pieceGroup;
-    pieceGroup.gameState = gameState;
+    //#if 0
+    //DrawBitmap(drawBuff, &gameState->background, 0, 0);
+    //#else
+    //DrawRect(drawBuff, Vec2{},
+    //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height)
+    //         }, 0.5f, 0.5f, 0.5f);
+    //#endif
 
     /// Simulation
 
-    auto* entity{ simRegion->entities };
-    for (i32 i{}; i < simRegion->entityCount; ++i, ++entity) {
+    for (i32 i{}; i < simRegion->entityCount; ++i) {
+        auto* entity{ &simRegion->entities[i] };
         if (!entity->updatable) {
             continue;
         }
 
-        pieceGroup.pieceCount = 0;
-
         // TODO: This is wrong, compute after update
-        f32 shadowAlpha{ 1.0f - 0.5f * entity->pos.z };
+        f32 shadowAlpha{ 1.0f - (0.5f * entity->pos.z) };
         if (shadowAlpha < 0) {
             shadowAlpha = 0.0f;
         }
@@ -1024,33 +1486,68 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         MoveSpec moveSpec{ DefaultMoveSpec() };
         Vec3 ddP{};
 
-        HeroBitmaps* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
+        RenderBasis* renderBasis{ PushStruct(&tranState->tranArena, RenderBasis) };
+        renderGroup->defaultBasis = renderBasis;
+
+        // Alpha for entities' visibility
+        const auto cameraRelGroundPos{ GetEntityGroundPoint(entity) - cameraPos };
+
+        // TODO: tune these according to cameraBoundsInMeters
+        // NOTE: order of declarations is the logical order
+        const f32 fadeEndZTop{ 0.85f * gameState->typicalFloorHeight };
+        const f32 fadeStartZTop{ 0.5f * gameState->typicalFloorHeight };
+        // The ground is here between these
+        const f32 fadeStartZBottom{ -2.0f * gameState->typicalFloorHeight };
+        const f32 fadeEndZBottom{ -2.25f * gameState->typicalFloorHeight };
+        renderGroup->globalAlpha = 1.0f;
+
+        if (cameraRelGroundPos.z > fadeStartZTop) {
+            renderGroup->globalAlpha =
+                Clamp01MapToRange(fadeEndZTop, cameraRelGroundPos.z, fadeStartZTop);
+        } else if (cameraRelGroundPos.z < fadeStartZBottom) {
+            renderGroup->globalAlpha =
+                Clamp01MapToRange(fadeEndZBottom, cameraRelGroundPos.z, fadeStartZBottom);
+        }
+
+        auto* heroBitmaps{ &gameState->heroBitmaps[entity->facingDir] };
 
         switch (entity->type) {
         case EntityType::WALL: {
             // Tree bitmaps
-            PushBitmap(&pieceGroup, &gameState->tree, Vec2{}, 0, Vec2{ 40, 80 });
+            PushBitmap(renderGroup, &gameState->tree, Vec3{}, 2.5f);
+        } break;
+
+        case EntityType::STAIRWELL: {
+            PushRect(renderGroup, Vec3{}, entity->walkableDim, Vec4{ 1, 1, 0, 1 });
+            PushRect(renderGroup, Vec3{ 0, 0, entity->walkableHeight }, entity->walkableDim,
+                     Vec4{ 1, 0.5f, 0, 1 });
         } break;
 
         case EntityType::HERO: {
-            for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
+            for (i32 controlIndex{}; controlIndex < gameState->controlledHeroes.size;
                  ++controlIndex) {
                 auto* controlled{ &gameState->controlledHeroes[controlIndex] };
                 // Confirm we are the one controlling
                 if (entity->storageIndex == controlled->entityIndex) {
                     // Reset, done in EndSim as we kind of have to for now
-                    //if (controlled->requestReset) {
+                    //if (controlled->requestHeroReset) {
                     //    PRINT("Request reset!\n");
-                    //    auto* lowEntity{ GetLowEntity(gameState, entity->storageIndex) };
-                    //    ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex,
+                    //    auto* lowEntity{ GetLowEntity(gameState, entity->storageIndex)
+                    //    }; ChangeEntityLocation(world, &gameState->worldArena,
+                    //    entity->storageIndex,
                     //                         lowEntity, lowEntity->startingPos);
                     //
                     //    continue;
                     //}
 
                     // Don't allow jumping if not on ground
-                    if (controlled->dZ != 0.0f && entity->pos.z == 0.0f) {
-                        entity->velocity.z = controlled->dZ;
+                    // We don't touch anything here because MoveEntity handles all the
+                    // flags when doing the simulation A plain read is sufficient here
+                    if (controlled->dZ != 0.0f) {
+                        if (IsSet(entity, SimEntityFlags::Z_SUPPORTED) ||
+                            gameState->allowUnlimitedJumps) { // && entity->pos.z == 0.0f
+                            entity->velocity.z = controlled->dZ;
+                        }
                     }
 
                     moveSpec.speed = 30.0f;
@@ -1066,7 +1563,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
                     // Sword
                     if (controlled->dSword != Vec3::ZERO) {
-                        SimEntity* sword{ entity->sword.ptr };
+                        auto* sword{ entity->sword.ptr };
                         if (sword && IsSet(sword, SimEntityFlags::NON_SPATIAL)) {
                             PRINT("Used sword!\n");
                             sword->distanceLimit = 6.0f;
@@ -1079,67 +1576,73 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
-                       0.0f);
-            PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
-            PushBitmap(&pieceGroup, &heroBitmaps->cape, Vec2{}, 0, heroBitmaps->align);
-            PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, 0, heroBitmaps->align);
+            // @Hack
+            const f32 heroSizeC{ 2.5f };
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 1.0f * heroSizeC,
+                       Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{}, 1.2f * heroSizeC);
+            PushBitmap(renderGroup, &heroBitmaps->cape, Vec3{}, 1.2f * heroSizeC);
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{}, 1.2f * heroSizeC);
 
-            DrawHitpoints(entity, &pieceGroup);
+            DrawHitpoints(entity, renderGroup);
         } break;
 
         case EntityType::MONSTER: {
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
-                       0.0f);
-            PushBitmap(&pieceGroup, &heroBitmaps->torso, Vec2{}, 0, heroBitmaps->align);
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 3.5f, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{}, 3.5f);
 
-            DrawHitpoints(entity, &pieceGroup);
+            DrawHitpoints(entity, renderGroup);
         } break;
 
         case EntityType::FAMILIAR: {
-            SimEntity* closestHero{};
-            constexpr f32 maxDist{ 10.0f };
-            f32 closestHeroDSq{ SquareF32(maxDist) };
+            if (entity->followingHero) {
+                SimEntity* closestHero{};
+                const f32 maxDist{ 10.0f };
+                f32 closestHeroDSq{ SquareF32(maxDist) };
 
-            // TODO: naive solution, BAD
-            SimEntity* testEntity{ simRegion->entities };
-            for (i32 testIndex{}; testIndex < simRegion->entityCount; ++testIndex, ++testEntity) {
-                if (testEntity->type == EntityType::HERO) {
-                    const f32 testDSq{ LengthSq(testEntity->pos - entity->pos) };
-                    if (testDSq < closestHeroDSq) {
-                        closestHero = testEntity;
-                        closestHeroDSq = testDSq;
+                // TODO: naive solution, BAD
+                SimEntity* testEntity{ simRegion->entities };
+                for (i32 testIndex{}; testIndex < simRegion->entityCount;
+                     ++testIndex, ++testEntity) {
+                    if (testEntity->type == EntityType::HERO) {
+                        const f32 testDSq{ LengthSq(testEntity->pos - entity->pos) };
+                        if (testDSq < closestHeroDSq) {
+                            closestHero = testEntity;
+                            closestHeroDSq = testDSq;
+                            // Updated every frame we find the hero
+                            closestHero->familiarIndex = closestHero->storageIndex;
+                        }
                     }
                 }
-            }
 
-            const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
-            Vec3 acceleration{};
+                const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
+                Vec3 acceleration{};
 
-            if (closestHero && closestHeroDSq > stopDistSq) {
-                constexpr f32 speed{ 0.5f };
-                const f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
-                acceleration = (closestHero->pos - entity->pos) * oneOverLength;
-                //PRINT_F32("before: closestHeroDSq: ", closestHeroDSq);
-                //PRINT_F32("before: acceleration.x: ", acceleration.x);
-                //PRINT_F32("before: acceleration.y: ", acceleration.y);
-                if (closestHeroDSq > 17.0f) {
-                    acceleration *= 1.75f;
+                if (closestHero && closestHeroDSq > stopDistSq) {
+                    const f32 speed{ 0.5f };
+                    const f32 oneOverLength{ speed / Sqrt(closestHeroDSq) };
+                    acceleration = (closestHero->pos - entity->pos) * oneOverLength;
+                    //PRINT_F32("before: closestHeroDSq: ", closestHeroDSq);
+                    //PRINT_F32("before: acceleration.x: ", acceleration.x);
+                    //PRINT_F32("before: acceleration.y: ", acceleration.y);
+                    if (closestHeroDSq > 17.0f) {
+                        acceleration *= 1.75f;
+                    }
+
+                    //PRINT_F32("before: acceleration.x: ", acceleration.x);
+                    //PRINT_F32("before: acceleration.y: ", acceleration.y);
+                    //PRINT("\n");
                 }
 
-                //PRINT_F32("before: acceleration.x: ", acceleration.x);
-                //PRINT_F32("before: acceleration.y: ", acceleration.y);
-                //PRINT("\n");
+                moveSpec.speed = 50.0f;
+                moveSpec.drag = 8.0f;
+
+                ddP = acceleration;
             }
 
-            moveSpec.speed = 50.0f;
-            moveSpec.drag = 8.0f;
-
-            ddP = acceleration;
-
             // Head bob
-            constexpr f32 bobSpeed{ 3.5f };
-            entity->tBob += delta * bobSpeed;
+            const f32 bobSpeed{ 3.5f };
+            entity->tBob += deltaTime * bobSpeed;
             if (entity->tBob > (2.0f * PI32f)) {
                 entity->tBob -= (2.0f * PI32f);
             }
@@ -1148,14 +1651,13 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.15f * bobSin) };
             const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align,
-                       newShadowAlpha, 0.0f);
-            PushBitmap(&pieceGroup, &heroBitmaps->head, Vec2{}, bobStrength * bobSin,
-                       heroBitmaps->align);
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 2.5f,
+                       Vec4{ 1, 1, 1, newShadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{ 0, 0, bobStrength * bobSin }, 2.5f);
         } break;
 
-            // FIXME: this seems to not get called if we stand still and use the sword at the start
-            // of the game, the sword stops working then
+            // FIXME: this seems to not get called if we stand still and use the sword
+            // at the start of the game, the sword stops working then
         case EntityType::SWORD: {
             // This doesn't affect the sword at all!
             moveSpec.speed = 0.0f;
@@ -1165,98 +1667,170 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 ClearCollisionRulesFor(gameState, entity->storageIndex);
             }
 
-            PushBitmap(&pieceGroup, &gameState->shadow, Vec2{}, 0, heroBitmaps->align, shadowAlpha,
-                       0.0f);
-            PushBitmap(&pieceGroup, &gameState->sword, Vec2{}, 0, Vec2{ 29, 10 });
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 0.5f, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &gameState->sword, Vec3{}, 0.5f);
         } break;
 
-        default: {
-            INVALID_CODE_PATH;
+        case EntityType::SPACE: {
+            for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount; ++volumeIndex) {
+                const auto* volume{ &entity->collision->volumes[volumeIndex] };
+                // Outlines
+                PushRectOutline(renderGroup,
+                                volume->offsetPos - Vec3{ 0, 0, volume->offsetPos.z * 0.5f },
+                                volume->dim.xy, Vec4{ 0.0f, 0.25f, 1.0f, 1.0f });
+            }
         } break;
+
+            INVALID_DEFAULT_CASE;
         }
 
         //if (entity->velocity != Vec2::ZERO || ddP != Vec2::ZERO) {
-        if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
-            MoveEntity(gameState, simRegion, entity, moveSpec, ddP, delta);
+        if (!IsSet(entity, SimEntityFlags::NON_SPATIAL) &&
+            IsSet(entity, SimEntityFlags::MOVEABLE)) {
+            MoveEntity(gameState, simRegion, entity, moveSpec, ddP, deltaTime);
+        }
+
+        // @Debug
+        renderBasis->pos = GetEntityGroundPoint(entity) + Vec3{ 0, 0, gameState->zOffset };
+
+        // @Debug
+        // Pink
+        const Vec4 debugColor{ 1.0f, 0.0f, 1.0f, 1.0f };
+        const f32 collisionBoxScale{ 0.95f };
+        if (gameState->showCollisionBoxes && entity->type != EntityType::SPACE) {
+            PushCollisionBox(renderGroup, entity->collision, debugColor, collisionBoxScale);
         }
 
         //if (entity->type == EntityType::HERO) {
         //    PRINT_F32("Z", entity->z);
         //}
-
-        const Vec2 entityGroundPoint{ screenCenter.x + (gameState->metersToPixels * entity->pos.x),
-                                      screenCenter.y -
-                                          (gameState->metersToPixels * entity->pos.y) };
-        const f32 entityZ{ -entity->pos.z * gameState->metersToPixels };
-
-        constexpr f32 r{ 0.5f };
-        constexpr f32 g{ 0.1f };
-        constexpr f32 b{ 0.5f };
-
-        const Vec2 leftTop{
-            entityGroundPoint.x - (0.5f * gameState->metersToPixels * entity->dim.x),
-            entityGroundPoint.y - (0.5f * gameState->metersToPixels * entity->dim.y)
-        };
-
-        const Vec2 entityWidthHeight{ entity->dim.x, entity->dim.y };
-
-        // Draw pieces
-        for (i32 pieceIndex{}; pieceIndex < pieceGroup.pieceCount; ++pieceIndex) {
-            EntityVisiblePiece* piece{ &pieceGroup.pieces[pieceIndex] };
-            const Vec2 center{ entityGroundPoint.x + piece->offset.x,
-                               entityGroundPoint.y + piece->offset.y + piece->offsetZ +
-                                   (entityZ * piece->entityZC) };
-            if (piece->bitmap) {
-                DrawBitmap(screenBuff, piece->bitmap, center.x, center.y, piece->a);
-            } else {
-                const Vec2 halfDim{ 0.5f * piece->dimension * gameState->metersToPixels };
-                DrawRectangle(screenBuff, center - halfDim, center + halfDim, piece->r, piece->g,
-                              piece->b);
-            }
-
-            // Debug collision box
-            //DrawRectangle(screenBuff, leftTop,
-            //              leftTop + entityWidthHeight * gameState->metersToPixels // *0.95f
-            //              ,
-            //              r, g, b);
-        }
     }
 
-    /// Debug
+    renderGroup->globalAlpha = 1.0f;
+
+// @Debug
 #if 0
     PRINT_F32("Max velocity: ", Sqrt(simRegion->maxRecordedEntityVelocitySq));
-    PRINT_I32("Max index: ", simRegion->maxRecordedEntityVelocityIndex);
+    PRINT("Max index: ", simRegion->maxRecordedEntityVelocityIndex);
 
-    const char* typeStr{};
-    switch (simRegion->maxRecordedEntityVelocityType) {
-    case EntityType::WALL: {
-        typeStr = "Wall";
-    } break;
-    case EntityType::HERO: {
-        typeStr = "Hero";
-    } break;
-    case EntityType::FAMILIAR: {
-        typeStr = "Familiar";
-    } break;
-    case EntityType::MONSTER: {
-        typeStr = "Monstar";
-    } break;
-    case EntityType::SWORD: {
-        typeStr = "Sword";
-    } break;
-    }
-
-    ASSERT(typeStr);
+    const char* typeStr{ EntityTypeToStr(simRegion->maxRecordedEntityVelocityType) };
     PRINT("Max type: ");
     PRINT(typeStr);
     PRINT("\n");
 #endif
 
-    WorldPosition worldOrigin{};
-    const Vec3 diff{ SubtractWorldPos(simRegion->world, &worldOrigin, &simRegion->origin) };
-    DrawRectangle(screenBuff, Vec2{ diff.x, diff.y }, Vec2{ 10.0f, 10.0f }, 1.0f, 1.0f, 1.0f);
+/// Normal map stuff
+#if 0
+    // @Debug
+    {
+        Vec4 mapColor[]{
+            { 1, 0, 0, 1 },
+            { 0, 1, 0, 1 },
+            { 0, 0, 1, 1 },
+        };
+
+        for (i32 mapIndex{}; mapIndex < tranState->envMaps.size; ++mapIndex) {
+            auto* map{ &tranState->envMaps[mapIndex] };
+            auto* lod{ &map->lod[0] };
+            i32 checkerWidth{ 16 };
+            i32 checkerHeight{ 16 };
+            bool32 rowCheckerOn{};
+            for (i32 y{}; y < lod->height; y += checkerHeight) {
+                bool32 checkerOn{ rowCheckerOn };
+                for (i32 x{}; x < lod->width; x += checkerWidth) {
+                    Vec4 color{ checkerOn ? mapColor[mapIndex] : Vec4{ 0, 0, 0, 1 } };
+                    Vec2 minPos{ x, y };
+                    Vec2 maxPos{ minPos + Vec2{ checkerWidth, checkerHeight } };
+                    DrawRect(lod, minPos, maxPos, color);
+                    checkerOn = !checkerOn;
+                }
+
+                rowCheckerOn = !rowCheckerOn;
+            }
+        }
+    }
+
+    // Position maps
+    tranState->envMaps[0].zPos = -1.5f;
+    tranState->envMaps[1].zPos = 0.0f;
+    tranState->envMaps[2].zPos = 1.5f;
+
+    // @Remove
+    gameState->time += deltaTime;
+    const f32 angle{ //0.0f
+                     gameState->time * 0.1f
+    };
+#    if 1
+    const f32 disp{ Cos(angle * 5.0f) * 100.0f };
+#    else
+    const f32 disp{ 0 };
+#    endif
+
+    const Vec2 origin{ screenCenter };
+#    if 1
+    Vec2 xAxis{ Vec2{ Cos(angle * 3.0f), Sin(angle * 3.0f) } * 150.0f };
+    //  (50 + (Cos(angle * 2.2f) * 50.0f)) }; // Scale via time
+    Vec2 yAxis{ Perp(xAxis) };
+#    else
+    const f32 axisSize{ 150 };
+    Vec2 xAxis{ axisSize, 0 };
+    Vec2 yAxis{ 0, axisSize };
+    // Wiggle
+//const Vec2 origin{ screenCenter + Vec2{ Sin(angle) * 10, 0.0f } };
+//const Vec2 xAxis{ (drawBuff->width * 0.5f) + 1, 0 };
+//const Vec2 xAxis{ Vec2{ Cos(angle), Sin(angle) } * 100 };
+//const Vec2 yAxis{ Vec2{ Cos(angle + 1.5f), Sin(angle + 0.5f) } *
+//                  (100 + 50.0f * Sin(3.9f * angle)) }; // Skewing works now
+#    endif
+
+#    if 0
+    const Vec4 coordinateColor{ 0.5f + 0.5f * Sin(angle * 2.9f), 0.5f + 0.5f * Sin(angle * 3.9f),
+                                0.5f + 0.5f * Sin(angle * 0.9f), 0.5f + 0.5f * Sin(angle * 15.5f) };
+#    else
+    const Vec4 coordinateColor{ Vec4::ONE };
+#    endif
+    auto* coordinateSystem{ PushCoordinateSystem(
+        renderGroup, Vec2{ disp, 0 } + origin - 0.5f * xAxis - 0.5f * yAxis, xAxis, yAxis,
+        coordinateColor, &gameState->testDiffuse, &gameState->testNormal, &tranState->envMaps[2],
+        &tranState->envMaps[1], &tranState->envMaps[0]) };
+    //i32 i{};
+    //for (f32 x{}; x < 1.0f; x += 0.25f) {
+    //    for (f32 y{}; y < 1.0f; y += 0.25f) {
+    //        coordinateSystem->points[i++] = Vec2{ x, y };
+    //    }
+    //}
+
+    // @Debug
+    {
+        Vec2 mapPos{};
+        for (i32 mapIndex{}; mapIndex < tranState->envMaps.size; ++mapIndex) {
+            auto* map{ &tranState->envMaps[mapIndex] };
+            auto* lod{ &map->lod[0] };
+
+            xAxis = Vec2{ lod->width, 0 } * 0.5f;
+            yAxis = Vec2{ 0, lod->height } * 0.5f;
+            PushCoordinateSystem(renderGroup, mapPos, xAxis, yAxis, Vec4::ONE, lod, nullptr,
+                                 nullptr, nullptr, nullptr);
+            mapPos += yAxis + Vec2{ 0, 6.0f };
+        }
+    }
+#endif
 
     EndSim(simRegion, gameState);
+
+    EndTempMemory(simMemory);
+    EndTempMemory(renderMemory); // Have to be in this order, not that great in the long run...
+    ArenaCheck(&tranState->tranArena);
+    ArenaCheck(&gameState->worldArena);
+
+    /// Rendering
+
+    // Funny stuff
+#if 0
+    PushSaturation(renderGroup, 0.5f + 0.5f * Sin(gameState->time * 7.0f));
+#endif
+
+    RenderGroupToOutput(renderGroup, drawBuff, gameState);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

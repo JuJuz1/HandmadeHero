@@ -49,7 +49,7 @@ struct GameCode {
 };
 
 // NOTE: don't use MAX_PATH in user code as it can be dangerous
-GLOBAL constexpr i32 file_Name_Count{ MAX_PATH };
+GLOBAL const i32 file_Name_Count{ MAX_PATH };
 
 // Buffers to store the game memory in memory instead of disk
 struct ReplayBuffer {
@@ -61,8 +61,8 @@ struct ReplayBuffer {
     bool32 isRecordedAtLeastOnce;
 };
 
-GLOBAL constexpr i32 replay_Buffer_Not_Recording{ -1 };
-GLOBAL constexpr i32 replay_Buffer_Not_Playing{ -1 };
+GLOBAL const i32 replay_Buffer_Not_Recording{ -1 };
+GLOBAL const i32 replay_Buffer_Not_Playing{ -1 };
 
 // NOTE: not really all state (yet?)
 struct AllState {

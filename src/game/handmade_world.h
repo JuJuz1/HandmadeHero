@@ -17,13 +17,13 @@
     - else: not "blocked"
 */
 
-GLOBAL constexpr u32 blocked_Tile_Value{ 1 };
+GLOBAL const u32 blocked_Tile_Value{ 1 };
 
 // This is the safe margin from the borders of the world (~4 billion)
-GLOBAL constexpr i32 tile_Chunk_Safe_Margin{ INT32_MAX / 64 };
-GLOBAL constexpr i32 tile_Chunk_Uninitialized{ INT32_MAX };
+GLOBAL const i32 tile_Chunk_Safe_Margin{ INT32_MAX / 64 };
+GLOBAL const i32 tile_Chunk_Uninitialized{ INT32_MAX };
 
-GLOBAL constexpr i32 tiles_Per_Chunk{ 16 };
+GLOBAL const i32 tiles_Per_Chunk{ 8 }; // 16
 
 // NOTE: Engine internal
 struct WorldChunkPosition_ {
@@ -68,8 +68,8 @@ struct World {
     Array<WorldChunk, 4096> worldChunkHash;
     WorldEntityBlock* firstFree;
 
-    f32 tileSideInMeters;
-    f32 tileDepthInMeters;
+    //f32 tileSideInMeters;
+    //f32 tileDepthInMeters;
     Vec3 chunkDimInMeters;
 };
 
@@ -79,7 +79,7 @@ struct World {
 //NODISCARD
 //INTERNAL bool32 IsValidWorldPos(WorldPosition pos);
 
-//INTERNAL void InitializeWorld(World* world, f32 tileSideInMeters);
+//INTERNAL void InitWorld(World* world, f32 tileSideInMeters);
 
 //NODISCARD
 //INTERNAL WorldChunk* GetWorldChunk(World* world, i32 chunkX, i32 chunkY, i32 chunkZ,

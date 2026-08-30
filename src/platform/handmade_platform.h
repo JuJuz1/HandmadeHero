@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+#include <float.h>  // various float definitions
 #include <stddef.h> // size_t
 #include <stdint.h> // common types
 
@@ -58,6 +59,13 @@ typedef double f64;
 
 typedef size_t memory_index;
 
+#ifdef FLT_MAX
+#    define F32_MAX FLT_MAX
+#else
+// TODO: error for now? or just define ourselves?
+#    error FLT_MAX not defined!
+#endif
+
 // A thread context passed to game code and is used when calling back to platform-specific code
 typedef struct ThreadContext {
     i32 placeHolder;
@@ -71,17 +79,9 @@ typedef struct DEBUGFileReadResult {
 } DEBUGFileReadResult;
 
 // clang-format off
-#define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* message)
+// TODO: our own versions?
+#define DEBUG_PRINT(name) void name(ThreadContext* threadContext, const char* format, ...)
 typedef DEBUG_PRINT(debug_print);
-
-#define DEBUG_PRINT_I32(name) void name(ThreadContext* threadContext, const char* valueName, i32 value)
-typedef DEBUG_PRINT_I32(debug_print_i32);
-
-#define DEBUG_PRINT_U32(name) void name(ThreadContext* threadContext, const char* valueName, u32 value)
-typedef DEBUG_PRINT_U32(debug_print_u32);
-
-#define DEBUG_PRINT_F32(name) void name(ThreadContext* threadContext, const char* valueName, f32 value)
-typedef DEBUG_PRINT_F32(debug_print_f32);
 
 #define DEBUG_FREE_FILE_MEMORY(name) void name(ThreadContext* threadContext, void* memory)
 typedef DEBUG_FREE_FILE_MEMORY(debug_free_file_memory);
@@ -96,9 +96,6 @@ typedef DEBUG_WRITE_FILE(debug_write_file);
 // Exported functions for the game
 typedef struct PlatformExports {
     debug_print* DEBUGPrint;
-    debug_print_i32* DEBUGPrintInt;
-    debug_print_u32* DEBUGPrintUInt;
-    debug_print_f32* DEBUGPrintFloat;
 
     debug_free_file_memory* DEBUGFreeFileMemory;
     debug_read_file* DEBUGReadFile;
@@ -134,7 +131,6 @@ typedef struct OffScreenBuffer {
     void* memory;
     i32 width;
     i32 height;
-    i32 bytesPerPixel;
     i32 pitch;
 } OffScreenBuffer;
 
@@ -157,7 +153,7 @@ typedef struct InputButtons {
     // InputButtons b;
     // b[0] is the same as b.up;
     union {
-        Button buttons[15];
+        Button buttons[28];
 
         struct {
             Button up;
@@ -170,7 +166,8 @@ typedef struct InputButtons {
             Button actionLeft;
             Button actionRight;
 
-            Button shift;
+            Button shift; // Right and left combined
+            Button ctrl;  // -||-
 
             Button space;
 
@@ -178,18 +175,31 @@ typedef struct InputButtons {
             Button E;
 
             Button R;
+            Button F;
+            Button Z;
 
             Button enter;
 
-            // All new buttons have to be above this
-            Button Z;
+            Button F1;
+            Button F2;
+            Button F3;
+            Button F4;
+            Button F5;
+            Button F6;
+            Button F7;
+            Button F8;
+            Button F9;
+            Button F10;
+
+            // All new buttons must be above this
+            Button terminator;
         };
     };
 } InputButtons;
 
 typedef struct MouseButtons {
     union {
-        Button buttons[5];
+        Button buttons[6];
 
         struct {
             Button left;
@@ -199,6 +209,8 @@ typedef struct MouseButtons {
             // Side buttons
             Button x1; // Closer
             Button x2; // Further
+
+            Button terminator;
         };
     };
 } MouseButtons;
@@ -210,6 +222,8 @@ typedef struct Input {
     i32 mouseX, mouseY, mouseZ; // mouseZ is scroll
 
     f32 frameDeltaTime;
+
+    bool32 executableReloaded;
 } Input;
 
 // We use the style 2 (Game as a service to the OS) described in the series
@@ -217,10 +231,10 @@ typedef struct Input {
 /// Services that the game provides to the platform layer ///
 
 // clang-format off
-#define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, const SoundOutputBuffer* soundBuff)
+#define GET_SOUND_SAMPLES(name) void name(ThreadContext* threadContext, GameMemory* memory, SoundOutputBuffer* soundBuff)
 typedef GET_SOUND_SAMPLES(get_sound_samples);
 
-#define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, const OffScreenBuffer* screenBuff, const Input* input)
+#define UPDATE_AND_RENDER(name) void name(ThreadContext* threadContext, GameMemory* memory, OffScreenBuffer* screenBuff, Input* input)
 typedef UPDATE_AND_RENDER(update_and_render);
 // clang-format on
 

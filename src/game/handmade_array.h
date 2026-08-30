@@ -15,7 +15,7 @@ struct Array {
     static_assert(N > 0, "Array size must be greater than 0!");
 
     T data_[N];
-    NOT_BOUND constexpr memory_index size{ N };
+    NOT_BOUND const memory_index size{ N };
 
     NODISCARD
     T&

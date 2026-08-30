@@ -42,6 +42,14 @@ operator/(Vec4 rhs, f32 scalar) {
     return result;
 }
 
+// Hadamard
+NODISCARD
+INTERNAL inline Vec4
+operator*(Vec4 lhs, Vec4 rhs) {
+    const Vec4 result{ lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w };
+    return result;
+}
+
 /// Member functions ///
 
 NODISCARD
@@ -70,8 +78,22 @@ Vec4::operator*=(f32 scalar) {
     return *this;
 }
 
+// Hadamard
+inline Vec4&
+Vec4::operator*=(Vec4 vec) {
+    *this = *this * vec;
+    return *this;
+}
+
 inline Vec4&
 Vec4::operator/=(f32 scalar) {
     *this = *this * (1.0f / scalar);
     return *this;
+}
+
+NODISCARD
+INTERNAL Vec4
+Lerp(Vec4 a, f32 t, Vec4 b) {
+    const Vec4 result{ (1 - t) * a + t * b };
+    return result;
 }

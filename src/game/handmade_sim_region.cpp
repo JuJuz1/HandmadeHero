@@ -54,10 +54,10 @@ LoadEntityReference(GameState* gameState, SimRegion* simRegion, EntityReference*
     if (ref->index) {
         SimEntityHash* entry{ GetEntityHashFromIndex(simRegion, ref->index) };
         if (!entry->ptr) {
+            entry->index = ref->index;
             auto* lowEntity{ GetLowEntity(gameState, ref->index) };
             Vec3 pos{ GetSimSpacePos(simRegion, lowEntity) };
             entry->ptr = AddEntityToSimRegion(gameState, simRegion, lowEntity, ref->index, nullptr);
-            entry->index = ref->index;
         }
 
         ref->ptr = entry->ptr;
@@ -83,9 +83,9 @@ AddEntityToSimRegion_(GameState* gameState, SimRegion* simRegion, LowEntity* src
                 *entity = src->sim;
                 LoadEntityReference(gameState, simRegion, &entity->sword);
 
-                // Debug code
+                // @Debug
                 ASSERT(!IsSet(&src->sim, SimEntityFlags::SIMULATING));
-                AddFlag(&src->sim, SimEntityFlags::SIMULATING);
+                AddFlags(&src->sim, SimEntityFlags::SIMULATING);
             }
 
             entity->storageIndex = lowIndex;
@@ -100,13 +100,13 @@ AddEntityToSimRegion_(GameState* gameState, SimRegion* simRegion, LowEntity* src
 
 NODISCARD
 INTERNAL bool32
-EntityOverlapsRect(Vec3 p, Vec3 dim, Rect3 rect) {
-    const Rect3 grown{ AddRadiusTo(rect, 0.5f * dim) };
-    const bool32 result{ IsInsideRectangle(grown, p) };
+EntityOverlapsRect(Vec3 pos, SimEntityCollisionVolume volume, Rect3 rect) {
+    const Rect3 grown{ AddRadiusTo(rect, 0.5f * volume.dim) };
+    const bool32 result{ IsInsideRectangle(grown, pos + volume.offsetPos) };
     return result;
 }
 
-NODISCARD
+//NODISCARD
 INTERNAL SimEntity*
 AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src, i32 lowIndex,
                      Vec3* simPos) {
@@ -115,7 +115,8 @@ AddEntityToSimRegion(GameState* gameState, SimRegion* simRegion, LowEntity* src,
     if (dest) {
         if (simPos) {
             dest->pos = *simPos;
-            dest->updatable = EntityOverlapsRect(dest->pos, dest->dim, simRegion->updatableBounds);
+            dest->updatable = EntityOverlapsRect(dest->pos, dest->collision->totalVolume,
+                                                 simRegion->updatableBounds);
         } else {
             dest->pos = GetSimSpacePos(simRegion, src);
         }
@@ -128,7 +129,7 @@ NODISCARD
 INTERNAL SimRegion*
 BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPosition origin,
          Rect3 bounds, f32 delta) {
-    SimRegion* simRegion{ PushSize(simArena, SimRegion) };
+    SimRegion* simRegion{ PushStruct(simArena, SimRegion) };
     ZeroSize(simRegion->hash);
 
     simRegion->maxEntityCount = simRegion->hash.size; // 4096
@@ -140,45 +141,52 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
     simRegion->maxEntityRadius = 5.0f;
     simRegion->maxEntityVelocity = 30.0f; // TODO: revise more
 
+    // Take into account max velocity of any entity and the delta time!
+    const f32 safetyMargin{ simRegion->maxEntityRadius + (simRegion->maxEntityVelocity * delta) };
+    const f32 safetyMarginZ{ 1.0f };
+
+    // @Debug
     simRegion->maxRecordedEntityVelocitySq = {};
     simRegion->maxRecordedEntityVelocityIndex = {};
     simRegion->maxRecordedEntityVelocityType = {};
 
-    // Take into account max velocity of any entity and the delta time!
-    const f32 safetyMargin{ simRegion->maxEntityRadius + (simRegion->maxEntityVelocity * delta) };
-    constexpr f32 safetyMarginZ{ 1.0f };
-
     simRegion->world = world;
     simRegion->origin = origin;
+    // TODO: Z is 0 for now!
     simRegion->updatableBounds =
-        AddRadiusTo(bounds, Vec3{ simRegion->maxEntityRadius, simRegion->maxEntityRadius,
-                                  simRegion->maxEntityRadius });
+        AddRadiusTo(bounds, Vec3{ simRegion->maxEntityRadius, simRegion->maxEntityRadius, 0 });
     simRegion->bounds =
         AddRadiusTo(simRegion->updatableBounds, Vec3{ safetyMargin, safetyMargin, safetyMarginZ });
 
-    const WorldPosition minChunk{ MapIntoChunkSpace(world, origin,
-                                                    Vec3{ bounds.min.x, bounds.min.y, 0 }) };
-    const WorldPosition maxChunk{ MapIntoChunkSpace(world, origin,
-                                                    Vec3{ bounds.max.x, bounds.max.y, 0 }) };
+    const WorldPosition minChunk{ MapIntoChunkSpace(
+        world, origin,
+        Vec3{ simRegion->bounds.min.x, simRegion->bounds.min.y, simRegion->bounds.min.z }) };
+    const WorldPosition maxChunk{ MapIntoChunkSpace(
+        world, origin,
+        Vec3{ simRegion->bounds.max.x, simRegion->bounds.max.y, simRegion->bounds.max.z }) };
 
     i32 movedCount{};
 
     // Check entities by chunk, move to high set if in the chunks close to camera
-    for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
-        for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
-            WorldChunk* chunk{ GetWorldChunk(world, chunkX, chunkY, simRegion->origin.chunkZ,
-                                             nullptr) };
-            if (chunk) {
-                for (WorldEntityBlock* block{ &chunk->firstBlock }; block; block = block->next) {
-                    for (i32 entityIndex{}; entityIndex < block->entityCount; ++entityIndex) {
-                        const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
-                        LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
-                        if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL)) {
-                            Vec3 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
-                            if (EntityOverlapsRect(simSpacePos, lowEntity->sim.dim, bounds)) {
-                                AddEntityToSimRegion(gameState, simRegion, lowEntity,
-                                                     lowEntityIndex, &simSpacePos);
-                                ++movedCount;
+    for (i32 chunkZ{ minChunk.chunkZ }; chunkZ <= maxChunk.chunkZ; ++chunkZ) {
+        for (i32 chunkY{ minChunk.chunkY }; chunkY <= maxChunk.chunkY; ++chunkY) {
+            for (i32 chunkX{ minChunk.chunkX }; chunkX <= maxChunk.chunkX; ++chunkX) {
+                WorldChunk* chunk{ GetWorldChunk(world, chunkX, chunkY, chunkZ, nullptr) };
+                if (chunk) {
+                    for (WorldEntityBlock* block{ &chunk->firstBlock }; block;
+                         block = block->next) {
+                        for (i32 entityIndex{}; entityIndex < block->entityCount; ++entityIndex) {
+                            const i32 lowEntityIndex{ block->lowEntityIndexes[entityIndex] };
+                            LowEntity* lowEntity{ GetLowEntity(gameState, lowEntityIndex) };
+                            if (!IsSet(&lowEntity->sim, SimEntityFlags::NON_SPATIAL)) {
+                                Vec3 simSpacePos{ GetSimSpacePos(simRegion, lowEntity) };
+                                if (EntityOverlapsRect(simSpacePos,
+                                                       lowEntity->sim.collision->totalVolume,
+                                                       simRegion->bounds)) {
+                                    AddEntityToSimRegion(gameState, simRegion, lowEntity,
+                                                         lowEntityIndex, &simSpacePos);
+                                    ++movedCount;
+                                }
                             }
                         }
                     }
@@ -188,7 +196,7 @@ BeginSim(GameState* gameState, MemoryArena* simArena, World* world, WorldPositio
     }
 
     //if (movedCount > 0) {
-    //    PRINT_I32("Entities moved to sim: ", movedCount);
+    //    PRINT("Entities moved to sim: ", movedCount);
     //}
 
     return simRegion;
@@ -219,16 +227,22 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
         WorldPosition newPos{};
         bool32 doReset{};
         bool32 doResetSword{};
+        bool32 doFamiliarStopFollow{};
+        bool32 doFamiliarReset{};
 
         for (i32 controlIndex{}; controlIndex < ARRAY_COUNT(gameState->controlledHeroes);
              ++controlIndex) {
             auto* controlled{ &gameState->controlledHeroes[controlIndex] };
             if (controlled->entityIndex == entity->storageIndex) {
-                if (controlled->requestReset) {
+                if (controlled->requestHeroReset) {
                     doReset = true;
-                    //controlled->requestReset = false;
-                } else if (controlled->requestResetSword) {
+                    //controlled->requestHeroReset = false;
+                } else if (controlled->requestSwordReset) {
                     doResetSword = true;
+                } else if (controlled->requestFamiliarStopFollow) {
+                    doFamiliarStopFollow = true;
+                } else if (controlled->requestFamiliarReset) {
+                    doFamiliarReset = true;
                 }
 
                 // TODO: Only 1 hero can request reset, if multiple only the first is processed here
@@ -236,8 +250,26 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             }
         }
 
+        // TODO: doesn't work by rawdogging as we overwrite these changes when we process the
+        // familiar... figure it out, probably using the references like with the sword
+        // the system is not fully fletched out yet so prolly best to wait on it!
+        if (doFamiliarStopFollow && stored->sim.familiarIndex) {
+            PRINT("Familiar follow swap: %d\n", stored->sim.familiarIndex);
+            auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
+            familiar->sim.followingHero = !familiar->sim.followingHero;
+        } else if (doFamiliarReset && stored->sim.familiarIndex) {
+            // TODO: use the EntityReference for this instead of rawdogging?
+            auto* familiar{ GetLowEntity(gameState, stored->sim.familiarIndex) };
+            PRINT("Reset familiar: %d\n", stored->sim.storageIndex);
+            ChangeEntityLocation(world, &gameState->worldArena, familiar->sim.storageIndex,
+                                 familiar, &familiar->startingPos);
+        }
+
+        auto nullWorldPos{ NullWorldPos() };
+
+        // These do work!
         if (doResetSword) {
-            PRINT_I32("Reset sword: ", stored->sim.sword.index);
+            PRINT("Reset sword: %d\n", stored->sim.sword.index);
             auto* sword{ GetLowEntity(gameState, stored->sim.sword.index) };
             // TODO: sometimes hit assert inside MoveEntity because distanceRemaining is below 0
             // TODO: @Hack do we even have to do this?
@@ -247,23 +279,24 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             // These have to be done I guess
             MakeEntityNonSpatial(&sword->sim);
             ChangeEntityLocation(world, &gameState->worldArena, stored->sim.sword.index, sword,
-                                 NullWorldPos());
+                                 &nullWorldPos);
         }
 
         if (doReset) {
-            PRINT_I32("Reset: ", entity->storageIndex);
+            PRINT("Reset: %d\n", entity->storageIndex);
             newPos = stored->startingPos;
             stored->sim.velocity = {};
         } else {
             newPos = !IsSet(entity, SimEntityFlags::NON_SPATIAL)
                          ? MapIntoChunkSpace(world, simRegion->origin, entity->pos)
-                         : NullWorldPos();
+                         : nullWorldPos;
         }
 
-        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, newPos);
+        ChangeEntityLocation(world, &gameState->worldArena, entity->storageIndex, stored, &newPos);
         ++movedCount;
 
-        // Camera position
+        /// Camera position
+
         if (entity->storageIndex == gameState->cameraFollowingEntityIndex) {
             WorldPosition newCameraPos{ gameState->cameraPos };
             newCameraPos.chunkZ = stored->pos.chunkZ;
@@ -294,49 +327,27 @@ EndSim(SimRegion* simRegion, GameState* gameState) {
             }
 #endif
             // Fully smooth scrolling
-            const f32 camOffsetZ{ newCameraPos.offset_.z };
+            //const f32 camOffsetZ{ newCameraPos.offset_.z };
             newCameraPos = stored->pos;
-            newCameraPos.offset_.z = camOffsetZ;
+            //newCameraPos.offset_.z = camOffsetZ;
 
             gameState->cameraPos = newCameraPos;
         }
     }
 
     //if (movedCount > 0) {
-    //    PRINT_I32("Entities moved to back to low: ", movedCount);
+    //    PRINT("Entities moved to back to low: ", movedCount);
     //}
-}
-
-INTERNAL TestWallResult
-TestWall(f32 wallX, f32 relX, f32 relY, f32 playerDeltaX, f32 playerDeltaY, f32 tMin, f32 minY,
-         f32 maxY) {
-    // TODO: this should be moved elsewhere and not be in playerDelta space
-    constexpr f32 tEps{ 0.0001f };
-    TestWallResult result{};
-    f32 newTMin{ tMin };
-
-    if (playerDeltaX != 0.0f) {
-        const f32 tResult{ (wallX - relX) / playerDeltaX };
-        const f32 newY{ relY + (tResult * playerDeltaY) };
-        if (tResult >= 0.0f && tResult < tMin) {
-            if (newY >= minY && newY <= maxY) {
-                newTMin = MAX(0.0f, tResult - tEps);
-                result.tMin = newTMin;
-                result.hit = true;
-            }
-        }
-    }
-
-    return result;
 }
 
 NODISCARD
 INTERNAL bool32
-ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
+CanCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
     bool32 result{};
 
-    if (a == b) {
-        return result;
+    // TODO: sword is broken now after adding the second condition
+    if (a == b || !(IsSet(a, SimEntityFlags::COLLIDES) && IsSet(b, SimEntityFlags::COLLIDES))) {
+        return false;
     }
 
     if (a->storageIndex > b->storageIndex) {
@@ -349,12 +360,16 @@ ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
         result = true;
     }
 
+    //if (a->type == EntityType::STAIRWELL || b->type == EntityType::STAIRWELL) {
+    //    result = false;
+    //}
+
     // TODO: Better hash func
     const i32 hashBucket{ static_cast<i32>(a->storageIndex &
                                            (gameState->collisionRuleHash.size - 1)) };
     for (auto* rule{ gameState->collisionRuleHash[hashBucket] }; rule; rule = rule->nextInHash) {
         if (rule->storageIndexA == a->storageIndex && rule->storageIndexB == b->storageIndex) {
-            result = rule->shouldCollide;
+            result = rule->canCollide;
             break;
         }
     }
@@ -364,10 +379,13 @@ ShouldCollide(const GameState* gameState, SimEntity* a, SimEntity* b) {
 
 NODISCARD
 INTERNAL bool32
-HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
+HandleCollision(GameState* gameState, SimEntity* entity, SimEntity* hitEntity) {
     bool32 stopsOnCollision{};
 
-    if (!(entity->type == EntityType::SWORD)) {
+    if (entity->type == EntityType::SWORD) {
+        AddCollisionRule(gameState, entity->storageIndex, hitEntity->storageIndex, false);
+        stopsOnCollision = false;
+    } else {
         stopsOnCollision = true;
     }
 
@@ -380,10 +398,73 @@ HandleCollision(SimEntity* entity, SimEntity* hitEntity) {
             --a->hitPointMax;
         }
 
-        PRINT_I32("Monster hit, curr hp: ", a->hitPointMax);
+        PRINT("Monster hit, curr hp: %d\n", a->hitPointMax);
     }
 
     return stopsOnCollision;
+}
+
+NODISCARD
+INTERNAL bool32
+CanOverlap(GameState* gameState, SimEntity* mover, SimEntity* region) {
+    bool32 result{};
+
+    if (mover != region) {
+        if (region->type == EntityType::STAIRWELL) {
+            result = true;
+        }
+    }
+
+    return result;
+}
+
+INTERNAL void
+HandleOverlap(GameState* gameState, SimEntity* mover, SimEntity* region, f32 delta, f32* ground) {
+    if (region->type == EntityType::STAIRWELL) {
+        *ground = GetStairGround(region, GetEntityGroundPoint(mover));
+    }
+}
+
+NODISCARD
+INTERNAL bool32
+SpeculativeCollide(SimEntity* mover, SimEntity* region, Vec3 testPos) {
+    bool32 result{ true };
+    if (region->type == EntityType::STAIRWELL) {
+        const f32 ground{ GetStairGround(region, GetEntityGroundPoint(mover)) };
+        const f32 stepHeight{ 0.1f };
+#if 0
+        result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight) ||
+                 ((bary.y > 0.1f) && (bary.y < 0.9f));
+#else
+        result = (AbsF32(GetEntityGroundPoint(mover, testPos).z - ground) > stepHeight);
+#endif
+    }
+
+    return result;
+}
+
+NODISCARD
+INTERNAL bool32
+EntitiesOverlap(SimEntity* entity, SimEntity* testEntity, Vec3 epsEnlargementRegion = {}) {
+    bool32 result{};
+
+    for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount && !result;
+         ++volumeIndex) {
+        auto* volume{ &entity->collision->volumes[volumeIndex] };
+        for (i32 testVolumeIndex{}; testVolumeIndex < testEntity->collision->volumeCount && !result;
+             ++testVolumeIndex) {
+            auto* testVolume{ &testEntity->collision->volumes[testVolumeIndex] };
+
+            // Add to which one we want, no difference there
+            const Rect3 entityRect{ RectCenterDim(entity->pos + volume->offsetPos,
+                                                  volume->dim + epsEnlargementRegion) };
+            const Rect3 testEntityRect{ RectCenterDim(testEntity->pos + testVolume->offsetPos,
+                                                      testVolume->dim) };
+            result = RectsIntersect(entityRect, testEntityRect);
+        }
+    }
+
+    return result;
 }
 
 INTERNAL void
@@ -399,7 +480,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         }
     }
 
-    // Other player faster for debug
+    // @Debug other player faster
     //if (controllerIndex != 0) {
     //    acceleration *= 1.5f;
     //}
@@ -407,10 +488,20 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // acceleration <=> ddP
     acceleration *= moveSpec.speed;
 
-    const f32 gravity{ -9.8f };
     // TODO: ordinary differential equations
-    acceleration += -moveSpec.drag * entity->velocity;
-    acceleration += Vec3{ 0, 0, gravity };
+    Vec3 drag{ -moveSpec.drag * entity->velocity };
+    drag.z = 0;
+    acceleration += drag;
+
+    const f32 gravity{ -9.8f };
+    if (!IsSet(entity, SimEntityFlags::Z_SUPPORTED)) {
+        acceleration += Vec3{ 0, 0, gravity };
+    }
+
+    // TODO: rename playerDelta as now we use this function for all entities
+    // p' = 0.5 * at^2 + vt + p
+    Vec3 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
+
     // v' = at + v
     entity->velocity += acceleration * delta;
 
@@ -418,16 +509,12 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     const f32 velocitySq{ LengthSq(entity->velocity) };
     ASSERT(velocitySq <= SquareF32(simRegion->maxEntityVelocity));
 
-    // Debug code
+    // @Debug
     if (velocitySq > simRegion->maxRecordedEntityVelocitySq) {
         simRegion->maxRecordedEntityVelocitySq = velocitySq;
         simRegion->maxRecordedEntityVelocityIndex = entity->storageIndex;
         simRegion->maxRecordedEntityVelocityType = entity->type;
     }
-
-    // TODO: rename playerDelta as now we use this function for all entities
-    // p' = 0.5 * at^2 + vt + p
-    Vec3 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
 
     /// Collision checks
 
@@ -440,85 +527,198 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         distanceRemaining = 10000.0f;
     }
 
-    constexpr i32 iterationCount{ 4 };
+    const i32 iterationCount{ 4 };
 
     for (i32 iteration{}; iteration < iterationCount; ++iteration) {
-        f32 tMin{ 1.0f };
-
         const f32 playerDeltaLength{ Length(playerDelta) };
         // TODO: epsilon!!! we shouldn't allow lengths of 0.001 or so
         if (playerDeltaLength == 0) {
             break;
         }
 
+        f32 tMin{ 1.0f };
+        f32 tMax{ 0.0f };
+
         // Calculate new tMin for the remaining length allowed to move
         if (playerDeltaLength > distanceRemaining) {
             tMin = distanceRemaining / playerDeltaLength;
         }
 
-        Vec3 wallNormal{};
-        TestWallResult testWallResult{};
-
-        i32 hitHighEntityIndex{}; // Probably not needed
-        SimEntity* hitEntity{};
+        Vec3 wallNormalMin{};
+        Vec3 wallNormalMax{};
+        SimEntity* hitEntityMin{};
+        SimEntity* hitEntityMax{};
+        //TestWallResult testWallResult{};
 
         const Vec3 desiredPos{ entity->pos + playerDelta };
 
         if (!IsSet(entity, SimEntityFlags::NON_SPATIAL)) {
             for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
                 SimEntity* testEntity{ &simRegion->entities[highIndex] };
-                if (ShouldCollide(gameState, entity, testEntity)) {
-                    const Vec3 minkowskiDiameter{ testEntity->dim.x + entity->dim.x,
-                                                  testEntity->dim.y + entity->dim.y,
-                                                  testEntity->dim.z + entity->dim.z };
 
-                    const Vec3 minCorner{ minkowskiDiameter * -0.5f };
-                    const Vec3 maxCorner{ minkowskiDiameter * 0.5f };
+                // TODO: @Robustness
+                const f32 epsOverlap{ 0.001f };
+                const Vec3 epsOverlapRegion{ Vec3::ONE * epsOverlap };
 
-                    const Vec3 relPos{ entity->pos - testEntity->pos };
+                if ((IsSet(testEntity, SimEntityFlags::TRAVERSABLE) &&
+                     EntitiesOverlap(entity, testEntity, epsOverlapRegion)) ||
+                    CanCollide(gameState, entity, testEntity)) {
+                    for (i32 volumeIndex{}; volumeIndex < entity->collision->volumeCount;
+                         ++volumeIndex) {
+                        auto* volume{ &entity->collision->volumes[volumeIndex] };
+                        for (i32 testVolumeIndex{};
+                             testVolumeIndex < testEntity->collision->volumeCount;
+                             ++testVolumeIndex) {
+                            auto* testVolume{ &testEntity->collision->volumes[testVolumeIndex] };
 
-                    // Test all four "walls", used for other entities as well
+                            const Vec3 minkowskiDiameter{ testVolume->dim.x + volume->dim.x,
+                                                          testVolume->dim.y + volume->dim.y,
+                                                          testVolume->dim.z + volume->dim.z };
 
-                    // x
-                    testWallResult = TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                              playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                    if (testWallResult.hit) {
-                        tMin = testWallResult.tMin;
-                        wallNormal = Vec3{ -1, 0 };
-                        //hitWall = true;
-                        hitHighEntityIndex = highIndex;
-                        hitEntity = testEntity;
-                    }
+                            const Vec3 minCorner{ -minkowskiDiameter * 0.5f };
+                            const Vec3 maxCorner{ minkowskiDiameter * 0.5f };
 
-                    testWallResult = TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
-                                              playerDelta.y, tMin, minCorner.y, maxCorner.y);
-                    if (testWallResult.hit) {
-                        tMin = testWallResult.tMin;
-                        wallNormal = Vec3{ 1, 0 };
-                        //hitWall = true;
-                        hitHighEntityIndex = highIndex;
-                        hitEntity = testEntity;
-                    }
+                            const Vec3 relPos{ (entity->pos + volume->offsetPos) -
+                                               (testEntity->pos + testVolume->offsetPos) };
+                            // TODO: inclusive test on the max end?
+                            if ((relPos.z < minCorner.z) || (relPos.z >= maxCorner.z)) {
+                                continue;
+                            }
 
-                    // y
-                    testWallResult = TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                              playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                    if (testWallResult.hit) {
-                        tMin = testWallResult.tMin;
-                        wallNormal = Vec3{ 0, -1 };
-                        //hitwall = true;
-                        hitHighEntityIndex = highIndex;
-                        hitEntity = testEntity;
-                    }
+                            // Test all four "walls", used for other entities as well
 
-                    testWallResult = TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
-                                              playerDelta.x, tMin, minCorner.x, maxCorner.x);
-                    if (testWallResult.hit) {
-                        tMin = testWallResult.tMin;
-                        wallNormal = Vec3{ 0, 1 };
-                        //hitwall = true;
-                        hitHighEntityIndex = highIndex;
-                        hitEntity = testEntity;
+#if 0
+                            // x
+                            testWallResult =
+                                TestWall(minCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                         playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ -1, 0 };
+                                //hitWall = true;
+                                testHitEntity = testEntity;
+                            }
+
+                            testWallResult =
+                                TestWall(maxCorner.x, relPos.x, relPos.y, playerDelta.x,
+                                         playerDelta.y, tMin, minCorner.y, maxCorner.y);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ 1, 0 };
+                                //hitWall = true;
+                                testHitEntity = testEntity;
+                            }
+
+                            // y
+                            testWallResult =
+                                TestWall(minCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                         playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ 0, -1 };
+                                //hitwall = true;
+                                testHitEntity = testEntity;
+                            }
+
+                            testWallResult =
+                                TestWall(maxCorner.y, relPos.y, relPos.x, playerDelta.y,
+                                         playerDelta.x, tMin, minCorner.x, maxCorner.x);
+                            if (testWallResult.hit) {
+                                testTMin = testWallResult.tMin;
+                                testWallNormal = Vec3{ 0, 1 };
+                                //hitwall = true;
+                                testHitEntity = testEntity;
+                            }
+#endif
+
+                            struct TestWallData {
+                                f32 x;
+                                f32 relX;
+                                f32 relY;
+                                f32 deltaX;
+                                f32 deltaY;
+                                f32 minY;
+                                f32 maxY;
+                                Vec3 normal;
+                            };
+
+                            TestWallData walls[]{
+                                // x
+                                { minCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
+                                  minCorner.y, maxCorner.y, Vec3{ -1, 0, 0 } },
+                                { maxCorner.x, relPos.x, relPos.y, playerDelta.x, playerDelta.y,
+                                  minCorner.y, maxCorner.y, Vec3{ 1, 0, 0 } },
+                                // y
+                                { minCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
+                                  minCorner.x, maxCorner.x, Vec3{ 0, -1, 0 } },
+                                { maxCorner.y, relPos.y, relPos.x, playerDelta.y, playerDelta.x,
+                                  minCorner.x, maxCorner.x, Vec3{ 0, 1, 0 } }
+                            };
+
+                            Vec3 testWallNormal{};
+                            SimEntity* testHitEntity{};
+                            f32 testTMin{ tMin };
+                            f32 testTMax{ tMax };
+
+                            if (IsSet(testEntity, SimEntityFlags::TRAVERSABLE)) {
+                                for (i32 wallIndex{}; wallIndex < ARRAY_COUNT(walls); ++wallIndex) {
+                                    TestWallData* wall{ &walls[wallIndex] };
+
+                                    const f32 tEps{ 0.001f };
+                                    f32 newTMax{ tMax };
+
+                                    if (wall->deltaX != 0.0f) {
+                                        const f32 tResult{ (wall->x - wall->relX) / wall->deltaX };
+                                        const f32 newY{ wall->relY + (tResult * wall->deltaY) };
+                                        if (tResult >= 0.0f && tMax < tResult) {
+                                            if (newY >= wall->minY && newY <= wall->maxY) {
+                                                newTMax = MAX(0.0f, tResult - tEps);
+                                                testTMax = newTMax;
+
+                                                testWallNormal = wall->normal;
+                                                testHitEntity = testEntity;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (testHitEntity) {
+                                    tMax = testTMax;
+                                    wallNormalMax = testWallNormal;
+                                    hitEntityMax = testHitEntity;
+                                }
+                            } else {
+                                for (i32 wallIndex{}; wallIndex < ARRAY_COUNT(walls); ++wallIndex) {
+                                    TestWallData* wall{ &walls[wallIndex] };
+
+                                    const f32 tEps{ 0.001f };
+                                    f32 newTMin{ tMin };
+
+                                    if (wall->deltaX != 0.0f) {
+                                        const f32 tResult{ (wall->x - wall->relX) / wall->deltaX };
+                                        const f32 newY{ wall->relY + (tResult * wall->deltaY) };
+                                        if (tResult >= 0.0f && tResult < tMin) {
+                                            if (newY >= wall->minY && newY <= wall->maxY) {
+                                                newTMin = MAX(0.0f, tResult - tEps);
+                                                testTMin = newTMin;
+
+                                                testWallNormal = wall->normal;
+                                                testHitEntity = testEntity;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (testHitEntity) {
+                                    const Vec3 testPos{ entity->pos + (playerDelta * testTMin) };
+                                    if (SpeculativeCollide(entity, testEntity, testPos)) {
+                                        tMin = testTMin;
+                                        wallNormalMin = testWallNormal;
+                                        hitEntityMin = testHitEntity;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -526,8 +726,21 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
 
         //PRINT_F32("tMin: ", tMin);
 
-        entity->pos += playerDelta * tMin;
-        distanceRemaining -= playerDeltaLength * tMin;
+        f32 tStop{};
+        SimEntity* hitEntity{};
+        Vec3 wallNormal;
+        if (tMin < tMax) {
+            tStop = tMin;
+            hitEntity = hitEntityMin;
+            wallNormal = wallNormalMin;
+        } else {
+            tStop = tMax;
+            hitEntity = hitEntityMax;
+            wallNormal = wallNormalMax;
+        }
+
+        entity->pos += playerDelta * tStop;
+        distanceRemaining -= playerDeltaLength * tStop;
         distanceRemaining = MAX(distanceRemaining, 0.0f); // Do this just for safety?
         // This is sometimes hit when the sword is reset
         //ASSERT(distanceRemaining >= 0);
@@ -535,23 +748,47 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
         if (hitEntity) {
             playerDelta = desiredPos - entity->pos;
 
-            const bool32 stopsOnCollision{ HandleCollision(entity, hitEntity) };
+            const bool32 stopsOnCollision{ HandleCollision(gameState, entity, hitEntity) };
 
             // Slide along
             if (stopsOnCollision) {
                 playerDelta -= 1.0f * Dot(playerDelta, wallNormal) * wallNormal;
                 entity->velocity -= 1.0f * Dot(entity->velocity, wallNormal) * wallNormal;
-            } else {
-                AddCollisionRule(gameState, entity->storageIndex, hitEntity->storageIndex, false);
             }
         } else {
             break;
         }
     }
 
-    if (entity->pos.z < 0) {
-        entity->pos.z = 0;
+    // Handle events based on overlapping
+    // Imagine like walking on lava, we want to affect movement and other stuff most likely!
+    // Previously we added every overlapping entity to a overlap array and used that at the
+    // end of this function to do stuff
+
+    // TODO: this is based on the camera position...
+    // so we need a solid concept of ground levels
+    f32 ground{};
+
+    {
+        for (i32 highIndex{}; highIndex < simRegion->entityCount; ++highIndex) {
+            SimEntity* testEntity{ &simRegion->entities[highIndex] };
+            // Simple code :)
+            if (CanOverlap(gameState, entity, testEntity) && EntitiesOverlap(entity, testEntity)) {
+                HandleOverlap(gameState, entity, testEntity, delta, &ground);
+            }
+        }
+    }
+
+    // Move the ground to the entity's position
+    ground += entity->pos.z - GetEntityGroundPoint(entity).z;
+
+    if (entity->pos.z <= ground ||
+        (IsSet(entity, SimEntityFlags::Z_SUPPORTED) && entity->velocity.z == 0.0f)) {
+        entity->pos.z = ground;
         entity->velocity.z = 0;
+        AddFlags(entity, SimEntityFlags::Z_SUPPORTED);
+    } else {
+        ClearFlags(entity, SimEntityFlags::Z_SUPPORTED);
     }
 
     if (entity->distanceLimit != 0.0f) {
@@ -560,7 +797,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
 
     // Delta independent friction using exponential decay: e^(-kt)
     //if (hitWall) {
-    //    constexpr f32 frictionModifier{ 2.0f };
+    //    const f32 frictionModifier{ 2.0f };
     //    const f32 friction{ ExpF32(-frictionModifier * delta) };
     //    entity->velocity *= friction;
     //}

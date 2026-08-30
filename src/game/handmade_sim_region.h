@@ -20,14 +20,48 @@ struct MoveSpec {
 enum class EntityType {
     NON_EXISTENT = 0,
 
+    SPACE,
+
     WALL,
     HERO,
     FAMILIAR,
     MONSTER,
     SWORD,
+    STAIRWELL,
 };
 
-GLOBAL constexpr i32 hit_Point_Sub_Count{ 4 };
+NODISCARD
+INTERNAL const char*
+EntityTypeToStr(EntityType type) {
+    const char* typeStr{};
+    switch (type) {
+    case EntityType::WALL: {
+        typeStr = "Wall";
+    } break;
+    case EntityType::HERO: {
+        typeStr = "Hero";
+    } break;
+    case EntityType::FAMILIAR: {
+        typeStr = "Familiar";
+    } break;
+    case EntityType::MONSTER: {
+        typeStr = "Monstar";
+    } break;
+    case EntityType::SWORD: {
+        typeStr = "Sword";
+    } break;
+    case EntityType::STAIRWELL: {
+        typeStr = "Stairwell";
+    } break;
+    default: {
+        INVALID_CODE_PATH;
+    }
+    }
+
+    return typeStr;
+}
+
+GLOBAL const i32 hit_Point_Sub_Count{ 4 };
 
 struct HitPoint {
     i8 flags;
@@ -45,10 +79,27 @@ struct EntityReference {
 };
 
 enum SimEntityFlags : u32 {
+    // TODO: cleanup these, collides and z_supported are probably unnecessary
     COLLIDES = (1 << 0),
     NON_SPATIAL = (1 << 1),
+    MOVEABLE = (1 << 2),
+    Z_SUPPORTED = (1 << 3),
+    TRAVERSABLE = (1 << 4),
 
     SIMULATING = (1 << 30),
+};
+
+struct SimEntityCollisionVolume {
+    Vec3 dim;
+    Vec3 offsetPos;
+};
+
+struct SimEntityCollisionVolumeGroup {
+    SimEntityCollisionVolume totalVolume;
+    SimEntityCollisionVolume* volumes;
+    // Volume count is expected to be greater than 0 if the entity has any volume
+    // We could also specify that when volumeCount is 0 we only use the totalVolume
+    i32 volumeCount;
 };
 
 // Simulated (high)
@@ -60,10 +111,11 @@ struct SimEntity {
     EntityType type;
     i32 flags;
 
-    Vec3 dim;
-
     Vec3 pos; // NOTE: This is now already relative to the camera center
     Vec3 velocity;
+
+    SimEntityCollisionVolumeGroup* collision;
+    //Vec3 dim;
 
     f32 distanceLimit; // For every entity a max limit
 
@@ -75,6 +127,13 @@ struct SimEntity {
     Array<HitPoint, 16> hitPoints;
 
     EntityReference sword;
+
+    i32 familiarIndex; // Used by hero, saved by familiar of the closest hero
+    bool32 followingHero;
+
+    // For stairwells only...
+    Vec2 walkableDim;
+    f32 walkableHeight;
 };
 
 /**
@@ -99,23 +158,22 @@ struct SimRegion {
     Rect3 bounds;
     Rect3 updatableBounds;
 
+    // Camera position relative to the origin of this region
+    Vec3 cameraPos;
+
+    SimEntity* entities;
+    i32 entityCount;
+    i32 maxEntityCount;
+
+    Array<SimEntityHash, 4096> hash;
+
     f32 maxEntityRadius;
     f32 maxEntityVelocity;
 
+    // @Debug
     f32 maxRecordedEntityVelocitySq; // Stored in MoveEntity
     i32 maxRecordedEntityVelocityIndex;
     EntityType maxRecordedEntityVelocityType;
-
-    i32 maxEntityCount;
-    i32 entityCount;
-    SimEntity* entities;
-
-    Array<SimEntityHash, 4096> hash;
-};
-
-struct TestWallResult {
-    f32 tMin;
-    bool32 hit;
 };
 
 #endif // HANDMADE_SIM_REGION_H
