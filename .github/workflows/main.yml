@@ -108,5 +108,32 @@ jobs:
           chmod +x ./scripts/macos_build.sh
           ./scripts/macos_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
 
-# TODO: web
 # https://github.com/emscripten-core/setup-emsdk
+  build-web:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - emscripten
+        mode:
+          - debug
+          - release
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Emscripten
+        uses: emscripten-core/setup-emsdk@v15
+        with:
+        # Or latest
+          version: 6.0.1
+
+      - name: Get toolset info
+        run: |
+          emcc -v
+
+      - name: Build Web
+        run: |
+          chmod +x ./scripts/web_build.sh
+          ./scripts/web_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"

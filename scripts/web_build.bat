@@ -43,13 +43,13 @@ if %useRealAssets% == 1 (
 )
 
 if "%~1" == "rel" (
-    echo config: RELEASE
+    echo [CONFIG: RELEASE]
     set commonCompilerFlags=%commonCompilerFlags% -O3
 ) else if "%~1" == "release" (
-    echo config: RELEASE
+    echo [CONFIG: RELEASE]
     set commonCompilerFlags=%commonCompilerFlags% -O3
 ) else (
-    echo config: DEBUG
+    echo [CONFIG: DEBUG]
     set commonCompilerFlags=%commonCompilerFlags% -O0 -g2
     set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_DEBUG=1
 )

@@ -155,11 +155,13 @@ Run it:
 
 Using [emscripten](https://emscripten.org/index.html) to compile the C++ code to WebAssembly. Install it via: https://emscripten.org/docs/getting_started/downloads.html
 
-Because browsers are trying to be so safe nowadays we have to host a local web server to be able to test the game... Navigate to build/web and host a server via python:
+Because browsers are trying to be so safe nowadays we have to host a local web server to be able to test the game... Run:
 
 ```
-python -m http.server
+./scripts/web_build_host.sh
 ```
+
+Navigate to localhost:8000
 
 -> Open web_handmade.html
 
