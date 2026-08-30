@@ -100,8 +100,7 @@ struct GameState {
     //MemoryArena transientArena;
 
     World* world;
-    f32 metersToPixels; // TODO: should this be here?
-    f32 pixelsToMeters;
+
     f32 typicalFloorHeight;
 
     WorldPosition cameraPos;

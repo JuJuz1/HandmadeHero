@@ -6,7 +6,9 @@ struct LoadedBitmapInfo {
     i32 width;
     i32 height;
     i32 pitch;
-    Vec2 align;
+
+    Vec2 alignPercentage;
+    f32 widthOverHeight;
 };
 
 struct EnvironmentMap {
@@ -50,6 +52,7 @@ struct RenderEntryRect {
 struct RenderEntryBitmap {
     RenderEntityBasis entityBasis;
     LoadedBitmapInfo* bitmap;
+    Vec2 size;
     Vec4 color;
 };
 
@@ -74,7 +77,6 @@ struct RenderEntrySaturation {
 
 struct RenderGroup {
     RenderBasis* defaultBasis;
-    f32 metersToPixels;
     f32 globalAlpha;
 
     u8* pushBufferBase;

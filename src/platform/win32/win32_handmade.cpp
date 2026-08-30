@@ -1082,8 +1082,14 @@ WinMain(
         return 0;
     }
 
+// TODO: multiple resolutions: 1920, 1080
+#if 1
     const i32 startingWidth{ 960 };
     const i32 startingHeight{ 540 };
+#else
+    const i32 startingWidth{ 1920 };
+    const i32 startingHeight{ 1080 };
+#endif
     hm_win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     char buf[128];

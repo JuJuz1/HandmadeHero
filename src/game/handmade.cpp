@@ -49,6 +49,9 @@ INTERNAL inline Vec2
 TopDownAlign(LoadedBitmapInfo* bitmap, Vec2 align) {
     ASSERT(bitmap);
     align.y = static_cast<f32>(bitmap->height - 1) - align.y;
+    align.x = SafeRatio0(align.x, static_cast<f32>(bitmap->width));
+    align.y = SafeRatio0(align.y, static_cast<f32>(bitmap->height));
+
     return align;
 }
 
@@ -56,9 +59,9 @@ INTERNAL void
 SetTopDownAlign(HeroBitmaps* heroBitmaps, Vec2 align) {
     align = TopDownAlign(&heroBitmaps->head, align);
 
-    heroBitmaps->head.align = align;
-    heroBitmaps->cape.align = align;
-    heroBitmaps->torso.align = align;
+    heroBitmaps->head.alignPercentage = align;
+    heroBitmaps->cape.alignPercentage = align;
+    heroBitmaps->torso.alignPercentage = align;
 }
 
 // Struct packing to avoid manual work
@@ -106,7 +109,9 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         result.memory = pixels;
         result.width = bitMapHeader->width;
         result.height = bitMapHeader->height;
-        result.align = TopDownAlign(&result, align); // Y is top-down aligned
+        result.alignPercentage = TopDownAlign(&result, align); // Y is top-down aligned
+        result.widthOverHeight =
+            SafeRatio0(static_cast<f32>(result.width), static_cast<f32>(result.height));
 
         // IMPORTANT: Byte order of bmp is determined by the header!
         // It seems we have a value of 3 for compression always, and the masks change between files!
@@ -503,7 +508,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
 
     auto groundMemory{ BeginTempMemory(&tranState->tranArena) };
     // We do ground chunks in pixel space
-    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2), 1.0f) };
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2)) };
 
     //ScreenClear(renderGroup, Vec4{ 1.0f, 1.0f, 0.0f, 1.0f });
 
@@ -544,7 +549,8 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 });
+                // TODO: height
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 1.0f);
             }
         }
     }
@@ -570,7 +576,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                                    RandUnilateral(&series) * height };
                 const Vec2 pos{ center + offset - bitmapCenter };
 
-                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 });
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 1.0f);
             }
         }
     }
@@ -815,15 +821,15 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     gameState->world = PushStruct(&gameState->worldArena, World);
     World* world{ gameState->world };
 
-    gameState->metersToPixels = 42.0f; // Totally modifiable
-    gameState->pixelsToMeters = 1.0f / gameState->metersToPixels;
     gameState->typicalFloorHeight = 3.0f;
 
     const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
     const i32 groundBuffHeight{ 256 };
-    const Vec3 chunkDimInMeters{ gameState->pixelsToMeters * groundBuffWidth,
-                                 gameState->pixelsToMeters * groundBuffHeight,
-                                 gameState->typicalFloorHeight };
+
+    // @Remove
+    const f32 pixelsToMeters{ 1.0f / 42.0f };
+    const Vec3 chunkDimInMeters{ pixelsToMeters * groundBuffWidth,
+                                 pixelsToMeters * groundBuffHeight, gameState->typicalFloorHeight };
     InitWorld(world, chunkDimInMeters);
 
     // IMPORTANT: This now determines the actual pixel size of the tiles!
@@ -1130,11 +1136,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     }
 #endif
 
-    // Had a bug earlier with this not being initialized yet
-    // Should probably assert a bunch more everywhere
-    ASSERT(gameState->metersToPixels != 0.0f);
-    const f32 pixelsToMeters{ 1.0f / gameState->metersToPixels };
-
     World* world{ gameState->world };
 
     for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(input->playerInputs);
@@ -1302,8 +1303,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     /// Render stuff
     auto renderMemory{ BeginTempMemory(&tranState->tranArena) };
-    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4),
-                                        gameState->metersToPixels) };
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4)) };
 
     // Copy the OS sent screen buff info into our format
     LoadedBitmapInfo drawBuff_{};
@@ -1322,6 +1322,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
+    const f32 pixelsToMeters{ 1.0f / 42.0f };
     const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
     const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
     Rect3 cameraBoundsInMeters{ RectCenterDim(
@@ -1513,7 +1514,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         switch (entity->type) {
         case EntityType::WALL: {
             // Tree bitmaps
-            PushBitmap(renderGroup, &gameState->tree, Vec3{});
+            PushBitmap(renderGroup, &gameState->tree, Vec3{}, 2.5f);
         } break;
 
         case EntityType::STAIRWELL: {
@@ -1575,17 +1576,20 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 }
             }
 
-            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, shadowAlpha });
-            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{});
-            PushBitmap(renderGroup, &heroBitmaps->cape, Vec3{});
-            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{});
+            // @Hack
+            const f32 heroSizeC{ 2.5f };
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 1.0f * heroSizeC,
+                       Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{}, 1.2f * heroSizeC);
+            PushBitmap(renderGroup, &heroBitmaps->cape, Vec3{}, 1.2f * heroSizeC);
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{}, 1.2f * heroSizeC);
 
             DrawHitpoints(entity, renderGroup);
         } break;
 
         case EntityType::MONSTER: {
-            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, shadowAlpha });
-            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{});
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 3.5f, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->torso, Vec3{}, 3.5f);
 
             DrawHitpoints(entity, renderGroup);
         } break;
@@ -1647,8 +1651,9 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             const f32 newShadowAlpha{ (shadowAlpha * 0.5f) + (0.15f * bobSin) };
             const f32 bobStrength{ 0.23f }; // How big the bobbing is
 
-            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, newShadowAlpha });
-            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{ 0, 0, bobStrength * bobSin });
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 2.5f,
+                       Vec4{ 1, 1, 1, newShadowAlpha });
+            PushBitmap(renderGroup, &heroBitmaps->head, Vec3{ 0, 0, bobStrength * bobSin }, 2.5f);
         } break;
 
             // FIXME: this seems to not get called if we stand still and use the sword
@@ -1662,8 +1667,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                 ClearCollisionRulesFor(gameState, entity->storageIndex);
             }
 
-            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, Vec4{ 1, 1, 1, shadowAlpha });
-            PushBitmap(renderGroup, &gameState->sword, Vec3{});
+            PushBitmap(renderGroup, &gameState->shadow, Vec3{}, 0.5f, Vec4{ 1, 1, 1, shadowAlpha });
+            PushBitmap(renderGroup, &gameState->sword, Vec3{}, 0.5f);
         } break;
 
         case EntityType::SPACE: {

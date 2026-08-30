@@ -28,7 +28,8 @@ PushRenderElement_(RenderGroup* group, i32 size, RenderGroupEntryType type) {
 }
 
 INTERNAL void
-PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec3 offset, Vec4 color = Vec4::ONE) {
+PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec3 offset, f32 height,
+           Vec4 color = Vec4::ONE) {
     //ASSERT(group->pieceCount < group->pieces.size);
     //RenderGroupEntry* piece{ &group->pieces[group->pieceCount++] };
     auto* entry{ PushRenderElement(group, RenderEntryBitmap) };
@@ -36,7 +37,10 @@ PushBitmap(RenderGroup* group, LoadedBitmapInfo* bitmap, Vec3 offset, Vec4 color
         entry->bitmap = bitmap;
 
         entry->entityBasis.basis = group->defaultBasis;
-        entry->entityBasis.offset = (group->metersToPixels * offset) - Vec3{ bitmap->align, 0 };
+        const Vec2 size{ bitmap->widthOverHeight * height, height };
+        entry->size = size;
+        const Vec2 align{ bitmap->alignPercentage * size };
+        entry->entityBasis.offset = offset - Vec3{ align, 0 };
 
         entry->color = color * group->globalAlpha;
     }
@@ -48,9 +52,9 @@ PushRect(RenderGroup* group, Vec3 offset, Vec2 dim, Vec4 color = Vec4::ONE) {
     auto* entry{ PushRenderElement(group, RenderEntryRect) };
     if (entry) {
         entry->entityBasis.basis = group->defaultBasis;
-        entry->entityBasis.offset = group->metersToPixels * (offset - Vec3{ dim * 0.5f, 0 });
+        entry->entityBasis.offset = offset - Vec3{ dim * 0.5f, 0 };
 
-        entry->dim = group->metersToPixels * dim;
+        entry->dim = dim;
         // TODO: global alpha for rects
         entry->color = color //* group->globalAlpha
             ;
@@ -631,13 +635,12 @@ DrawRectOutline(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec3 color,
 
 NODISCARD
 INTERNAL RenderGroup*
-AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, f32 metersToPixels) {
+AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize) {
     RenderGroup* result{ PushStruct(arena, RenderGroup) };
     result->pushBufferBase = static_cast<u8*>(PushSize(arena, maxPushBufferSize));
 
     result->defaultBasis = PushStruct(arena, RenderBasis);
     result->defaultBasis->pos = Vec3{};
-    result->metersToPixels = metersToPixels;
 
     result->maxPushBufferSize = maxPushBufferSize;
     result->pushBufferSize = 0;
@@ -655,22 +658,25 @@ struct RenderEntityBasisPosResult {
 
 NODISCARD
 INTERNAL RenderEntityBasisPosResult
-GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenCenter) {
+GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenDim,
+                        f32 metersToPixels) {
     RenderEntityBasisPosResult result{};
 
-    const Vec3 entityBasePos{ entityBasis->basis->pos * group->metersToPixels };
+    const Vec2 screenCenter{ screenDim * 0.5f };
+
+    const Vec3 entityBasePos{ entityBasis->basis->pos };
 
     // Modifiable properties, needs tuning
-    const f32 focalLength{ 20.0f * group->metersToPixels };
-    const f32 cameraDistanceAboveTarget{ 20.0f * group->metersToPixels };
+    const f32 focalLength{ 6.0f };
+    const f32 cameraDistanceAboveTarget{ 5.0f };
     const f32 depth{ cameraDistanceAboveTarget - entityBasePos.z };
-    const f32 nearClipPlane{ 0.2f * group->metersToPixels };
+    const f32 nearClipPlane{ 0.2f };
 
     const Vec3 rawXY{ entityBasePos.xy + entityBasis->offset.xy, 1.0f };
     if (depth > nearClipPlane) {
         const Vec3 projectedXY{ (1.0f / depth) * focalLength * rawXY };
-        result.pos = screenCenter + projectedXY.xy;
-        result.scale = projectedXY.z;
+        result.pos = screenCenter + (projectedXY.xy * metersToPixels);
+        result.scale = projectedXY.z * metersToPixels;
         result.valid = true;
     }
 
@@ -679,8 +685,11 @@ GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2
 
 INTERNAL void
 RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameState* gameState) {
-    const Vec2 screenCenter{ outputTarget->width * 0.5f, outputTarget->height * 0.5f };
-    const f32 pixelsToMeters{ 1.0f / group->metersToPixels };
+    const Vec2 screenDim{ outputTarget->width, outputTarget->height };
+
+    // The divisor can be modified to give some zoom
+    const f32 metersToPixels{ screenDim.x / 20.0f };
+    const f32 pixelsToMeters{ 1.0f / metersToPixels };
 
     for (i32 baseAddress{}; baseAddress < group->pushBufferSize;) {
         auto* header{ reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
@@ -702,7 +711,8 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryRect*>(data) };
             baseAddress += sizeof(*entry);
 
-            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
+            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim,
+                                                      metersToPixels) };
 
             DrawRect(outputTarget, basis.pos, basis.pos + (entry->dim * basis.scale), entry->color);
         } break;
@@ -710,14 +720,15 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
             baseAddress += sizeof(*entry);
 
-            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenCenter) };
+            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim,
+                                                      metersToPixels) };
 
 #if 0
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
 #else
-            DrawRectSlowly(outputTarget, basis.pos, Vec2{ entry->bitmap->width, 0 } * basis.scale,
-                           Vec2{ 0, entry->bitmap->height } * basis.scale, entry->color,
-                           entry->bitmap, nullptr, nullptr, nullptr, nullptr, pixelsToMeters);
+            DrawRectSlowly(outputTarget, basis.pos, Vec2{ entry->size.x, 0 } * basis.scale,
+                           Vec2{ 0, entry->size.y } * basis.scale, entry->color, entry->bitmap,
+                           nullptr, nullptr, nullptr, nullptr, pixelsToMeters);
 #endif
         } break;
         case RenderGroupEntryType_RenderEntryCoordinateSystem: {
@@ -761,11 +772,11 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             INVALID_DEFAULT_CASE;
         }
 
-        // @Debug collision box
+// @Debug collision box
+#if 0
         if (gameState->showCollisionBoxes) {
 // Don't draw for room space as it blocks the whole screen
 // @Re-enable after getting reference to entity here, probably store to the piece?
-#if 0
             if (entity->type != EntityType::SPACE) {
                 const Vec2 leftTop{ entityGroundPoint.x - (0.5f * group->metersToPixels *
                                                            entity->collision->totalVolume.dim.x),
@@ -778,7 +789,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
                          ,
                          0.5f, 0.1f, 0.5f);
             }
-#endif
         }
+#endif
     }
 }
