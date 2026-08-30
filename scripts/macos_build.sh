@@ -4,7 +4,7 @@ set -euo pipefail
 # MUST BE RUN FROM THE ROOT
 
 mkdir -p build
-pushd build
+pushd build > /dev/null
 
 useRealAssets=0
 
@@ -49,4 +49,4 @@ rm lock.tmp
 # Build platform
 clang++ $commonCompilerFlags ../src/platform/sdl/sdl_handmade.cpp -I ../src -o macos_handmade $sdl2
 
-popd
+popd > /dev/null
