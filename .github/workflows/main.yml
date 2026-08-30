@@ -73,7 +73,7 @@ jobs:
       - name: Build Linux
         run: |
           chmod +x ./scripts/linux_build.sh
-          ./scripts/linux_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          time ./scripts/linux_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
 
   build-macos:
     # See if we can do "macos-latest-large" without a paid Github version -> can not
@@ -106,7 +106,7 @@ jobs:
         # actions said to untap aws/tap
         run: |
           chmod +x ./scripts/macos_build.sh
-          ./scripts/macos_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          time ./scripts/macos_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
 
 # https://github.com/emscripten-core/setup-emsdk
   build-web:
@@ -136,4 +136,4 @@ jobs:
       - name: Build Web
         run: |
           chmod +x ./scripts/web_build.sh
-          ./scripts/web_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          time ./scripts/web_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"

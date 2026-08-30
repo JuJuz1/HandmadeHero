@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 
 rem A faster alternative to build.bat from VSCode which does the same but doesn't initialize the
 rem environment for no reason if it was already initialized in the shell

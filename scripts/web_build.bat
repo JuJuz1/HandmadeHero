@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 
 IF NOT EXIST build\web mkdir build\web
 pushd build\web
