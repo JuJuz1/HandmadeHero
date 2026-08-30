@@ -650,6 +650,7 @@ AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, f32 metersToPixels) 
 struct RenderEntityBasisPosResult {
     Vec2 pos;
     f32 scale;
+    bool32 valid;
 };
 
 NODISCARD
@@ -657,17 +658,21 @@ INTERNAL RenderEntityBasisPosResult
 GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenCenter) {
     RenderEntityBasisPosResult result{};
 
-    const Vec3 entityBasePos{ group->metersToPixels * entityBasis->basis->pos };
-    const f32 zFudge{ 1.0f + (0.0015f * entityBasePos.z) };
-    const Vec2 entityGroundPoint{ screenCenter +
-                                  zFudge * (entityBasePos.xy + entityBasis->offset.xy) };
-    // Now z offset doesn't affect the scaling? Have to really nail down on this to get it right
-    const Vec2 center{
-        entityGroundPoint //+ Vec2(0, entityBasePos.z + entityBasis->offset.z)
-    };
+    const Vec3 entityBasePos{ entityBasis->basis->pos * group->metersToPixels };
 
-    result.pos = center;
-    result.scale = zFudge;
+    // Modifiable properties, needs tuning
+    const f32 focalLength{ 20.0f * group->metersToPixels };
+    const f32 cameraDistanceAboveTarget{ 20.0f * group->metersToPixels };
+    const f32 depth{ cameraDistanceAboveTarget - entityBasePos.z };
+    const f32 nearClipPlane{ 0.2f * group->metersToPixels };
+
+    const Vec3 rawXY{ entityBasePos.xy + entityBasis->offset.xy, 1.0f };
+    if (depth > nearClipPlane) {
+        const Vec3 projectedXY{ (1.0f / depth) * focalLength * rawXY };
+        result.pos = screenCenter + projectedXY.xy;
+        result.scale = projectedXY.z;
+        result.valid = true;
+    }
 
     return result;
 }

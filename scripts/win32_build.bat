@@ -68,7 +68,10 @@ if %useCTime% == 1 (
     )
 )
 
-set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets%
+rem HANDMADE_INTERNAL=1 for release mode also
+set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets% -DHANDMADE_INTERNAL=1
+
+rem TODO: clang?
 
 rem other compile options
 rem /wd4100 unreferenced param /wd4189 local variable init but not referenced
@@ -76,11 +79,10 @@ rem /wd4189 /wd4100
 set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4189 /wd4100
 
 set commonCompilerFlags=/MTd /Od /Zi
-rem TODO: make ASAN work
+rem TODO: make ASAN work, seems to not work if we do DirectSound initialization stuff...
+rem pretty weird but disabling any dsound related stuff makes it work
+rem Also using it even on /O2 is absurdly slow...
 rem /fsanitize=address
-rem if not exist ..\data\clang_rt.asan_dynamic-x86_64.dll (
-    rem copy ..\misc\clang_rt.asan_dynamic-x86_64.dll ..\data
-rem )
 
 set dllFlags=/LDd
 
@@ -96,10 +98,9 @@ if "%~1" == "rel" (
     set dllFlags=/LD
 ) else (
     echo [CONFIG: DEBUG]
-    set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_INTERNAL=1 -DHANDMADE_DEBUG=1
+    rem -DHANDMADE_INTERNAL=1
+    set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_DEBUG=1
 )
-
-rem TODO: clang?
 
 set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% /Zc:__cplusplus /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 
