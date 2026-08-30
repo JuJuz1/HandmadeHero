@@ -55,9 +55,10 @@
 #include <dsound.h>
 #include <timeapi.h> // for timeBeginPeriod and TIMERR_NOERROR
 
-#include <stdio.h> // sprintf_s
+#include <cstdio> // sprintf_s
 
 #include "game/handmade.h"
+#include "game/handmade_input.h"
 
 #include "win32_handmade.h"
 
@@ -75,57 +76,26 @@ namespace hm_platform_export {
 
 #if HANDMADE_INTERNAL
 
-// TODO: make these more generic (and allow variadic arguments?)
-// and much safer...
+// TODO: eventually replace with our own solution?
+// if we really find that necessary...
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {
     UNUSED_PARAMS(threadContext);
 
-    char buf[128];
-    sprintf_s(buf, "%s", message);
-    OutputDebugStringA(buf);
-}
+    char buff[1024];
 
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {
-    UNUSED_PARAMS(threadContext);
+    va_list args;
+    va_start(args, format);
+    _vsnprintf_s(buff, sizeof(buff), format, args);
+    va_end(args);
 
-    char buf[64];
-    sprintf_s(buf, "%s%d\n", valueName, value);
-    OutputDebugStringA(buf);
-}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {
-    UNUSED_PARAMS(threadContext);
-
-    char buf[64];
-    sprintf_s(buf, "%s%u\n", valueName, value);
-    OutputDebugStringA(buf);
-}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {
-    UNUSED_PARAMS(threadContext);
-
-    char buf[64];
-    sprintf_s(buf, "%s%f\n", valueName, value);
-    OutputDebugStringA(buf);
+    OutputDebugStringA(buff);
 }
 
 #else
 
 INTERNAL
 DEBUG_PRINT(DEBUGPrint) {}
-
-INTERNAL
-DEBUG_PRINT_I32(DEBUGPrintInt) {}
-
-INTERNAL
-DEBUG_PRINT_U32(DEBUGPrintUInt) {}
-
-INTERNAL
-DEBUG_PRINT_F32(DEBUGPrintFloat) {}
 
 #endif
 
@@ -142,7 +112,11 @@ INTERNAL
 DEBUG_READ_FILE(DEBUGReadFile) {
     UNUSED_PARAMS(threadContext);
 
+    ASSERT(threadContext);
+    ASSERT(filename);
+
     DEBUGFileReadResult result{};
+
     // What an atrocious name for a function which requests to read a file...
     HANDLE fileHandle{ CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0,
                                    0) };
@@ -217,6 +191,7 @@ INTERNAL void
 ToggleFullscreen(HWND hWnd) {
     const LONG style{ GetWindowLongA(hWnd, GWL_STYLE) };
     if (style & WS_OVERLAPPEDWINDOW) {
+        OutputDebugStringA("Toggle fullscreen!\n");
         MONITORINFO mi{ sizeof(mi) };
         if (GetWindowPlacement(hWnd, &gWindowPlacement) &&
             GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
@@ -227,6 +202,7 @@ ToggleFullscreen(HWND hWnd) {
                          SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
         }
     } else {
+        OutputDebugStringA("Disable fullscreen!\n");
         SetWindowLongA(hWnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
         SetWindowPlacement(hWnd, &gWindowPlacement);
         SetWindowPos(hWnd, 0, 0, 0, 0, 0,
@@ -258,7 +234,7 @@ ResizeDIBSection(OffScreenBuffer* screenBuff, i32 w, i32 h) {
 
     screenBuff->info.bmiHeader.biSize = sizeof(screenBuff->info.bmiHeader);
     screenBuff->info.bmiHeader.biWidth = screenBuff->width;
-    screenBuff->info.bmiHeader.biHeight = -screenBuff->height; // top-down by assigning negative
+    screenBuff->info.bmiHeader.biHeight = screenBuff->height; // top-down by assigning negative
     screenBuff->info.bmiHeader.biPlanes = 1;
     screenBuff->info.bmiHeader.biBitCount = 32; // 8 padding
     screenBuff->info.bmiHeader.biCompression = BI_RGB;
@@ -282,8 +258,8 @@ DisplayBufferWindow(const HDC deviceContext, // clang-tidy NOLINT
                       screenBuff->width, screenBuff->height, screenBuff->memory, &screenBuff->info,
                       DIB_RGB_COLORS, SRCCOPY);
     } else {
-        constexpr i32 offsetX{ 50 };
-        constexpr i32 offsetY{ 50 };
+        const i32 offsetX{ 50 };
+        const i32 offsetY{ 50 };
 
         // Only clear parts we are not writing to get rid of flickering
         PatBlt(deviceContext, 0, 0, wndWidth, offsetY, BLACKNESS);
@@ -544,8 +520,7 @@ GetExePathAndFilename(AllState* allState) {
 
 INTERNAL void
 BuildGamePathFilename(const AllState* allState, const char* filename, char* dest, i32 destCount) {
-    CatStrings(allState->exePath.data_,
-               static_cast<i32>(allState->exeFilename - allState->exePath.data_), filename,
+    CatStrings(allState->exePath.data_, allState->exeFilename - allState->exePath.data_, filename,
                StrLength(filename), dest, destCount);
 }
 
@@ -739,15 +714,6 @@ HandleSwitchReplayBuffer(AllState* allState, Input* input, i32 selectedIndex, bo
 }
 
 INTERNAL void
-ProcessInputMessage(Button* button, bool32 isDown) {
-    // NOTE: maybe just use if instead of ASSERT due to the way we do mouse input polling atm
-    if (button->endedDown != isDown) {
-        button->endedDown = isDown;
-        ++button->halfTransitionCount;
-    }
-}
-
-INTERNAL void
 ProcessPendingMessages(Input* input, AllState* allState) {
     MSG message;
     while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
@@ -782,78 +748,83 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             case 'W': {
                 // This approach won't work for justPressed, we have to use halfTransitionCount
                 //input->playerInputs->up.pressed = true;
-                ProcessInputMessage(&input->playerInputs->up, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->up, isDown);
             } break;
             case 'S': {
-                ProcessInputMessage(&input->playerInputs->down, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->down, isDown);
             } break;
             case 'A': {
-                ProcessInputMessage(&input->playerInputs->left, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->left, isDown);
             } break;
             case 'D': {
-                ProcessInputMessage(&input->playerInputs->right, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->right, isDown);
             } break;
 
                 // TODO: remove these, only for debugging the second player
                 //case VK_UP: {
-                //    ProcessInputMessage(&input->playerInputs[1].up, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].up, isDown);
                 //} break;
                 //case VK_DOWN: {
-                //    ProcessInputMessage(&input->playerInputs[1].down, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].down, isDown);
                 //} break;
                 //case VK_LEFT: {
-                //    ProcessInputMessage(&input->playerInputs[1].left, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].left, isDown);
                 //} break;
                 //case VK_RIGHT: {
-                //    ProcessInputMessage(&input->playerInputs[1].right, isDown);
+                //    hm_input::ProcessInputEvent(&input->playerInputs[1].right, isDown);
                 //} break;
 
             case VK_UP: {
-                ProcessInputMessage(&input->playerInputs->actionUp, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionUp, isDown);
             } break;
             case VK_DOWN: {
-                ProcessInputMessage(&input->playerInputs->actionDown, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionDown, isDown);
             } break;
             case VK_LEFT: {
-                ProcessInputMessage(&input->playerInputs->actionLeft, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionLeft, isDown);
             } break;
             case VK_RIGHT: {
-                ProcessInputMessage(&input->playerInputs->actionRight, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->actionRight, isDown);
             } break;
 
             case VK_SPACE: {
-                ProcessInputMessage(&input->playerInputs->space, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->space, isDown);
             } break;
 
             case 'Q': {
-                ProcessInputMessage(&input->playerInputs->Q, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Q, isDown);
             } break;
             case 'E': {
-                ProcessInputMessage(&input->playerInputs->E, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->E, isDown);
             } break;
 
             case 'R': {
-                ProcessInputMessage(&input->playerInputs->R, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->R, isDown);
+            } break;
+            case 'F': {
+                hm_input::ProcessInputEvent(&input->playerInputs->F, isDown);
             } break;
 
             case VK_SHIFT: {
-                ProcessInputMessage(&input->playerInputs->shift, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->shift, isDown);
+            } break;
+            case VK_CONTROL: {
+                hm_input::ProcessInputEvent(&input->playerInputs->ctrl, isDown);
             } break;
             // Enter
             case VK_RETURN: {
-                ProcessInputMessage(&input->playerInputs->enter, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->enter, isDown);
             } break;
 
             case VK_F4: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F4, isDown);
                 if (isDown) {
-                    OutputDebugStringA("VK_F4\n");
                     if (altPressed) {
                         gIsGameRunning = false;
                     }
                 }
             } break;
             case VK_F11: {
-                OutputDebugStringA("VK_F11 toggle fullscreen\n");
                 if (isDown) {
                     ToggleFullscreen(message.hwnd);
                 }
@@ -909,9 +880,38 @@ ProcessPendingMessages(Input* input, AllState* allState) {
             } break;
 
             case 'Z': {
-                ProcessInputMessage(&input->playerInputs->Z, isDown);
+                hm_input::ProcessInputEvent(&input->playerInputs->Z, isDown);
             } break;
 #endif
+
+            // F4 processed above
+            case VK_F1: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F1, isDown);
+            } break;
+            case VK_F2: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F2, isDown);
+            } break;
+            case VK_F3: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F3, isDown);
+            } break;
+            case VK_F5: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F5, isDown);
+            } break;
+            case VK_F6: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F6, isDown);
+            } break;
+            case VK_F7: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F7, isDown);
+            } break;
+            case VK_F8: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F8, isDown);
+            } break;
+            case VK_F9: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F9, isDown);
+            } break;
+            case VK_F10: {
+                hm_input::ProcessInputEvent(&input->playerInputs->F10, isDown);
+            } break;
 
             default: {
                 if (isDown) {
@@ -1059,9 +1059,9 @@ WinMain(
     // NOTE: This will not be used if we recap episode 20 audio fixes
     // 3 seems to be enough for monitorHz of 60 (gameUpdateHz 30), 5 for 144
     // NOTE: audio is bugged when using the record and playback
-    constexpr i32 framesOfAudioLatency{ 5 };
+    const i32 framesOfAudioLatency{ 5 };
 
-    constexpr i32 desiredSchedulerMS{ 1 };
+    const i32 desiredSchedulerMS{ 1 };
     const bool32 isSleepGranular{ timeBeginPeriod(desiredSchedulerMS) == TIMERR_NOERROR };
 
     if (!RegisterClassA(&windowClass)) {
@@ -1082,8 +1082,14 @@ WinMain(
         return 0;
     }
 
-    constexpr i32 startingWidth{ 960 };
-    constexpr i32 startingHeight{ 540 };
+// TODO: multiple resolutions: 1920, 1080
+#if 1
+    const i32 startingWidth{ 960 };
+    const i32 startingHeight{ 540 };
+#else
+    const i32 startingWidth{ 1920 };
+    const i32 startingHeight{ 1080 };
+#endif
     hm_win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     char buf[128];
@@ -1154,9 +1160,6 @@ WinMain(
     }
 
     // Platform exports
-    gameMemory.exports.DEBUGPrintInt = hm_platform_export::DEBUGPrintInt;
-    gameMemory.exports.DEBUGPrintUInt = hm_platform_export::DEBUGPrintUInt;
-    gameMemory.exports.DEBUGPrintFloat = hm_platform_export::DEBUGPrintFloat;
     gameMemory.exports.DEBUGPrint = hm_platform_export::DEBUGPrint;
 
     gameMemory.exports.DEBUGFreeFileMemory = hm_platform_export::DEBUGFreeFileMemory;
@@ -1217,20 +1220,18 @@ WinMain(
     gIsGameRunning = true;
 
     while (gIsGameRunning) {
+        gameInput.executableReloaded = false;
+
         const FILETIME newDllWriteTime{ hm_win32::GetLastWriteTime(srcDllPath.data_) };
         if (CompareFileTime(&game.lastWritetime, &newDllWriteTime)) {
             hm_win32::UnloadGameCode(&game);
             game = hm_win32::LoadGameCode(srcDllPath.data_, tempDllPath.data_, lockFilePath.data_);
+            gameInput.executableReloaded = true;
         }
 
-        // Keyboard input
+        /// Keyboard input
 
-        for (i32 controllerIndex{}; controllerIndex < ARRAY_COUNT(gameInput.playerInputs);
-             ++controllerIndex) {
-            for (i32 i{}; i < ARRAY_COUNT(gameInput.playerInputs[0].buttons); ++i) {
-                gameInput.playerInputs[controllerIndex].buttons[i].halfTransitionCount = 0;
-            }
-        }
+        hm_input::ClearInputTransitionCounts(&gameInput);
 
         hm_win32::ProcessPendingMessages(&gameInput, &allState);
 
@@ -1264,16 +1265,16 @@ WinMain(
         }
 
         // NOTE: query these in ProcessPendingMessages so everything is in one place?
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.left,
-                                      GetKeyState(VK_LBUTTON) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.middle,
-                                      GetKeyState(VK_MBUTTON) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.right,
-                                      GetKeyState(VK_RBUTTON) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.x1,
-                                      GetKeyState(VK_XBUTTON1) & (1 << 15));
-        hm_win32::ProcessInputMessage(&gameInput.mouseButtons.x2,
-                                      GetKeyState(VK_XBUTTON2) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.left,
+                                    GetKeyState(VK_LBUTTON) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.middle,
+                                    GetKeyState(VK_MBUTTON) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.right,
+                                    GetKeyState(VK_RBUTTON) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.x1,
+                                    GetKeyState(VK_XBUTTON1) & (1 << 15));
+        hm_input::ProcessInputEvent(&gameInput.mouseButtons.x2,
+                                    GetKeyState(VK_XBUTTON2) & (1 << 15));
 
         if (gIsGamePaused) {
             continue;
@@ -1289,7 +1290,6 @@ WinMain(
         screenBuff.memory = gScreenBuff.memory;
         screenBuff.width = gScreenBuff.width;
         screenBuff.height = gScreenBuff.height;
-        screenBuff.bytesPerPixel = gScreenBuff.bytesPerPixel;
         screenBuff.pitch = gScreenBuff.pitch;
 
         if (allState.recordingIndex != hm_win32::replay_Buffer_Not_Recording) {
