@@ -363,8 +363,6 @@ elif [[ "$platform" == "web" ]]; then
         "${commonDefines[@]}"
         "${modeFlags[@]}"
 
-        -std=c++20
-
         "${commonWarnings[@]}"
 
         -sUSE_SDL=2
