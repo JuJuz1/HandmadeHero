@@ -103,7 +103,7 @@ if "%~1" == "rel" (
     set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_DEBUG=1
 )
 
-set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% /Zc:__cplusplus /FC /Fm /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% /Zc:__cplusplus /FC /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
 
 echo %commonCompilerFlags%
 echo.

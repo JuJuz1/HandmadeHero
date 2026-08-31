@@ -17,7 +17,7 @@ jobs:
       matrix:
         compiler:
           - msvc
-          # TODO?
+          # TODO
           #- clang
         mode:
           - debug
@@ -33,8 +33,9 @@ jobs:
           arch: x64
 
       - name: Get toolset info
+        # TODO -v for clang
         run: |
-          cl
+          "${{ matrix.compiler }}"
 
       - name: Build Win32
         shell: cmd
@@ -47,9 +48,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform:
+          - linux
         compiler:
-          #- gcc TODO
           - clang
+          #- gcc TODO
         mode:
           - debug
           - release
@@ -68,12 +71,12 @@ jobs:
 
       - name: Get toolset info
         run: |
-          clang -v
+          "${{ matrix.compiler }}" -v
 
       - name: Build Linux
         run: |
-          chmod +x ./scripts/linux_build.sh
-          time ./scripts/linux_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          chmod +x ./scripts/build.sh
+          time ./scripts/build.sh "${{ matrix.platform }}" "${{ matrix.compiler }}" "${{ matrix.mode }}"
 
   build-macos:
     # See if we can do "macos-latest-large" without a paid Github version -> can not
@@ -81,6 +84,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform:
+          - mac
         compiler:
           - clang
         mode:
@@ -100,13 +105,13 @@ jobs:
 
       - name: Get toolset info
         run: |
-          clang -v
+          "${{ matrix.compiler }}" -v
 
       - name: Build macOS
         # actions said to untap aws/tap
         run: |
-          chmod +x ./scripts/macos_build.sh
-          time ./scripts/macos_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          chmod +x ./scripts/build.sh
+          time ./scripts/build.sh "${{ matrix.platform }}" "${{ matrix.compiler }}" "${{ matrix.mode }}"
 
 # https://github.com/emscripten-core/setup-emsdk
   build-web:
@@ -114,8 +119,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform:
+          - web
         compiler:
-          - emscripten
+          - emcc
         mode:
           - debug
           - release
@@ -131,9 +138,9 @@ jobs:
 
       - name: Get toolset info
         run: |
-          emcc -v
+          "${{ matrix.compiler }}" -v
 
       - name: Build Web
         run: |
-          chmod +x ./scripts/web_build.sh
-          time ./scripts/web_build.sh "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          chmod +x ./scripts/build.sh
+          time ./scripts/build.sh "${{ matrix.platform }}" "${{ matrix.compiler }}" "${{ matrix.mode }}"
