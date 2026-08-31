@@ -726,7 +726,7 @@ main() {
 // This is pretty much the only difference atm between building for Linux vs. macOS
 #if HANDMADE_LINUX
     hm_sdl::BuildGamePathFilename(&allState, "handmade.so", srcDllPath.data_, srcDllPath.size);
-#elif HANDMADE_MACOS
+#elif HANDMADE_MAC
     hm_sdl::BuildGamePathFilename(&allState, "handmade.dylib", srcDllPath.data_, srcDllPath.size);
 //#else Notify somehow?
 #endif

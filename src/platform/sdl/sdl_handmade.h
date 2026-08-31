@@ -1,7 +1,7 @@
 #ifndef SDL_HANDMADE_H
 #define SDL_HANDMADE_H
 
-#if HANDMADE_LINUX || HANDMADE_MACOS
+#if HANDMADE_LINUX || HANDMADE_MAC
 
 #    include "game/handmade_array.h"
 

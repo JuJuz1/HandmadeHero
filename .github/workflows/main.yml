@@ -41,7 +41,7 @@ jobs:
         shell: cmd
         # TODO: passing matrix.compiler currently does nothing
         run: |
-          scripts\win32_build.bat "${{ matrix.mode }}" "${{ matrix.compiler }}"
+          scripts\build.bat "${{ matrix.compiler }}" "${{ matrix.mode }}"
 
   build-linux:
     runs-on: ubuntu-latest

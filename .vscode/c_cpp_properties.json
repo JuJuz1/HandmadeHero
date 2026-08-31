@@ -48,7 +48,7 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
-                "HANDMADE_MACOS",
+                "HANDMADE_MAC",
                 "HANDMADE_INTERNAL",
                 "HANDMADE_DEBUG",
                 "HANDMADE_USE_REAL_ASSETS"
