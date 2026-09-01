@@ -508,7 +508,8 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
 
     auto groundMemory{ BeginTempMemory(&tranState->tranArena) };
     // We do ground chunks in pixel space
-    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2)) };
+    // TODO: how to control ground chunk resolutions
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2), Vec2{ 1920, 1080 }) };
 
     //ScreenClear(renderGroup, Vec4{ 1.0f, 1.0f, 0.0f, 1.0f });
 
@@ -895,7 +896,7 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 #endif
 
         // @Remove
-        doorDirection = 3;
+        //doorDirection = 3;
 
         bool32 createdZDoor{};
 
@@ -1301,10 +1302,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         }
     }
 
-    /// Render stuff
-    auto renderMemory{ BeginTempMemory(&tranState->tranArena) };
-    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4)) };
-
     // Copy the OS sent screen buff info into our format
     LoadedBitmapInfo drawBuff_{};
     LoadedBitmapInfo* drawBuff{ &drawBuff_ };
@@ -1312,6 +1309,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     drawBuff->height = screenBuff->height;
     drawBuff->pitch = screenBuff->pitch;
     drawBuff->memory = screenBuff->memory;
+
+    /// Render stuff
+    auto renderMemory{ BeginTempMemory(&tranState->tranArena) };
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4),
+                                        Vec2{ drawBuff->width, drawBuff->height }) };
 
     // Clear screen
     //DrawRect(drawBuff, Vec2{},
@@ -1322,11 +1324,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
     const Vec2 screenCenter{ drawBuff->width * 0.5f, drawBuff->height * 0.5f };
 
-    const f32 pixelsToMeters{ 1.0f / 42.0f };
-    const f32 screenWidthInMeters{ screenBuff->width * pixelsToMeters };
-    const f32 screenHeightInMeters{ screenBuff->height * pixelsToMeters };
-    Rect3 cameraBoundsInMeters{ RectCenterDim(
-        Vec3{}, Vec3{ screenWidthInMeters, screenHeightInMeters, 0 }) };
+    const auto screenBounds{ GetCameraRectAtTarget(renderGroup) };
+    Rect3 cameraBoundsInMeters{ RectMinMax(Vec3{ screenBounds.min, 0 },
+                                           Vec3{ screenBounds.max, 0 }) };
+    // TODO: make these numbers more formal
     cameraBoundsInMeters.min.z = -3.0f * gameState->typicalFloorHeight;
     cameraBoundsInMeters.max.z = 2.0f * gameState->typicalFloorHeight;
 
@@ -1430,6 +1431,12 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const WorldPosition simCenterPos{ gameState->cameraPos };
     const Vec3 cameraPos{ SubtractWorldPos(simRegion->world, &gameState->cameraPos,
                                            &simCenterPos) };
+
+    PushRectOutline(renderGroup, Vec3{}, GetDim(screenBounds)); // White
+    //PushRectOutline(renderGroup, Vec3{}, GetDim(cameraBoundsInMeters).xy, Vec4{ 0, 1, 1, 1 });
+    PushRectOutline(renderGroup, Vec3{}, GetDim(cameraBoundsSim).xy, Vec4{ 0, 1, 1, 1 }); // Cyan
+    PushRectOutline(renderGroup, Vec3{}, GetDim(simRegion->updatableBounds).xy, Vec4{});  // Black
+    PushRectOutline(renderGroup, Vec3{}, GetDim(simRegion->bounds).xy, Vec4{ 0.5, 0, 0, 1 }); // Red
 
 // @Debug printing
 #if 0

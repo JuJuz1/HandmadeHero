@@ -73,6 +73,13 @@ GetMaxCorner(Rect2 rect) {
     return result;
 }
 
+NODISCARD
+INTERNAL inline Vec2
+GetDim(Rect2 rect) {
+    const Vec2 result{ rect.max - rect.min };
+    return result;
+}
+
 ///
 /// Rect3
 ///
@@ -157,5 +164,12 @@ NODISCARD
 INTERNAL inline Vec3
 GetMaxCorner(Rect3 rect) {
     const Vec3 result{ rect.max };
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Vec3
+GetDim(Rect3 rect) {
+    const Vec3 result{ rect.max - rect.min };
     return result;
 }

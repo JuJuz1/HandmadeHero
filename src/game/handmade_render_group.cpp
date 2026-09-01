@@ -635,7 +635,7 @@ DrawRectOutline(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec3 color,
 
 NODISCARD
 INTERNAL RenderGroup*
-AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize) {
+AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, Vec2 resolutionPixels) {
     RenderGroup* result{ PushStruct(arena, RenderGroup) };
     result->pushBufferBase = static_cast<u8*>(PushSize(arena, maxPushBufferSize));
 
@@ -646,6 +646,37 @@ AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize) {
     result->pushBufferSize = 0;
 
     result->globalAlpha = 1.0f;
+
+    result->gameCamera.focalLength = 0.6f;
+    result->gameCamera.cameraDistAboveTarget = 9.0f;
+
+    result->renderCamera = result->gameCamera;
+    result->renderCamera.cameraDistAboveTarget = 30.0f;
+
+    // TODO: adjust based on buffer size, monitor width for now in meters
+    result->metersToPixels = resolutionPixels.x * 0.635f;
+
+    const f32 pixelsToMeters{ 1.0f / result->metersToPixels };
+    result->monitorHalfDimInMeters = Vec2{ 0.5 * resolutionPixels.x * pixelsToMeters,
+                                           0.5 * resolutionPixels.y * pixelsToMeters };
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Rect2
+GetCameraRectAtDist(RenderGroup* group, f32 distFromCamera) {
+    const Vec2 rawXY{ (distFromCamera / group->gameCamera.focalLength) *
+                      group->monitorHalfDimInMeters };
+    const Rect2 result{ RectCenterHalfDim(Vec2{}, rawXY) };
+
+    return result;
+}
+
+NODISCARD
+INTERNAL inline Rect2
+GetCameraRectAtTarget(RenderGroup* group) {
+    const Rect2 result{ GetCameraRectAtDist(group, group->gameCamera.cameraDistAboveTarget) };
 
     return result;
 }
@@ -658,25 +689,21 @@ struct RenderEntityBasisPosResult {
 
 NODISCARD
 INTERNAL RenderEntityBasisPosResult
-GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenDim,
-                        f32 metersToPixels) {
+GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2 screenDim) {
     RenderEntityBasisPosResult result{};
 
     const Vec2 screenCenter{ screenDim * 0.5f };
 
     const Vec3 entityBasePos{ entityBasis->basis->pos };
 
-    // Modifiable properties, needs tuning
-    const f32 focalLength{ 6.0f };
-    const f32 cameraDistanceAboveTarget{ 5.0f };
-    const f32 depth{ cameraDistanceAboveTarget - entityBasePos.z };
+    const f32 depth{ group->renderCamera.cameraDistAboveTarget - entityBasePos.z };
     const f32 nearClipPlane{ 0.2f };
 
     const Vec3 rawXY{ entityBasePos.xy + entityBasis->offset.xy, 1.0f };
     if (depth > nearClipPlane) {
-        const Vec3 projectedXY{ (1.0f / depth) * focalLength * rawXY };
-        result.pos = screenCenter + (projectedXY.xy * metersToPixels);
-        result.scale = projectedXY.z * metersToPixels;
+        const Vec3 projectedXY{ (1.0f / depth) * group->renderCamera.focalLength * rawXY };
+        result.pos = screenCenter + (projectedXY.xy * group->metersToPixels);
+        result.scale = projectedXY.z * group->metersToPixels;
         result.valid = true;
     }
 
@@ -688,8 +715,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
     const Vec2 screenDim{ outputTarget->width, outputTarget->height };
 
     // The divisor can be modified to give some zoom
-    const f32 metersToPixels{ screenDim.x / 20.0f };
-    const f32 pixelsToMeters{ 1.0f / metersToPixels };
+    const f32 pixelsToMeters{ 1.0f / group->metersToPixels };
 
     for (i32 baseAddress{}; baseAddress < group->pushBufferSize;) {
         auto* header{ reinterpret_cast<RenderGroupEntryHeader*>(group->pushBufferBase +
@@ -711,8 +737,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryRect*>(data) };
             baseAddress += sizeof(*entry);
 
-            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim,
-                                                      metersToPixels) };
+            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim) };
 
             DrawRect(outputTarget, basis.pos, basis.pos + (entry->dim * basis.scale), entry->color);
         } break;
@@ -720,8 +745,7 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             auto* entry{ reinterpret_cast<RenderEntryBitmap*>(data) };
             baseAddress += sizeof(*entry);
 
-            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim,
-                                                      metersToPixels) };
+            const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim) };
 
 #if 0
             DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);

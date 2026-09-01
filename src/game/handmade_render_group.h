@@ -75,7 +75,19 @@ struct RenderEntrySaturation {
     f32 saturation;
 };
 
+struct RenderGroupCamera {
+    // Modifiable camera properties, needs tuning
+    f32 focalLength; // How far the person is sitting from the monitor in meters
+    f32 cameraDistAboveTarget;
+};
+
 struct RenderGroup {
+    RenderGroupCamera gameCamera;   // Where the game will think the camera is at
+    RenderGroupCamera renderCamera; // Where we actually render from
+
+    f32 metersToPixels; // Meters on the monitor to pixels on the monitor
+    Vec2 monitorHalfDimInMeters;
+
     RenderBasis* defaultBasis;
     f32 globalAlpha;
 
