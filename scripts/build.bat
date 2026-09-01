@@ -129,6 +129,7 @@ set "win32Libraries=User32.lib Gdi32.lib Winmm.lib"
 set "gameExportedFunctions=-EXPORT:UpdateAndRender -EXPORT:GetSoundSamples"
 
 if "%compiler%" == "clang" (
+    rem TODO: why not just use clang-cl?
     set "cxx=clang++"
     set "modeFlags=-O0 -g"
     set "commonFlags=-fno-exceptions -fno-rtti -std=c++20"
@@ -172,29 +173,33 @@ echo WAITING FOR PDB > lock.tmp
 rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
 
-set "cTimeNameDll=win32_handmade_msvc.ctm"
+set "cTimeNameGame=win32_handmade_msvc.ctm"
 set "cTimeNamePlatform=win32_platform_msvc.ctm"
 if %useCTime% == 1 (
     if "%mode%" == "release" (
-        set "cTimeNameDll=win32_handmade_msvc_rel.ctm"
+        set "cTimeNameGame=win32_handmade_msvc_rel.ctm"
         set "cTimeNamePlatform=win32_platform_msvc_rel.ctm"
     )
 
     if "%compiler%" == "clang" (
         if "%mode%" == "debug" (
-            set "cTimeNameDll=win32_handmade_clang.ctm"
+            set "cTimeNameGame=win32_handmade_clang.ctm"
             set "cTimeNamePlatform=win32_platform_clang.ctm"
         ) else (
-            set "cTimeNameDll=win32_handmade_clang_rel.ctm"
+            set "cTimeNameGame=win32_handmade_clang_rel.ctm"
             set "cTimeNamePlatform=win32_platform_clang_rel.ctm"
         )
     )
 
     rem forced delayed expansion...
-    ctime.exe -begin "!cTimeNameDll!"
+    ctime.exe -begin "!cTimeNameGame!"
 )
 
 set buildFailed=0
+
+if "%compiler%" == "clang" (
+    echo handmade.cpp
+)
 
 %cxx% %commonFlags% ../src/game/handmade.cpp -I ../src %outDll% %dllFlags% %linkerFlags% %gameExportedFunctions%
 if ERRORLEVEL 1 (
@@ -203,7 +208,7 @@ if ERRORLEVEL 1 (
 )
 
 if %useCTime% == 1 (
-    ctime.exe -end "%cTimeNameDll%" %buildFailed%
+    ctime.exe -end "%cTimeNameGame%" %buildFailed%
 )
 
 set buildFailed=0
@@ -212,6 +217,10 @@ del lock.tmp
 
 if %useCTime% == 1 (
     ctime.exe -begin "%cTimeNamePlatform%"
+)
+
+if "%compiler%" == "clang" (
+    echo win32_handmade.cpp
 )
 
 %cxx% %commonFlags% ../src/platform/win32/win32_handmade.cpp -I ../src %outExe% %linkerFlags% %win32Libraries%

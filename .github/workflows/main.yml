@@ -11,6 +11,7 @@ on:
 
 jobs:
   build-win32:
+    name: (${{ matrix.compiler }}, ${{ matrix.mode }})
     runs-on: windows-2025-vs2026
     strategy:
       fail-fast: false
@@ -48,6 +49,7 @@ jobs:
           scripts\build.bat "${{ matrix.compiler }}" "${{ matrix.mode }}"
 
   build-linux:
+    name: (${{ matrix.compiler }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -78,12 +80,14 @@ jobs:
           "${{ matrix.compiler }}" -v
 
       - name: Build Linux
+        # TODO: Linux (and mac?) ctime, should be one available on the internet
         run: |
           chmod +x ./scripts/build.sh
           time ./scripts/build.sh "${{ matrix.platform }}" "${{ matrix.compiler }}" "${{ matrix.mode }}"
 
   build-macos:
     # See if we can do "macos-latest-large" without a paid Github version -> can not
+    name: (${{ matrix.compiler }}, ${{ matrix.mode }})
     runs-on: macos-15-intel
     strategy:
       fail-fast: false
@@ -100,6 +104,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Untap aws/tap
+        # Actions said to untap aws/tap
         run: |
           brew untap aws/tap
 
@@ -112,13 +117,13 @@ jobs:
           "${{ matrix.compiler }}" -v
 
       - name: Build macOS
-        # actions said to untap aws/tap
         run: |
           chmod +x ./scripts/build.sh
           time ./scripts/build.sh "${{ matrix.platform }}" "${{ matrix.compiler }}" "${{ matrix.mode }}"
 
 # https://github.com/emscripten-core/setup-emsdk
   build-web:
+    name: (${{ matrix.compiler }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
