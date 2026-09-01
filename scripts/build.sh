@@ -198,7 +198,7 @@ if [[ "$useAsan" == "1" ]]; then
         useAsan=0
         echo "ASAN not available on web build"
     else
-        echo "[ASAN: ENABLED]"
+        echo "[ASAN: enabled]"
     fi
 fi
 
@@ -291,10 +291,10 @@ commonWarnings=(
 # =============================================================================
 
 if [[ "$platform" == "linux" || "$platform" == "mac" ]]; then
-    CXX=clang++
+    cxx=clang++
     if [[ "$compiler" == "gcc" ]]; then
         # TODO: MAKE WORK AND don't allow for mac
-        #CXX=g++
+        #cxx=g++
         echo "GCC NOT SUPPORTED YET"
         exit 1
     fi
@@ -322,7 +322,6 @@ if [[ "$platform" == "linux" || "$platform" == "mac" ]]; then
     fi
 
     sanitizeFlags=()
-
     if [[ "$useAsan" == "1" ]]; then
         sanitizeFlags+=(
             -fsanitize=address
@@ -337,7 +336,7 @@ if [[ "$platform" == "linux" || "$platform" == "mac" ]]; then
     echo
     echo "WAITING FOR PDB" > lock.tmp
 
-    "$CXX" \
+    "$cxx" \
         "${nativeFlags[@]}" \
         ../src/game/handmade.cpp \
         -I ../src \
@@ -348,7 +347,7 @@ if [[ "$platform" == "linux" || "$platform" == "mac" ]]; then
 
     echo
 
-    "$CXX" \
+    "$cxx" \
         "${nativeFlags[@]}" \
         ../src/platform/sdl/sdl_handmade.cpp \
         -I ../src \
@@ -415,5 +414,5 @@ popd >/dev/null
 
 # --- Result ------------------------------------------------------------------
 
-#echo
-#echo "Build succeeded $(date '+%Y-%m-%d %H:%M:%S')"
+echo
+echo "[32m[1mBuild succeeded[0m[1m $(date '+%Y-%m-%d %H:%M:%S')"

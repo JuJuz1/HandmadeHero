@@ -18,7 +18,7 @@ jobs:
         compiler:
           - msvc
           # TODO
-          #- clang
+          - clang
         mode:
           - debug
           - release
@@ -33,13 +33,17 @@ jobs:
           arch: x64
 
       - name: Get toolset info
-        # TODO -v for clang
+        shell: cmd
         run: |
-          "${{ matrix.compiler }}"
+          if "${{ matrix.compiler }}" == "msvc" (
+            cl
+          ) else (
+              clang++ -v
+          )
 
       - name: Build Win32
         shell: cmd
-        # TODO: passing matrix.compiler currently does nothing
+        # Passing matrix.platform is unnecessary as we only do win32 build here
         run: |
           scripts\build.bat "${{ matrix.compiler }}" "${{ matrix.mode }}"
 

@@ -44,6 +44,27 @@ rem /wd4201 nonstandard extension used: nameless struct/union
 rem /wd4127 conditional expression is constant NOT USED
 rem TODO: enable /WX back, remove /wd4505 /wd4100 /wd4189
 
+set "platform=win32"
+set "compiler=msvc"
+set "mode=debug"
+set "useAsan=0"
+
+for %%a in (%*) do set "%%~a=1"
+if "%clang%" == "1" set "compiler=clang"
+if "%rel%" == "1" set "mode=release"
+if "%release%" == "1" set "mode=release"
+if "%asan%" == "1" set "useAsan=1"
+
+echo [PLATFORM: %platform%]
+echo [COMPILER: %compiler%]
+echo [CONFIG: %mode%]
+
+if "%useAsan%" == "1" (
+    echo [ASAN: enabled]
+)
+
+echo.
+
 rem search if the preordered data assets exist
 set useRealAssets=0
 
@@ -69,49 +90,75 @@ if %useCTime% == 1 (
     )
 )
 
-rem HANDMADE_INTERNAL=1 for release mode also
-set commonCompilerDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets% -DHANDMADE_INTERNAL=1
 
-rem TODO: clang?
+rem --- Git Commit Info ---------------------------------------------------------
+rem set "gitHash=unknown"
+rem set "gitHashFull=unknown"
+rem for /f %%i in ('git describe --always --dirty >nul') do set "gitHash=%%i"
+rem for /f %%i in ('git rev-parse HEAD >nul') do set "gitHashFull=%%i"
 
-rem other compile options
-rem /wd4100 unreferenced param /wd4189 local variable init but not referenced
-rem /wd4189 /wd4100
-set commonCompilerWarnings=/W4 /wd4201 /wd4505 /wd4189 /wd4100
 
-set commonCompilerFlags=/MTd /Od /Zi
+rem TODO: HANDMADE_INTERNAL=1 for release mode also for now
+set "commonDefines=-DHANDMADE_WIN32=1 -DHANDMADE_USE_REAL_ASSETS=%useRealAssets% -DHANDMADE_INTERNAL=1"
+
 rem TODO: make ASAN work, seems to not work if we do DirectSound initialization stuff...
 rem pretty weird but disabling any dsound related stuff makes it work
 rem Also using it even on /O2 is absurdly slow...
 rem /fsanitize=address
 
-set dllFlags=/LDd
+rem --- Compiler options --------------------------------------------------------
 
-rem TODO: unpack arguments much better
-rem %1 is reserved for build mode TODO: FOR NOW
-if "%~1" == "rel" (
-    echo [CONFIG: RELEASE]
-    set commonCompilerFlags=/MT /O2
-    set dllFlags=/LD
-) else if "%~1" == "release" (
-    echo [CONFIG: RELEASE]
-    set commonCompilerFlags=/MT /O2
-    set dllFlags=/LD
-) else (
-    echo [CONFIG: DEBUG]
-    rem -DHANDMADE_INTERNAL=1
-    set commonCompilerDefines=%commonCompilerDefines% -DHANDMADE_DEBUG=1
+set "cxx=cl"
+set "modeFlags=-MTd -Od -Zi"
+set "commonFlags=-Zc:__cplusplus -FC -Oi -EHa- -GR- -nologo -std:c++20"
+rem /wd4100 unreferenced param /wd4189 local variable init but not referenced
+rem /wd4189 /wd4100
+set "commonWarnings=-W4 -wd4201 -wd4505 -wd4189 -wd4100"
+set "dllFlags=-LDd"
+rem Combine linkerFlags with clang version?
+set "linkerFlags=-link -OPT:REF -OPT:NOICF -INCREMENTAL:NO -PDB:handmade_%random%.pdb"
+set "outDll=-Fe:handmade.dll"
+set "outExe=-Fe:win32_handmade.exe"
+
+if "%mode%" == "release" (
+    set "modeFlags=-MT -O2"
+    set "dllFlags=-LD"
 )
 
-set commonCompilerFlags=%commonCompilerDefines% %commonCompilerFlags% /Zc:__cplusplus /FC /Oi /EHa- /GR- /std:c++20 /nologo %commonCompilerWarnings%
+set "win32Libraries=User32.lib Gdi32.lib Winmm.lib"
+set "gameExportedFunctions=-EXPORT:UpdateAndRender -EXPORT:GetSoundSamples"
 
-echo %commonCompilerFlags%
+if "%compiler%" == "clang" (
+    set "cxx=clang++"
+    set "modeFlags=-O0 -g"
+    set "commonFlags=-fno-exceptions -fno-rtti -std=c++20"
+    rem Remove last two disabling warnings
+    set "commonWarnings=-Wall -Wextra -Wpedantic -Wno-unused-function -Wno-missing-braces -Wno-unused-variable -Wno-unused-parameter -Wno-null-dereference -Wno-missing-field-initializers -Wno-gnu-anonymous-struct -Wno-nested-anon-types -Wno-sign-compare -Wno-gnu-zero-variadic-macro-arguments -Wno-unused-but-set-variable -Wno-unused-value"
+    set "dllFlags=-shared"
+    set "linkerFlags=-Wl,-opt:ref,-opt:noicf,-incremental:no"
+    set "outDll=-o handmade.dll"
+    set "outExe=-o win32_handmade.exe"
+
+    if "%mode%" == "release" (
+        set "modeFlags=-O3"
+    )
+
+    set "win32Libraries=-Wl,User32.lib,Gdi32.lib,Winmm.lib"
+    set "gameExportedFunctions=-Wl,-EXPORT:UpdateAndRender,-EXPORT:GetSoundSamples"
+)
+
+set "sanitizeFlags="
+if "%useAsan%" == "1" (
+    rem TODO: sanitize=undefined?
+    set "sanitizeFlags=-fsanitize=address"
+)
+
+set "modeFlags=%modeFlags% %sanitizeFlags%"
+
+set "commonFlags=%commonDefines% %modeFlags% %commonFlags% %commonWarnings%"
+
+echo %commonFlags%
 echo.
-
-set commonLinkerFlags=/OPT:REF /OPT:NOICF /INCREMENTAL:NO
-
-set win32Libraries=User32.lib Gdi32.lib Winmm.lib
-set gameExportedFunctions=/EXPORT:UpdateAndRender /EXPORT:GetSoundSamples
 
 rem delete all .pdb files
 rem replace the game's one with a new timestamped version to enable instantenous updating
@@ -122,39 +169,59 @@ rem sometimes we couldn't set breakpoints in visual studio
 rem as the pdb was not loaded correctly when hot loading
 echo WAITING FOR PDB > lock.tmp
 
-set buildFailed=0
-
 rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
 
+set "cTimeNameDll=win32_handmade_msvc.ctm"
+set "cTimeNamePlatform=win32_platform_msvc.ctm"
 if %useCTime% == 1 (
-    ctime.exe -begin win32_handmade.ctm
+    if "%mode%" == "release" (
+        set "cTimeNameDll=win32_handmade_msvc_rel.ctm"
+        set "cTimeNamePlatform=win32_platform_msvc_rel.ctm"
+    )
+
+    if "%compiler%" == "clang" (
+        if "%mode%" == "debug" (
+            set "cTimeNameDll=win32_handmade_clang.ctm"
+            set "cTimeNamePlatform=win32_platform_clang.ctm"
+        ) else (
+            set "cTimeNameDll=win32_handmade_clang_rel.ctm"
+            set "cTimeNamePlatform=win32_platform_clang_rel.ctm"
+        )
+    )
+
+    rem forced delayed expansion...
+    ctime.exe -begin "!cTimeNameDll!"
 )
 
-cl %commonCompilerFlags% ../src/game/handmade.cpp /I ../src %dllFlags% /link /PDB:handmade_%random%.pdb %gameExportedFunctions% %commonLinkerFlags%
+set buildFailed=0
+
+%cxx% %commonFlags% ../src/game/handmade.cpp -I ../src %outDll% %dllFlags% %linkerFlags% %gameExportedFunctions%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mhandmade.cpp failed[0m[1m
 )
 
 if %useCTime% == 1 (
-    ctime.exe -end win32_handmade.ctm %buildFailed%
+    ctime.exe -end "%cTimeNameDll%" %buildFailed%
 )
+
+set buildFailed=0
 
 del lock.tmp
 
 if %useCTime% == 1 (
-    ctime.exe -begin win32_platform.ctm
+    ctime.exe -begin "%cTimeNamePlatform%"
 )
 
-cl %commonCompilerFlags% ../src/platform/win32/win32_handmade.cpp /I ../src /link %win32Libraries% %commonLinkerFlags%
+%cxx% %commonFlags% ../src/platform/win32/win32_handmade.cpp -I ../src %outExe% %linkerFlags% %win32Libraries%
 if ERRORLEVEL 1 (
     set buildFailed=1
     echo [31m[1mwin32_handmade.cpp failed[0m[1m
 )
 
 if %useCTime% == 1 (
-    ctime.exe -end win32_platform.ctm %buildFailed%
+    ctime.exe -end "%cTimeNamePlatform%" %buildFailed%
 )
 
 rem needed if building from command line and not vscode
