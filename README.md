@@ -64,12 +64,13 @@ TODO: Arm cpu support??
 Visual Studio 2022+ (or build tools). Also earlier versions might work. Have to test GCC and Clang
 
 - Clone the repository if you already haven't
-- Open x64 Native Tools Command Prompt for VS <*some version*> (or similar named)
+- Open x64 Native Tools Command Prompt for VS <*some version*> (or similar named), the key requirement is to have msvc compile as x64 architecture
 - Navigate to the project root
-- run [scripts/win32_build.bat](scripts/win32_build.bat) FROM THE ROOT
+- run [scripts/build.bat](scripts/build.bat) FROM THE ROOT
+- Additional arguments can be passed such as "release" for an optimized build
 
 ```
-.\scripts\win32_build.bat
+.\scripts\build.bat
 ```
 
 which puts the executable into the created build folder
@@ -80,7 +81,7 @@ Run it:
 .\build\win32_handmade.exe
 ```
 
-If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat) script to have vcvarsall.bat path to your Visual Studio installation before running [scripts/win32_build.bat](scripts/win32_build.bat). This varies between Visual Studio installations
+If using other shells: modify the [scripts/setup_env.bat](scripts/setup_env.bat) script to have vcvarsall.bat path to your Visual Studio installation before running [scripts/build.bat](scripts/build.bat). This varies between Visual Studio installations
 - run [scripts/setup_env.bat](scripts/setup_env.bat) to initialize x64 environment for MSVC and then build according to the instructions above
 
 ### Linux
@@ -105,10 +106,11 @@ In other cases more information can be found here: https://wiki.libsdl.org/SDL2/
 
 - Clone the repository if you already haven't
 - Navigate to the project root
-- run [scripts/linux_build.sh](scripts/linux_build.sh) FROM THE ROOT
+- run [scripts/build.sh](scripts/build.sh) FROM THE ROOT
+- IMPORTANT: With the argument(s) "linux"
 
 ```
-./scripts/linux_build.sh
+./scripts/build.sh linux
 ```
 
 which puts the executable into the created build folder
@@ -137,10 +139,10 @@ brew install sdl2
 
 - Clone the repository if you already haven't
 - Navigate to the project root
-- run [scripts/macos_build.sh](scripts/macos_build.sh) FROM THE ROOT
+- run [scripts/build.sh](scripts/build.sh) FROM THE ROOT
 
 ```
-./scripts/macos_build.sh
+./scripts/build.sh mac
 ```
 
 which puts the executable into the created build folder
@@ -155,10 +157,16 @@ Run it:
 
 Using [emscripten](https://emscripten.org/index.html) to compile the C++ code to WebAssembly. Install it via: https://emscripten.org/docs/getting_started/downloads.html
 
-Because browsers are trying to be so safe nowadays we have to host a local web server to be able to test the game... Run:
+Build via:
 
 ```
-./scripts/web_build_host.sh
+./scripts/build.sh web
+```
+
+Because browsers are trying to be so safe nowadays we have to host a local web server to be able to test the game... Must have python installed:
+
+```
+./scripts/host_web_build.sh
 ```
 
 Navigate to localhost:8000
@@ -174,5 +182,5 @@ By default the build scripts use placeholder assets I have created. If you wish 
 ### CI
 
 Some ideas:
-- Have a test run that just runs the executable for a couple of seconds and verify it doesn't exit for that time
+- Have a test run that just runs the executable for a couple of seconds and verify it doesn't exit (crash to an assert or such) for that time
 - In addition supply some input and approximate where the player would be for those inputs?

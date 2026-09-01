@@ -49,6 +49,9 @@ set "compiler=msvc"
 set "mode=debug"
 set "useAsan=0"
 
+rem Additional arguments:
+rem clang, release, rel, asan
+
 for %%a in (%*) do set "%%~a=1"
 if "%clang%" == "1" set "compiler=clang"
 if "%rel%" == "1" set "mode=release"
