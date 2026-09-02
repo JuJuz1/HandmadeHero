@@ -97,7 +97,7 @@ struct BitmapHeader {
 NODISCARD
 INTERNAL LoadedBitmapInfo
 DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename,
-             Vec2 align = {}) {
+             Vec2 align) {
     LoadedBitmapInfo result{};
 
     auto readFileResult{ readFile(threadContext, filename) };
@@ -194,6 +194,14 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
 #endif
 
     return result;
+}
+
+NODISCARD
+INTERNAL LoadedBitmapInfo
+DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char* filename) {
+    auto bmp{ DEBUGLoadBMP(threadContext, readFile, filename, Vec2{}) };
+    bmp.alignPercentage = Vec2{ 0.5f, 0.5f };
+    return bmp;
 }
 
 // @Remove
@@ -506,23 +514,27 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
           chunkPos->chunkZ);
 
+    auto* buff{ &groundBuff->bitmap };
+    buff->alignPercentage = Vec2{ 0.5f, 0.5f };
+    buff->widthOverHeight = 1.0f;
+
     auto groundMemory{ BeginTempMemory(&tranState->tranArena) };
     // We do ground chunks in pixel space
     // TODO: how to control ground chunk resolutions
-    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(2), Vec2{ 1920, 1080 }) };
+    auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(1),
+                                        Vec2{ buff->width, buff->height }) };
 
-    //ScreenClear(renderGroup, Vec4{ 1.0f, 1.0f, 0.0f, 1.0f });
+    ScreenClear(renderGroup, Vec4{ 0.0f, 0.0f, 0.0f, 1.0f });
 
-    // Load the template but draw onto the pointer copied from the groundBuff
-    // Not anymore as we had no way of storing the bitmap when using this new deferred method
-    auto* buff{ &groundBuff->bitmap };
     //buff = groundBuff->bitmap;
     groundBuff->pos = *chunkPos;
 
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
-    const f32 width{ static_cast<f32>(buff->width) };
-    const f32 height{ static_cast<f32>(buff->height) };
+    const f32 width{ gameState->world->chunkDimInMeters.x };
+    const f32 height{ gameState->world->chunkDimInMeters.y };
+    Vec2 halfDim{ Vec2{ width, height } * 0.5f };
+    halfDim = 2.0f * halfDim;
 
     for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
         for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
@@ -534,6 +546,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
             RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
 
             const Vec2 center{ chunkOffsetX * width, chunkOffsetY * height };
+
             for (i32 grassIndex{}; grassIndex < 100; ++grassIndex) {
                 LoadedBitmapInfo* stamp;
                 if (RandChoice(&series, 2)) {
@@ -544,14 +557,22 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
                         &gameState->stoneBitmaps[RandChoice(&series, gameState->stoneBitmaps.size)];
                 }
 
-                const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
                 // Normalize to [-1, 1] via f(x) = 2x - 1
-                const Vec2 offset{ RandUnilateral(&series) * width,
-                                   RandUnilateral(&series) * height };
-                const Vec2 pos{ center + offset - bitmapCenter };
+                //const f32 x{ RandBilateral(&series) };
+                //const f32 y{ RandBilateral(&series) };
+
+                // Casey's build evaluated the arguments in this order, so we have to do it like
+                // this to preserve the exact same pattern. Weird stuff
+                const f32 y{ RandBilateral(&series) };
+                const f32 x{ RandBilateral(&series) };
+                const Vec2 offset{ halfDim * Vec2{ x, y } };
+                //const Vec2 offset{ halfDim *
+                //                   Vec2{ RandBilateral(&series), RandBilateral(&series) } };
+
+                const Vec2 pos{ center + offset };
 
                 // TODO: height
-                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 1.0f);
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 4.0f);
             }
         }
     }
@@ -568,16 +589,16 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
             RandSeries series{ RandSeed((chunkX * 139) + (chunkY * 593) + (chunkZ * 329)) };
 
             const Vec2 center{ chunkOffsetX * width, chunkOffsetY * height };
-            for (i32 grassIndex{}; grassIndex < 30; ++grassIndex) {
+
+            for (i32 grassIndex{}; grassIndex < 50; ++grassIndex) {
                 LoadedBitmapInfo* stamp;
                 stamp = &gameState->tuftBitmaps[RandChoice(&series, gameState->tuftBitmaps.size)];
 
-                const Vec2 bitmapCenter{ stamp->width * 0.5f, stamp->height * 0.5f };
-                const Vec2 offset{ RandUnilateral(&series) * width,
-                                   RandUnilateral(&series) * height };
-                const Vec2 pos{ center + offset - bitmapCenter };
+                const Vec2 offset{ halfDim *
+                                   Vec2{ RandBilateral(&series), RandBilateral(&series) } };
+                const Vec2 pos{ center + offset };
 
-                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 1.0f);
+                PushBitmap(renderGroup, stamp, Vec3{ pos, 0 }, 0.4f);
             }
         }
     }
@@ -941,10 +962,8 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
                 }
 
                 if (shouldBeDoor) {
-                    if ((tileY % 2) || (tileX % 2)) {
-                        AddWall(gameState, absTileX, absTileY, absTileZ);
-                        ++wallsAdded;
-                    }
+                    AddWall(gameState, absTileX, absTileY, absTileZ);
+                    ++wallsAdded;
                 } else if (createdZDoor) {
                     if (((absTileZ % 2) && (tileX == 10) && (tileY == 5)) ||
                         (!(absTileZ % 2) && (tileX == 4) && (tileY == 5))) {
@@ -1020,19 +1039,6 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
     memory->isInitialized = true;
 }
 
-#if 0
-INTERNAL void
-RequestGroundBuffers(GameState* gameState, TransientState* tranState, WorldPosition* centerPos,
-                     Rect3 bounds) {
-    bounds = AddOffsetTo(bounds, centerPos->offset_);
-    centerPos->offset_ = Vec3{};
-    //for () {
-    //}
-
-    FillGroundChunk(gameState, tranState, tranState->groundBuffs, &gameState->cameraPos);
-}
-#endif
-
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // NOTE: this macro depends on the order of the buttons inside InputButtons
@@ -1089,7 +1095,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
         const i32 groundBuffWidth{ 256 }; // 256 / 32 = 8, aligns with metersToPixels
         const i32 groundBuffHeight{ 256 };
 
-        tranState->groundBuffCount = 64; // 128
+        tranState->groundBuffCount = 256; // lower will cause trashing
         tranState->groundBuffs =
             PushArray(&tranState->tranArena, tranState->groundBuffCount, GroundBuff);
 
@@ -1255,20 +1261,21 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 
             if (ActionPressed(&buttons->actionUp)) {
                 if (shiftPressed) {
-                    zoomRate = 5.0f;
+                    zoomRate = -15.0f;
                 } else {
-                    zoomRate = 1.0f;
+                    zoomRate = -5.0f;
                 }
             }
             if (ActionPressed(&buttons->actionDown)) {
                 if (shiftPressed) {
-                    zoomRate = -5.0f;
+                    zoomRate = 15.0f;
                 } else {
-                    zoomRate = -1.0f;
+                    zoomRate = 5.0f;
                 }
             }
 
             gameState->zOffset += zoomRate * deltaTime;
+            gameState->zOffset = Clamp(-25, gameState->zOffset, 10);
 #endif
 
             // @Debug
@@ -1315,6 +1322,11 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(4),
                                         Vec2{ drawBuff->width, drawBuff->height }) };
 
+    // @Debug, @Hack, doesn't update rects correctly
+    const f32 newCameraDist{ renderGroup->renderCamera.cameraDistAboveTarget + gameState->zOffset };
+    renderGroup->renderCamera.cameraDistAboveTarget = Clamp(5.0f, newCameraDist, 100.0f);
+    //PRINT("renderCamera distAboveTarget %.2f\n", renderGroup->renderCamera.cameraDistAboveTarget);
+
     // Clear screen
     //DrawRect(drawBuff, Vec2{},
     //         Vec2{ static_cast<f32>(drawBuff->width), static_cast<f32>(drawBuff->height) }, 1.0f,
@@ -1327,15 +1339,16 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const auto screenBounds{ GetCameraRectAtTarget(renderGroup) };
     Rect3 cameraBoundsInMeters{ RectMinMax(Vec3{ screenBounds.min, 0 },
                                            Vec3{ screenBounds.max, 0 }) };
-    // TODO: make these numbers more formal
+    // TODO: make these numbers more formal, affects ground buff generation as well
+    // Now from current, 3 floors down and 1 up also, so 5 levels in total
     cameraBoundsInMeters.min.z = -3.0f * gameState->typicalFloorHeight;
-    cameraBoundsInMeters.max.z = 2.0f * gameState->typicalFloorHeight;
+    cameraBoundsInMeters.max.z = 1.0f * gameState->typicalFloorHeight;
 
-    /// Ground buffs
+    /// Ground buffs rendering
     // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
     // Is it because we don't want to lag 1 frame behind on these?
 
-#if 0
+#if 1
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
         ASSERT(groundBuff);
@@ -1347,22 +1360,23 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             ASSERT(bitmap->memory);
 
             const Vec3 posDelta{ SubtractWorldPos(world, &groundBuff->pos, &gameState->cameraPos) };
-            bitmap->align = Vec2{ bitmap->width / 2, bitmap->height / 2 };
+            if (posDelta.z >= -1.0f && posDelta.z < 1.0f) {
+                auto* basis{ PushStruct(&tranState->tranArena, RenderBasis) };
+                renderGroup->defaultBasis = basis;
+                basis->pos = posDelta;
 
-            auto* basis{ PushStruct(&tranState->tranArena, RenderBasis) };
-            renderGroup->defaultBasis = basis;
-            basis->pos = posDelta + Vec3{ 0, 0, gameState->zOffset };
-
-            PushBitmap(renderGroup, bitmap, {});
-            // We can just push the outline here as it overlaps with the just pushed ground buffer
-            // bitmaps, thickness is parametrized now
-            // @Re-enable
-            //PushRectOutline(renderGroup, {}, world->chunkDimInMeters.xy);
+                const f32 groundSideInMeters{ world->chunkDimInMeters.x };
+                PushBitmap(renderGroup, bitmap, Vec3{}, groundSideInMeters);
+                // We can just push the outline here as it overlaps with the just pushed ground
+                // buffer bitmaps, thickness is parametrized now
+                // @Re-enable
+                PushRectOutline(renderGroup, {}, Vec2{ groundSideInMeters, groundSideInMeters },
+                                Vec4{ 1, 1, 0, 1 });
+            }
         }
     }
 
-    /// Drawing chunks
-
+    /// Ground chunks update
     {
         const WorldPosition minChunk{ MapIntoChunkSpace(
             world, gameState->cameraPos, Vec3{ GetMinCorner(cameraBoundsInMeters) }) };
@@ -1375,14 +1389,6 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     //auto* chunk{ GetWorldChunk(world, chunkX, chunkY, chunkZ) };
                     //if (chunk) {
                     const auto chunkCenter{ CenteredChunkPoint(chunkX, chunkY, chunkZ) };
-
-                    const Vec3 relCenterPos{ SubtractWorldPos(world, &chunkCenter,
-                                                              &gameState->cameraPos) };
-                    const Vec2 screenPos{
-                        screenCenter.x + (relCenterPos.x * gameState->metersToPixels),
-                        screenCenter.y - (relCenterPos.y * gameState->metersToPixels)
-                    };
-                    const Vec2 screenDim{ world->chunkDimInMeters.xy * gameState->metersToPixels };
 
                     // @Speed, it's terrible!
                     f32 furthestBuffLengthSq{};
@@ -1432,6 +1438,10 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     const Vec3 cameraPos{ SubtractWorldPos(simRegion->world, &gameState->cameraPos,
                                            &simCenterPos) };
 
+    auto* basis{ PushStruct(&tranState->tranArena, RenderBasis) };
+    *basis = {};
+    renderGroup->defaultBasis = basis;
+    // @Debug, investigating sim region bug
     PushRectOutline(renderGroup, Vec3{}, GetDim(screenBounds)); // White
     //PushRectOutline(renderGroup, Vec3{}, GetDim(cameraBoundsInMeters).xy, Vec4{ 0, 1, 1, 1 });
     PushRectOutline(renderGroup, Vec3{}, GetDim(cameraBoundsSim).xy, Vec4{ 0, 1, 1, 1 }); // Cyan
@@ -1697,8 +1707,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             MoveEntity(gameState, simRegion, entity, moveSpec, ddP, deltaTime);
         }
 
-        // @Debug
-        renderBasis->pos = GetEntityGroundPoint(entity) + Vec3{ 0, 0, gameState->zOffset };
+        renderBasis->pos = GetEntityGroundPoint(entity);
 
         // @Debug
         // Pink

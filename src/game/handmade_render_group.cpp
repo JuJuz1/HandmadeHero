@@ -651,7 +651,7 @@ AllocRenderGroup(MemoryArena* arena, i32 maxPushBufferSize, Vec2 resolutionPixel
     result->gameCamera.cameraDistAboveTarget = 9.0f;
 
     result->renderCamera = result->gameCamera;
-    result->renderCamera.cameraDistAboveTarget = 30.0f;
+    //result->renderCamera.cameraDistAboveTarget = 30.0f;
 
     // TODO: adjust based on buffer size, monitor width for now in meters
     result->metersToPixels = resolutionPixels.x * 0.635f;
