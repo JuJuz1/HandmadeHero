@@ -25,13 +25,13 @@ extern "C" {
 #    define COMPILER_LLVM 0
 #endif
 
+// TODO: more compilers, GCC at least
 // Determine the compiler if none set
-// TODO: more compilers
 #if !COMPILER_MSVC && !COMPILER_LLVM
 #    if _MSC_VER
 #        undef COMPILER_MSVC
 #        define COMPILER_MSVC 1
-#    else
+#    elif __clang__
 #        undef COMPILER_LLVM
 #        define COMPILER_LLVM 1
 #    endif
@@ -73,10 +73,48 @@ typedef struct ThreadContext {
 
 /// Services that the platform layer provides to the game ///
 
+//#if HANDMADE_INTERNAL
+
 typedef struct DEBUGFileReadResult {
     void* content;
     u32 contentSize;
 } DEBUGFileReadResult;
+
+enum {
+    DEBUGCycleCounter_UpdateAndRender = 0,
+    DEBUGCycleCounter_RenderGroupToOutput,
+
+    DEBUGCycleCounter_DrawRectSlowly,
+    DEBUGCycleCounter_TestPixel,
+    DEBUGCycleCounter_FillPixel,
+
+    DEBUGCycleCounter_Count
+};
+
+typedef struct DEBUGCycleCounter {
+    u64 cycleCount;
+    u32 hitCount; // How many times the function is called
+} DEBUGCycleCounter;
+
+#if COMPILER_MSVC || COMPILER_LLVM
+#    define BEGIN_TIMED_BLOCK(id) u64 startCycleCount##id{ __rdtsc() };
+#    define END_TIMED_BLOCK(id)                                                                    \
+        gDebugMemory->counters[DEBUGCycleCounter_##id].cycleCount +=                               \
+            __rdtsc() - startCycleCount##id;                                                       \
+        ++gDebugMemory->counters[DEBUGCycleCounter_##id].hitCount;
+//#elif COMPILER_GCC
+//#    // TODO: make these work
+//#    define BEGIN_TIMED_BLOCK(id) u64 startCycleCount##id{ __rdtsc() };
+//#    define END_TIMED_BLOCK(id) \
+//        gDebugMemory->counters[DEBUGCycleCounter_##id].cycleCount += \
+//            _rdtsc() - startCycleCount##id; \
+//        ++gDebugMemory->counters[DEBUGCycleCounter_##id].hitCount;
+#else // TODO: web, lets see sometime
+#    define BEGIN_TIMED_BLOCK(id)
+#    define END_TIMED_BLOCK(id)
+#endif
+
+//#endif
 
 // clang-format off
 // TODO: our own versions?
@@ -108,14 +146,14 @@ typedef struct GameMemory {
     // TODO: because we target wasm32, better ways to do this? JUST TARGET 64???
     // Although most browser already support wasm64 at the time 26/6/2026
     // As an exercise it would be best to keep it 32-bit just to see how the code needs to change
-#if HANDMADE_WEB
+#if 0 // HANDMADE_WEB
     u32 permanentStorageSize;
 #else
     u64 permanentStorageSize;
 #endif
 
     void* transientStorage;
-#if HANDMADE_WEB
+#if 0 // HANDMADE_WEB
     u32 transientStorageSize;
 #else
     u64 transientStorageSize;
@@ -124,6 +162,10 @@ typedef struct GameMemory {
     bool32 isInitialized;
 
     PlatformExports exports;
+
+#if HANDMADE_INTERNAL
+    DEBUGCycleCounter counters[DEBUGCycleCounter_Count];
+#endif
 } GameMemory;
 
 // Struct to hold screen buffer info

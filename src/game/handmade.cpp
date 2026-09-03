@@ -22,12 +22,16 @@
 
 // Any global variables need to be initialized after hot reload (so probably every frame)
 GLOBAL ThreadContext* gThreadContext;
-GLOBAL GameMemory* gMemory;
+//GLOBAL GameMemory* gMemory;
+GLOBAL GameMemory* gDebugMemory;
 
+// clang-format off
 // NOTE: just a hacky way to print things from game code
 // TODO: think of a better way!
 // TODO: relies on gnu extension on clang, not perfect but will suffice
-#define PRINT(format, ...) (*gMemory->exports.DEBUGPrint)(gThreadContext, format, ##__VA_ARGS__)
+//#define PRINT(format, ...) (*gMemory->exports.DEBUGPrint)(gThreadContext, format, ##__VA_ARGS__)
+#define PRINT(format, ...) (*gDebugMemory->exports.DEBUGPrint)(gThreadContext, format, ##__VA_ARGS__)
+// clang-format on
 
 // clang-format off
 #include "game/handmade_world.cpp"
@@ -1041,15 +1045,22 @@ InitGameState(ThreadContext* threadContext, GameState* gameState, GameMemory* me
 
 // NOTE: use extern "C" to avoid name mangling
 extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
+    // TODO: Find another way preferrably
+    // Apparently not :)
+    gThreadContext = threadContext;
+    //gMemory = memory;
+
+    //#if HANDMADE_INTERNAL
+    gDebugMemory = memory;
+    //#endif
+
+    BEGIN_TIMED_BLOCK(UpdateAndRender);
+
     // NOTE: this macro depends on the order of the buttons inside InputButtons
     ASSERT(&input->playerInputs[0].terminator - &input->playerInputs[0].buttons[0] ==
            ARRAY_COUNT(input->playerInputs[0].buttons) - 1);
     ASSERT(&input->mouseButtons.terminator - &input->mouseButtons.buttons[0] ==
            ARRAY_COUNT(input->mouseButtons.buttons) - 1);
-
-    // TODO: Find another way preferrably
-    gThreadContext = threadContext;
-    gMemory = memory;
 
     const f32 deltaTime{ input->frameDeltaTime };
 
@@ -1348,7 +1359,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
     // Is it because we don't want to lag 1 frame behind on these?
 
-#if 1
+#if 0
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
         ASSERT(groundBuff);
@@ -1847,6 +1858,8 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
 #endif
 
     RenderGroupToOutput(renderGroup, drawBuff, gameState);
+
+    END_TIMED_BLOCK(UpdateAndRender);
 }
 
 extern "C" GET_SOUND_SAMPLES(GetSoundSamples) {

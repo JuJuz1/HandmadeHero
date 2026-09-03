@@ -417,6 +417,8 @@ INTERNAL void
 DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
                LoadedBitmapInfo* texture, LoadedBitmapInfo* normalMap, EnvironmentMap* top,
                EnvironmentMap* middle, EnvironmentMap* bottom, f32 pixelsToMeters) {
+    BEGIN_TIMED_BLOCK(DrawRectSlowly);
+
     ASSERT(texture);
 
     // Premultiply color
@@ -492,6 +494,8 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     for (i32 y{ minY }; y <= maxY; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; ++x) {
+            BEGIN_TIMED_BLOCK(TestPixel);
+
             const Vec2 pixelPos{ x, y };
             const Vec2 d{ pixelPos - origin };
 
@@ -500,6 +504,8 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
             const f32 edge2{ Dot(d - xAxis - yAxis, Perp(xAxis)) };
             const f32 edge3{ Dot(d - yAxis, Perp(yAxis)) };
             if ((edge0 < 0) && (edge1 < 0) && (edge2 < 0) && (edge3 < 0)) {
+                BEGIN_TIMED_BLOCK(FillPixel);
+
                 // Lookup into texture
                 const Vec2 uv{ Dot(d, xAxis) * xAxisLenSqInv, Dot(d, yAxis) * yAxisLenSqInv };
                 // TODO: needs to be clamped
@@ -602,16 +608,22 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                            (TruncateF32ToU32(blended.r + 0.5f) << 16) |
                            (TruncateF32ToU32(blended.g + 0.5f) << 8) |
                            (TruncateF32ToU32(blended.b + 0.5f) << 0) };
+
+                END_TIMED_BLOCK(FillPixel);
             }
 #else
                     *pixel = colorRounded;
 #endif
 
             ++pixel;
+
+            END_TIMED_BLOCK(TestPixel);
         }
 
         row += buff->pitch;
     }
+
+    END_TIMED_BLOCK(DrawRectSlowly);
 }
 
 // We simply don't need this now as we use PushRectOutline to do this via the push buffer
@@ -712,6 +724,10 @@ GetRenderEntityBasisPos(RenderGroup* group, RenderEntityBasis* entityBasis, Vec2
 
 INTERNAL void
 RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameState* gameState) {
+    // TODO: can we use something more automatic like __FUNCTION__
+    // Didn't work at first try at least as __FUNCTION__ pastes a string
+    BEGIN_TIMED_BLOCK(RenderGroupToOutput);
+
     const Vec2 screenDim{ outputTarget->width, outputTarget->height };
 
     // The divisor can be modified to give some zoom
@@ -816,4 +832,6 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
         }
 #endif
     }
+
+    END_TIMED_BLOCK(RenderGroupToOutput);
 }

@@ -4,6 +4,9 @@
 
     A heavily modified version of the SDL Handmade Linux platform layer using SDL 2
 
+    Compiles on clang!
+    TODO: GCC
+
     Tested to work on:
         - Linux Mint Cinnamon 22.3 compiled with clang 22.1.0
             - Linux Kernel 6.17.0.20-generic
@@ -651,6 +654,26 @@ GetSecondsElapsed(u64 Start, u64 End) {
     return result;
 }
 
+INTERNAL void
+HandleDebugCycleCounters(GameMemory* memory) {
+#if HANDMADE_INTERNAL
+    printf("DEBUG cycle counters\n");
+    for (i32 i{}; i < ARRAY_COUNT(memory->counters); ++i) {
+        auto* counter{ &memory->counters[i] };
+
+        if (counter->hitCount) {
+            char buf[128];
+            sprintf(buf, "    %d: %lu cy, %u h, %lu cy/h \n", i, counter->cycleCount,
+                    counter->hitCount, counter->cycleCount / counter->hitCount);
+            printf("%s", buf);
+
+            counter->cycleCount = 0;
+            counter->hitCount = 0;
+        }
+    }
+#endif
+}
+
 NODISCARD
 INTERNAL time_t
 GetLastWriteTime(const char* filename) {
@@ -843,7 +866,7 @@ main() {
     printf("PerfCounterFreq: %lu\n", gPerfCounterFreq);
 
     u64 lastCounter{ hm_sdl::GetWallClock() };
-    u64 lastCycleCount{ _rdtsc() };
+    u64 lastCycleCount{ __rdtsc() };
 
     hm_sdl::GameCode game{ hm_sdl::LoadGameCode(srcDllPath.data_, lockFilePath.data_) };
     Input gameInput{};
@@ -889,6 +912,7 @@ main() {
 
         if (game.updateAndRender) {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
+            hm_sdl::HandleDebugCycleCounters(&gameMemory);
         }
 
         u64 endCounter{ hm_sdl::GetWallClock() };
@@ -923,7 +947,7 @@ main() {
         hm_sdl::DisplayBufferWindow(renderer, &gScreenBuff, wndDimension.width,
                                     wndDimension.height);
 
-        const u64 endCycleCount{ _rdtsc() };
+        const u64 endCycleCount{ __rdtsc() };
         const f64 cycleElapsedM{ static_cast<f64>((endCycleCount - lastCycleCount)) /
                                  (1000 * 1000) };
 

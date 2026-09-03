@@ -35,6 +35,7 @@ Annotations: prefixed with a "@"
 - @Duplicate -> duplicate variables or code, constants usually
 - @Re-enable -> re-enable later
 - @Cleanup -> messy code, see if we can improve
+- @Hack -> temporary hack to get the code working
 
 Documented here so I would remember to use these better!
 
@@ -43,7 +44,7 @@ Documented here so I would remember to use these better!
 ## Hot reloading
 Build the game after modifying the code to load the DLL automatically and see the changes instantly
 
-Supported automatically when modifying game code only! All other files except platform code (prefixed e.g. win32 AND handmade_platform.h). Basically any other files not linked to the actual executable
+Supported automatically when modifying game code only! All files inside src/game. Basically any other files not linked to the actual executable
 
 ## Extra features
 

@@ -948,6 +948,28 @@ GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return result;
 }
 
+INTERNAL void
+HandleDebugCycleCounters(GameMemory* memory) {
+#if HANDMADE_INTERNAL
+    // TODO: introduce platform's own print function to make this code shared with other platforms
+    // at least sdl_handmade.cpp
+    OutputDebugStringA("DEBUG cycle counters\n");
+    for (i32 i{}; i < ARRAY_COUNT(memory->counters); ++i) {
+        auto* counter{ &memory->counters[i] };
+
+        if (counter->hitCount) {
+            char buf[128];
+            sprintf_s(buf, "    %d: %llu cy, %u h, %llu cy/h \n", i, counter->cycleCount,
+                      counter->hitCount, counter->cycleCount / counter->hitCount);
+            OutputDebugStringA(buf);
+
+            counter->cycleCount = 0;
+            counter->hitCount = 0;
+        }
+    }
+#endif
+}
+
 NODISCARD
 INTERNAL FILETIME
 GetLastWriteTime(const char* filename) {
@@ -1091,6 +1113,7 @@ WinMain(
     const i32 startingWidth{ 1920 };
     const i32 startingHeight{ 1080 };
 #endif
+
     hm_win32::ResizeDIBSection(&gScreenBuff, startingWidth, startingHeight);
 
     char buf[128];
@@ -1129,7 +1152,10 @@ WinMain(
     hm_win32::ClearSoundBuffer(&soundOutput);
     gSecondaryBuff->Play(0, 0, DSBPLAY_LOOPING);
 
-    // TODO: pool with bitmap
+    DWORD lastPlayCursor{};
+    bool32 isSoundValid{};
+
+    // TODO: pool with bitmap?
     i16* soundBuffSamples{ static_cast<i16*>(
         VirtualAlloc(0, soundOutput.buffSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) };
 
@@ -1208,9 +1234,6 @@ WinMain(
     LARGE_INTEGER lastCounter{ hm_win32::GetWallClock() };
     // RDTSC
     u64 lastCycleCount{ __rdtsc() };
-
-    DWORD lastPlayCursor{};
-    bool32 isSoundValid{};
 
     // The game represented as a DLL which allows hot reloading and more fun stuff!
     hm_win32::GameCode game{ hm_win32::LoadGameCode(srcDllPath.data_, tempDllPath.data_,
@@ -1308,6 +1331,7 @@ WinMain(
 
         if (game.updateAndRender) {
             game.updateAndRender(&threadContext, &gameMemory, &screenBuff, &gameInput);
+            hm_win32::HandleDebugCycleCounters(&gameMemory);
         }
 
         SoundOutputBuffer soundBuff{};
