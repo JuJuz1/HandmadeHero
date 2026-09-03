@@ -37,6 +37,12 @@ extern "C" {
 #    endif
 #endif
 
+// @Hack? figure out a better way
+#if HANDMADE_WEB
+#    undef COMPILER_LLVM
+#    define COMPILER_LLVM 0
+#endif
+
 #if COMPILER_MSVC
 #    include <intrin.h>
 #endif
@@ -109,7 +115,7 @@ typedef struct DEBUGCycleCounter {
 //        gDebugMemory->counters[DEBUGCycleCounter_##id].cycleCount += \
 //            _rdtsc() - startCycleCount##id; \
 //        ++gDebugMemory->counters[DEBUGCycleCounter_##id].hitCount;
-#else // TODO: web, lets see sometime
+#else // TODO: web, let's see sometime
 #    define BEGIN_TIMED_BLOCK(id)
 #    define END_TIMED_BLOCK(id)
 #endif

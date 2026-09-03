@@ -469,7 +469,7 @@ main() {
     gGameMemory.permanentStorageSize = MEGABYTES(32);
     gGameMemory.transientStorageSize = MEGABYTES(64);
 
-    const u32 totalSize{ gGameMemory.permanentStorageSize + gGameMemory.transientStorageSize };
+    const u64 totalSize{ gGameMemory.permanentStorageSize + gGameMemory.transientStorageSize };
     gGameMemory.permanentStorage = malloc(totalSize);
 
     gGameMemory.transientStorage =
