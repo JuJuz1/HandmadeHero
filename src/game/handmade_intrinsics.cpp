@@ -182,7 +182,7 @@ SignOf(i32 value) {
 
 NODISCARD
 INTERNAL inline f32
-SquareF32(f32 value) {
+Square(f32 value) {
     const f32 result{ value * value };
     return result;
 }

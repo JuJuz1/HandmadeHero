@@ -119,7 +119,9 @@ rem /wd4189 /wd4100
 set "commonWarnings=-W4 -wd4201 -wd4505 -wd4189 -wd4100"
 set "dllFlags=-LDd"
 rem Combine linkerFlags with clang version?
-set "linkerFlags=-link -OPT:REF -OPT:NOICF -INCREMENTAL:NO -PDB:handmade_%random%.pdb"
+set "linkerFlags=-link -OPT:REF -OPT:NOICF -INCREMENTAL:NO"
+rem Visual studio broke with this one :D 4.9.2026, couldn't load symbols for the dll
+rem -PDB:handmade_%random%.pdb
 set "outDll=-Fe:handmade.dll"
 set "outExe=-Fe:win32_handmade.exe"
 
@@ -133,6 +135,7 @@ set "gameExportedFunctions=-EXPORT:UpdateAndRender -EXPORT:GetSoundSamples"
 
 if "%compiler%" == "clang" (
     rem TODO: why not just use clang-cl?
+    rem would still have to specify warnings the "clang" way but other stuff would work nicely
     set "cxx=clang++"
     set "modeFlags=-O0 -g"
     set "commonFlags=-fno-exceptions -fno-rtti -std=c++20"

@@ -500,14 +500,14 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
 
     // TODO: rename playerDelta as now we use this function for all entities
     // p' = 0.5 * at^2 + vt + p
-    Vec3 playerDelta{ (0.5f * acceleration * SquareF32(delta)) + (entity->velocity * delta) };
+    Vec3 playerDelta{ (0.5f * acceleration * Square(delta)) + (entity->velocity * delta) };
 
     // v' = at + v
     entity->velocity += acceleration * delta;
 
     // TODO: clamp the max velocity?
     const f32 velocitySq{ LengthSq(entity->velocity) };
-    ASSERT(velocitySq <= SquareF32(simRegion->maxEntityVelocity));
+    ASSERT(velocitySq <= Square(simRegion->maxEntityVelocity));
 
     // @Debug
     if (velocitySq > simRegion->maxRecordedEntityVelocitySq) {

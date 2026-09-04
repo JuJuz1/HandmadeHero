@@ -94,6 +94,8 @@ enum {
     DEBUGCycleCounter_TestPixel,
     DEBUGCycleCounter_FillPixel,
 
+    DEBUGCycleCounter_DrawRectQuickly,
+
     DEBUGCycleCounter_Count
 };
 

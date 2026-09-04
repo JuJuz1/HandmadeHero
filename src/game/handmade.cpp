@@ -452,7 +452,7 @@ MakeSphereNormalMap(LoadedBitmapInfo* bitmap, f32 roughness) {
             const f32 nX{ (2.0f * bitmapUV.x) - 1.0f };
             const f32 nY{ (2.0f * bitmapUV.y) - 1.0f };
 
-            const f32 rootTerm{ 1.0f - SquareF32(nX) - SquareF32(nY) };
+            const f32 rootTerm{ 1.0f - Square(nX) - Square(nY) };
             const f32 tilt{ 1.0f / Sqrt(2) }; // 0,707...
             // We need the tilt because if we have {0, 1, 1} the reflection points straight up. In
             // that case we can never see the reflected vector
@@ -515,8 +515,8 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     ASSERT(chunkPos);
     ASSERT(IsValidWorldPos(chunkPos));
 
-    PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
-          chunkPos->chunkZ);
+    //PRINT("FillGroundChunk: chunk %d %d %d\n", chunkPos->chunkX, chunkPos->chunkY,
+    //      chunkPos->chunkZ);
 
     auto* buff{ &groundBuff->bitmap };
     buff->alignPercentage = Vec2{ 0.5f, 0.5f };
@@ -528,11 +528,12 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     auto* renderGroup{ AllocRenderGroup(&tranState->tranArena, MEGABYTES(1),
                                         Vec2{ buff->width, buff->height }) };
 
-    ScreenClear(renderGroup, Vec4{ 0.0f, 0.0f, 0.0f, 1.0f });
+    ScreenClear(renderGroup, Vec4{ 1.0f, 0.0f, 0.0f, 1.0f });
 
     //buff = groundBuff->bitmap;
     groundBuff->pos = *chunkPos;
 
+#if 0
     // TODO: make functions for Vec2i, Vec2u to be able to do Vec2i(..., ...) * 0.5f
     //const Vec2 screenCenter{ buff->width * 0.5f, buff->height * 0.5f };
     const f32 width{ gameState->world->chunkDimInMeters.x };
@@ -582,7 +583,6 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
     }
 
 // Detail tufts on top of the "ground"
-#if 1
     for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
         for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
             const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };
@@ -1359,7 +1359,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
     // TODO: Why are we doing this after FillGroundChunk, Casey does earlier
     // Is it because we don't want to lag 1 frame behind on these?
 
-#if 0
+#if 1
     for (i32 groundBuffIndex{}; groundBuffIndex < tranState->groundBuffCount; ++groundBuffIndex) {
         auto* groundBuff{ &tranState->groundBuffs[groundBuffIndex] };
         ASSERT(groundBuff);
@@ -1626,7 +1626,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
             if (entity->followingHero) {
                 SimEntity* closestHero{};
                 const f32 maxDist{ 10.0f };
-                f32 closestHeroDSq{ SquareF32(maxDist) };
+                f32 closestHeroDSq{ Square(maxDist) };
 
                 // TODO: naive solution, BAD
                 SimEntity* testEntity{ simRegion->entities };
@@ -1643,7 +1643,7 @@ extern "C" UPDATE_AND_RENDER(UpdateAndRender) {
                     }
                 }
 
-                const f32 stopDistSq{ SquareF32(2.25f) }; // Dist of 2.25f
+                const f32 stopDistSq{ Square(2.25f) }; // Dist of 2.25f
                 Vec3 acceleration{};
 
                 if (closestHero && closestHeroDSq > stopDistSq) {

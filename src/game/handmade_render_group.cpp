@@ -123,9 +123,9 @@ SRGB255ToLinear1(Vec4 color) {
     Vec4 result;
 
     const f32 inv255{ 1.0f / 255.0f };
-    result.r = SquareF32(color.r * inv255);
-    result.g = SquareF32(color.g * inv255);
-    result.b = SquareF32(color.b * inv255);
+    result.r = Square(color.r * inv255);
+    result.g = Square(color.g * inv255);
+    result.b = Square(color.b * inv255);
     result.a = color.a * inv255;
 
     return result;
@@ -202,11 +202,11 @@ INTERNAL inline BilinearSample
 BilinearSampleFromTex(LoadedBitmapInfo* texture, i32 x, i32 y) {
     BilinearSample result;
 
-    u8* normalPtr{ static_cast<u8*>(texture->memory) + y * texture->pitch + x * sizeof(u32) };
-    result.a = *reinterpret_cast<u32*>(normalPtr);
-    result.b = *reinterpret_cast<u32*>(normalPtr + sizeof(u32));
-    result.c = *reinterpret_cast<u32*>(normalPtr + texture->pitch);
-    result.d = *reinterpret_cast<u32*>(normalPtr + texture->pitch + sizeof(u32));
+    u8* texelPtr{ static_cast<u8*>(texture->memory) + y * texture->pitch + x * sizeof(u32) };
+    result.a = *reinterpret_cast<u32*>(texelPtr);
+    result.b = *reinterpret_cast<u32*>(texelPtr + sizeof(u32));
+    result.c = *reinterpret_cast<u32*>(texelPtr + texture->pitch);
+    result.d = *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32));
 
     return result;
 }
@@ -626,6 +626,236 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     END_TIMED_BLOCK(DrawRectSlowly);
 }
 
+INTERNAL void
+DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
+                LoadedBitmapInfo* texture, f32 pixelsToMeters) {
+    BEGIN_TIMED_BLOCK(DrawRectQuickly);
+
+    ASSERT(texture);
+
+    // Premultiply color
+    color.rgb *= color.a;
+    // AA RR GG BB
+    u32 colorRounded{ (RoundF32ToU32(color.a * 255.0f) << 24) |
+                      (RoundF32ToU32(color.r * 255.0f) << 16) |
+                      (RoundF32ToU32(color.g * 255.0f) << 8) |
+                      (RoundF32ToU32(color.b * 255.0f) << 0) };
+
+    const i32 widthMax{ buff->width - 1 };
+    const i32 heightMax{ buff->height - 1 };
+    const f32 widthMaxInv{ 1.0f / static_cast<f32>(buff->width - 1) };
+    const f32 heightMaxInv{ 1.0f / static_cast<f32>(buff->height - 1) };
+
+    i32 minX{ widthMax };
+    i32 minY{ heightMax };
+    i32 maxX{};
+    i32 maxY{};
+
+#if 1
+    Array<Vec2, 4> points{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
+    for (i32 i{}; i < points.size; ++i) {
+        const i32 floorX{ FloorF32ToI32(points[i].x) };
+        const i32 ceilX{ CeilF32ToI32(points[i].x) };
+        const i32 floorY{ FloorF32ToI32(points[i].y) };
+        const i32 ceilY{ CeilF32ToI32(points[i].y) };
+
+        if (floorX < minX) {
+            minX = floorX;
+        }
+        if (ceilX > maxX) {
+            maxX = ceilX;
+        }
+        if (floorY < minY) {
+            minY = floorY;
+        }
+        if (ceilY > maxY) {
+            maxY = ceilY;
+        }
+    }
+#endif
+
+    if (minX < 0) {
+        minX = 0;
+    }
+    if (minY < 0) {
+        minY = 0;
+    }
+    if (maxX > buff->width - 1) {
+        maxX = buff->width - 1;
+    }
+    if (maxY > buff->height - 1) {
+        maxY = buff->height - 1;
+    }
+
+    const f32 xAxisLenSqInv{ 1.0f / LengthSq(xAxis) };
+    const f32 yAxisLenSqInv{ 1.0f / LengthSq(yAxis) };
+
+    f32 xAxisLen{ Length(xAxis) };
+    f32 yAxisLen{ Length(yAxis) };
+    Vec2 nXCoefficient{ (yAxisLen / xAxisLen) * xAxis };
+    Vec2 nYCoefficient{ (xAxisLen / yAxisLen) * yAxis };
+    f32 nZScale{ 0.5f * (xAxisLen + yAxisLen) };
+
+    const Vec2 nXAxis{ xAxisLenSqInv * xAxis };
+    const Vec2 nYAxis{ yAxisLenSqInv * yAxis };
+
+    const f32 originZ{};
+    const f32 originY{ (origin + (0.5f * xAxis) + (0.5f * yAxis)).y };
+    const f32 fixedCastY{ originY * heightMaxInv };
+
+    const f32 inv255{ 1.0f / 255.0f };
+    const f32 one255{ 255.0f };
+
+    u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
+             (minY * buff->pitch) };
+
+    for (i32 y{ minY }; y <= maxY; ++y) {
+        u32* pixel{ reinterpret_cast<u32*>(row) };
+        for (i32 x{ minX }; x <= maxX; ++x) {
+            BEGIN_TIMED_BLOCK(TestPixel);
+
+            const Vec2 pixelPos{ x, y };
+            const Vec2 d{ pixelPos - origin };
+
+            const f32 u{ Dot(d, nXAxis) };
+            const f32 v{ Dot(d, nYAxis) };
+
+            if ((u >= 0.0f) && (u <= 1.0f) && (v >= 0.0f) && (v <= 1.0f)) {
+                BEGIN_TIMED_BLOCK(FillPixel);
+
+                // Pretend the texture is 1 pixel smaller in both dimensions
+                const f32 texelX{ u * static_cast<f32>(texture->width - 2) };
+                const f32 texelY{ v * static_cast<f32>(texture->height - 2) };
+
+                const i32 roundedX{ static_cast<i32>(texelX) };
+                const i32 roundedY{ static_cast<i32>(texelY) };
+                ASSERT(roundedX >= 0 && roundedX < texture->width);
+                ASSERT(roundedY >= 0 && roundedY < texture->height);
+
+                const f32 fX{ static_cast<f32>(texelX - roundedX) };
+                const f32 fY{ static_cast<f32>(texelY - roundedY) };
+
+                // BilinearSampleFromTex
+                u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
+                              roundedX * sizeof(u32) };
+                u32 sample1{ *reinterpret_cast<u32*>(texelPtr) };
+                u32 sample2{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
+                u32 sample3{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
+                u32 sample4{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
+
+                // SRGBBilinearBlend, unpacks
+                f32 texel1R{ static_cast<f32>((sample1 >> 16) & 0xFF) };
+                f32 texel1G{ static_cast<f32>((sample1 >> 8) & 0xFF) };
+                f32 texel1B{ static_cast<f32>((sample1 >> 0) & 0xFF) };
+                f32 texel1A{ static_cast<f32>((sample1 >> 24) & 0xFF) };
+
+                f32 texel2R{ static_cast<f32>((sample2 >> 16) & 0xFF) };
+                f32 texel2G{ static_cast<f32>((sample2 >> 8) & 0xFF) };
+                f32 texel2B{ static_cast<f32>((sample2 >> 0) & 0xFF) };
+                f32 texel2A{ static_cast<f32>((sample2 >> 24) & 0xFF) };
+
+                f32 texel3R{ static_cast<f32>((sample3 >> 16) & 0xFF) };
+                f32 texel3G{ static_cast<f32>((sample3 >> 8) & 0xFF) };
+                f32 texel3B{ static_cast<f32>((sample3 >> 0) & 0xFF) };
+                f32 texel3A{ static_cast<f32>((sample3 >> 24) & 0xFF) };
+
+                f32 texel4R{ static_cast<f32>((sample4 >> 16) & 0xFF) };
+                f32 texel4G{ static_cast<f32>((sample4 >> 8) & 0xFF) };
+                f32 texel4B{ static_cast<f32>((sample4 >> 0) & 0xFF) };
+                f32 texel4A{ static_cast<f32>((sample4 >> 24) & 0xFF) };
+
+                // Convert texture from sRGB to linear
+                texel1R = Square(texel1R * inv255);
+                texel1G = Square(texel1G * inv255);
+                texel1B = Square(texel1B * inv255);
+                texel1A = texel1A * inv255;
+
+                texel2R = Square(texel2R * inv255);
+                texel2G = Square(texel2G * inv255);
+                texel2B = Square(texel2B * inv255);
+                texel2A = texel2A * inv255;
+
+                texel3R = Square(texel3R * inv255);
+                texel3G = Square(texel3G * inv255);
+                texel3B = Square(texel3B * inv255);
+                texel3A = texel3A * inv255;
+
+                texel4R = Square(texel4R * inv255);
+                texel4G = Square(texel4G * inv255);
+                texel4B = Square(texel4B * inv255);
+                texel4A = texel4A * inv255;
+
+                // Bilinear texture blend
+                f32 invfX{ 1.0f - fX };
+                f32 invfY{ 1.0f - fY };
+
+                // Coefficients for lerp
+                f32 c0{ invfY * invfX };
+                f32 c1{ invfY * fX };
+                f32 c2{ fY * invfX };
+                f32 c3{ fY * fX };
+
+                f32 texelR{ c0 * texel1R + c1 * texel2R + c2 * texel3R + c3 * texel4R };
+                f32 texelG{ c0 * texel1G + c1 * texel2G + c2 * texel3G + c3 * texel4G };
+                f32 texelB{ c0 * texel1B + c1 * texel2B + c2 * texel3B + c3 * texel4B };
+                f32 texelA{ c0 * texel1A + c1 * texel2A + c2 * texel3A + c3 * texel4A };
+
+                // Modulate by incoming color
+                texelR = texelR * color.r;
+                texelG = texelG * color.g;
+                texelB = texelB * color.b;
+                texelA = texelA * color.a;
+
+                // Clamp colors
+                texelR = Clamp01(texelR);
+                texelG = Clamp01(texelG);
+                texelB = Clamp01(texelB);
+                //texel.a = Clamp01(texel.a);
+
+                // basically Unpack4x8, flattened
+                f32 destR{ static_cast<f32>((*pixel >> 16) & 0xFF) };
+                f32 destG{ static_cast<f32>((*pixel >> 8) & 0xFF) };
+                f32 destB{ static_cast<f32>((*pixel >> 0) & 0xFF) };
+                f32 destA{ static_cast<f32>((*pixel >> 24) & 0xFF) };
+
+                // Go from sRGB to linear
+                destR = Square(destR * inv255);
+                destG = Square(destG * inv255);
+                destB = Square(destB * inv255);
+                destA = destA * inv255;
+
+                // Destination blend
+                f32 invTexelA{ 1.0f - texelA };
+                f32 blendedR{ (destR * invTexelA) + texelR };
+                f32 blendedG{ (destG * invTexelA) + texelG };
+                f32 blendedB{ (destB * invTexelA) + texelB };
+                f32 blendedA{ (destA * invTexelA) + texelA };
+
+                // Go from linear to sRGB
+                blendedR = Sqrt(blendedR) * one255;
+                blendedG = Sqrt(blendedG) * one255;
+                blendedB = Sqrt(blendedB) * one255;
+                blendedA = blendedA * one255;
+
+                *pixel = { (TruncateF32ToU32(blendedA + 0.5f) << 24) |
+                           (TruncateF32ToU32(blendedR + 0.5f) << 16) |
+                           (TruncateF32ToU32(blendedG + 0.5f) << 8) |
+                           (TruncateF32ToU32(blendedB + 0.5f) << 0) };
+
+                END_TIMED_BLOCK(FillPixel);
+            }
+
+            ++pixel;
+
+            END_TIMED_BLOCK(TestPixel);
+        }
+
+        row += buff->pitch;
+    }
+
+    END_TIMED_BLOCK(DrawRectQuickly);
+}
+
 // We simply don't need this now as we use PushRectOutline to do this via the push buffer
 #if 0
 INTERNAL void
@@ -764,11 +994,13 @@ RenderGroupToOutput(RenderGroup* group, LoadedBitmapInfo* outputTarget, GameStat
             const auto basis{ GetRenderEntityBasisPos(group, &entry->entityBasis, screenDim) };
 
 #if 0
-            DrawBitmap(outputTarget, entry->bitmap, pos.x, pos.y, entry->color.a);
-#else
             DrawRectSlowly(outputTarget, basis.pos, Vec2{ entry->size.x, 0 } * basis.scale,
                            Vec2{ 0, entry->size.y } * basis.scale, entry->color, entry->bitmap,
                            nullptr, nullptr, nullptr, nullptr, pixelsToMeters);
+#else
+            DrawRectQuickly(outputTarget, basis.pos, Vec2{ entry->size.x, 0 } * basis.scale,
+                            Vec2{ 0, entry->size.y } * basis.scale, entry->color, entry->bitmap,
+                            pixelsToMeters);
 #endif
         } break;
         case RenderGroupEntryType_RenderEntryCoordinateSystem: {
