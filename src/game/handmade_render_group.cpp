@@ -633,6 +633,11 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
     ASSERT(texture);
 
+    // My first SIMD code :)
+    //__m128 valueA{ _mm_set_ps(1.0f, 2, 3, 4) };
+    //__m128 valueB{ _mm_set_ps(10, 100, 1000, 10000) };
+    //__m128 sum{ _mm_add_ps(valueA, valueB) };
+
     // Premultiply color
     color.rgb *= color.a;
     // AA RR GG BB
@@ -641,10 +646,11 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                       (RoundF32ToU32(color.g * 255.0f) << 8) |
                       (RoundF32ToU32(color.b * 255.0f) << 0) };
 
-    const i32 widthMax{ buff->width - 1 };
-    const i32 heightMax{ buff->height - 1 };
-    const f32 widthMaxInv{ 1.0f / static_cast<f32>(buff->width - 1) };
-    const f32 heightMaxInv{ 1.0f / static_cast<f32>(buff->height - 1) };
+    // TODO: IMPORTATN: stop doing this once we have real row loading
+    const i32 widthMax{ buff->width - 1 - 3 };
+    const i32 heightMax{ buff->height - 1 - 3 };
+    const f32 widthMaxInv{ 1.0f / widthMax };
+    const f32 heightMaxInv{ 1.0f / heightMax };
 
     i32 minX{ widthMax };
     i32 minY{ heightMax };
@@ -680,11 +686,11 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     if (minY < 0) {
         minY = 0;
     }
-    if (maxX > buff->width - 1) {
-        maxX = buff->width - 1;
+    if (maxX > widthMax) {
+        maxX = widthMax;
     }
-    if (maxY > buff->height - 1) {
-        maxY = buff->height - 1;
+    if (maxY > heightMax) {
+        maxY = heightMax;
     }
 
     const f32 xAxisLenSqInv{ 1.0f / LengthSq(xAxis) };
@@ -711,94 +717,152 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
     for (i32 y{ minY }; y <= maxY; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
-        for (i32 x{ minX }; x <= maxX; ++x) {
+        for (i32 x{ minX }; x <= maxX; x += 4) {
             BEGIN_TIMED_BLOCK(TestPixel);
 
-            const Vec2 pixelPos{ x, y };
-            const Vec2 d{ pixelPos - origin };
+            // A bit nasty
+            f32 texel1R[4];
+            f32 texel1G[4];
+            f32 texel1B[4];
+            f32 texel1A[4];
 
-            const f32 u{ Dot(d, nXAxis) };
-            const f32 v{ Dot(d, nYAxis) };
+            f32 texel2R[4];
+            f32 texel2G[4];
+            f32 texel2B[4];
+            f32 texel2A[4];
 
-            if ((u >= 0.0f) && (u <= 1.0f) && (v >= 0.0f) && (v <= 1.0f)) {
-                BEGIN_TIMED_BLOCK(FillPixel);
+            f32 texel3R[4];
+            f32 texel3G[4];
+            f32 texel3B[4];
+            f32 texel3A[4];
 
-                // Pretend the texture is 1 pixel smaller in both dimensions
-                const f32 texelX{ u * static_cast<f32>(texture->width - 2) };
-                const f32 texelY{ v * static_cast<f32>(texture->height - 2) };
+            f32 texel4R[4];
+            f32 texel4G[4];
+            f32 texel4B[4];
+            f32 texel4A[4];
 
-                const i32 roundedX{ static_cast<i32>(texelX) };
-                const i32 roundedY{ static_cast<i32>(texelY) };
-                ASSERT(roundedX >= 0 && roundedX < texture->width);
-                ASSERT(roundedY >= 0 && roundedY < texture->height);
+            // Load destination
+            f32 destR[4];
+            f32 destG[4];
+            f32 destB[4];
+            f32 destA[4];
 
-                const f32 fX{ static_cast<f32>(texelX - roundedX) };
-                const f32 fY{ static_cast<f32>(texelY - roundedY) };
+            f32 blendedR[4];
+            f32 blendedG[4];
+            f32 blendedB[4];
+            f32 blendedA[4];
 
-                // BilinearSampleFromTex
-                u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
-                              roundedX * sizeof(u32) };
-                u32 sample1{ *reinterpret_cast<u32*>(texelPtr) };
-                u32 sample2{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
-                u32 sample3{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
-                u32 sample4{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
+            f32 fX[4];
+            f32 fY[4];
 
-                // SRGBBilinearBlend, unpacks
-                f32 texel1R{ static_cast<f32>((sample1 >> 16) & 0xFF) };
-                f32 texel1G{ static_cast<f32>((sample1 >> 8) & 0xFF) };
-                f32 texel1B{ static_cast<f32>((sample1 >> 0) & 0xFF) };
-                f32 texel1A{ static_cast<f32>((sample1 >> 24) & 0xFF) };
+            bool32 shouldFill[4];
 
-                f32 texel2R{ static_cast<f32>((sample2 >> 16) & 0xFF) };
-                f32 texel2G{ static_cast<f32>((sample2 >> 8) & 0xFF) };
-                f32 texel2B{ static_cast<f32>((sample2 >> 0) & 0xFF) };
-                f32 texel2A{ static_cast<f32>((sample2 >> 24) & 0xFF) };
+            for (i32 i{}; i < 4; ++i) {
+                const Vec2 pixelPos{ x + i, y };
+                const Vec2 d{ pixelPos - origin };
 
-                f32 texel3R{ static_cast<f32>((sample3 >> 16) & 0xFF) };
-                f32 texel3G{ static_cast<f32>((sample3 >> 8) & 0xFF) };
-                f32 texel3B{ static_cast<f32>((sample3 >> 0) & 0xFF) };
-                f32 texel3A{ static_cast<f32>((sample3 >> 24) & 0xFF) };
+                const f32 u{ Dot(d, nXAxis) };
+                const f32 v{ Dot(d, nYAxis) };
 
-                f32 texel4R{ static_cast<f32>((sample4 >> 16) & 0xFF) };
-                f32 texel4G{ static_cast<f32>((sample4 >> 8) & 0xFF) };
-                f32 texel4B{ static_cast<f32>((sample4 >> 0) & 0xFF) };
-                f32 texel4A{ static_cast<f32>((sample4 >> 24) & 0xFF) };
+                shouldFill[i] = ((u >= 0.0f) && (u <= 1.0f) && (v >= 0.0f) && (v <= 1.0f));
 
+                if (shouldFill[i]) {
+                    // Pretend the texture is 1 pixel smaller in both dimensions
+                    const f32 texelX{ u * static_cast<f32>(texture->width - 2) };
+                    const f32 texelY{ v * static_cast<f32>(texture->height - 2) };
+
+                    const i32 roundedX{ static_cast<i32>(texelX) };
+                    const i32 roundedY{ static_cast<i32>(texelY) };
+                    ASSERT(roundedX >= 0 && roundedX < texture->width);
+                    ASSERT(roundedY >= 0 && roundedY < texture->height);
+
+                    fX[i] = static_cast<f32>(texelX - roundedX);
+                    fY[i] = static_cast<f32>(texelY - roundedY);
+
+                    // BilinearSampleFromTex
+                    u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
+                                  roundedX * sizeof(u32) };
+                    u32 sample1{ *reinterpret_cast<u32*>(texelPtr) };
+                    u32 sample2{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
+                    u32 sample3{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
+                    u32 sample4{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
+
+                    // SRGBBilinearBlend, unpacks
+                    texel1R[i] = static_cast<f32>((sample1 >> 16) & 0xFF);
+                    texel1G[i] = static_cast<f32>((sample1 >> 8) & 0xFF);
+                    texel1B[i] = static_cast<f32>((sample1 >> 0) & 0xFF);
+                    texel1A[i] = static_cast<f32>((sample1 >> 24) & 0xFF);
+
+                    texel2R[i] = static_cast<f32>((sample2 >> 16) & 0xFF);
+                    texel2G[i] = static_cast<f32>((sample2 >> 8) & 0xFF);
+                    texel2B[i] = static_cast<f32>((sample2 >> 0) & 0xFF);
+                    texel2A[i] = static_cast<f32>((sample2 >> 24) & 0xFF);
+
+                    texel3R[i] = static_cast<f32>((sample3 >> 16) & 0xFF);
+                    texel3G[i] = static_cast<f32>((sample3 >> 8) & 0xFF);
+                    texel3B[i] = static_cast<f32>((sample3 >> 0) & 0xFF);
+                    texel3A[i] = static_cast<f32>((sample3 >> 24) & 0xFF);
+
+                    texel4R[i] = static_cast<f32>((sample4 >> 16) & 0xFF);
+                    texel4G[i] = static_cast<f32>((sample4 >> 8) & 0xFF);
+                    texel4B[i] = static_cast<f32>((sample4 >> 0) & 0xFF);
+                    texel4A[i] = static_cast<f32>((sample4 >> 24) & 0xFF);
+
+                    // Load destination
+                    // Basically Unpack4x8, flattened
+                    destR[i] = static_cast<f32>((*(pixel + i) >> 16) & 0xFF);
+                    destG[i] = static_cast<f32>((*(pixel + i) >> 8) & 0xFF);
+                    destB[i] = static_cast<f32>((*(pixel + i) >> 0) & 0xFF);
+                    destA[i] = static_cast<f32>((*(pixel + i) >> 24) & 0xFF);
+                }
+            }
+
+            for (i32 i{}; i < 4; ++i) {
                 // Convert texture from sRGB to linear
-                texel1R = Square(texel1R * inv255);
-                texel1G = Square(texel1G * inv255);
-                texel1B = Square(texel1B * inv255);
-                texel1A = texel1A * inv255;
+                //texel1R = Square(texel1R * inv255);
+                //texel1G = Square(texel1G * inv255);
+                //texel1B = Square(texel1B * inv255);
+                //texel1A = texel1A * inv255;
 
-                texel2R = Square(texel2R * inv255);
-                texel2G = Square(texel2G * inv255);
-                texel2B = Square(texel2B * inv255);
-                texel2A = texel2A * inv255;
+                // Flattened
+                texel1R[i] = texel1R[i] * inv255;
+                texel1R[i] *= texel1R[i];
+                texel1G[i] = texel1G[i] * inv255;
+                texel1G[i] *= texel1G[i];
+                texel1B[i] = texel1B[i] * inv255;
+                texel1B[i] *= texel1B[i];
+                texel1A[i] = texel1A[i] * inv255;
+                //
 
-                texel3R = Square(texel3R * inv255);
-                texel3G = Square(texel3G * inv255);
-                texel3B = Square(texel3B * inv255);
-                texel3A = texel3A * inv255;
+                texel2R[i] = Square(texel2R[i] * inv255);
+                texel2G[i] = Square(texel2G[i] * inv255);
+                texel2B[i] = Square(texel2B[i] * inv255);
+                texel2A[i] = texel2A[i] * inv255;
 
-                texel4R = Square(texel4R * inv255);
-                texel4G = Square(texel4G * inv255);
-                texel4B = Square(texel4B * inv255);
-                texel4A = texel4A * inv255;
+                texel3R[i] = Square(texel3R[i] * inv255);
+                texel3G[i] = Square(texel3G[i] * inv255);
+                texel3B[i] = Square(texel3B[i] * inv255);
+                texel3A[i] = texel3A[i] * inv255;
+
+                texel4R[i] = Square(texel4R[i] * inv255);
+                texel4G[i] = Square(texel4G[i] * inv255);
+                texel4B[i] = Square(texel4B[i] * inv255);
+                texel4A[i] = texel4A[i] * inv255;
 
                 // Bilinear texture blend
-                f32 invfX{ 1.0f - fX };
-                f32 invfY{ 1.0f - fY };
+                f32 invfX{ 1.0f - fX[i] };
+                f32 invfY{ 1.0f - fY[i] };
 
                 // Coefficients for lerp
                 f32 c0{ invfY * invfX };
-                f32 c1{ invfY * fX };
-                f32 c2{ fY * invfX };
-                f32 c3{ fY * fX };
+                f32 c1{ invfY * fX[i] };
+                f32 c2{ fY[i] * invfX };
+                f32 c3{ fY[i] * fX[i] };
 
-                f32 texelR{ c0 * texel1R + c1 * texel2R + c2 * texel3R + c3 * texel4R };
-                f32 texelG{ c0 * texel1G + c1 * texel2G + c2 * texel3G + c3 * texel4G };
-                f32 texelB{ c0 * texel1B + c1 * texel2B + c2 * texel3B + c3 * texel4B };
-                f32 texelA{ c0 * texel1A + c1 * texel2A + c2 * texel3A + c3 * texel4A };
+                f32 texelR{ c0 * texel1R[i] + c1 * texel2R[i] + c2 * texel3R[i] + c3 * texel4R[i] };
+                f32 texelG{ c0 * texel1G[i] + c1 * texel2G[i] + c2 * texel3G[i] + c3 * texel4G[i] };
+                f32 texelB{ c0 * texel1B[i] + c1 * texel2B[i] + c2 * texel3B[i] + c3 * texel4B[i] };
+                f32 texelA{ c0 * texel1A[i] + c1 * texel2A[i] + c2 * texel3A[i] + c3 * texel4A[i] };
 
                 // Modulate by incoming color
                 texelR = texelR * color.r;
@@ -812,40 +876,36 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                 texelB = Clamp01(texelB);
                 //texel.a = Clamp01(texel.a);
 
-                // basically Unpack4x8, flattened
-                f32 destR{ static_cast<f32>((*pixel >> 16) & 0xFF) };
-                f32 destG{ static_cast<f32>((*pixel >> 8) & 0xFF) };
-                f32 destB{ static_cast<f32>((*pixel >> 0) & 0xFF) };
-                f32 destA{ static_cast<f32>((*pixel >> 24) & 0xFF) };
-
                 // Go from sRGB to linear
-                destR = Square(destR * inv255);
-                destG = Square(destG * inv255);
-                destB = Square(destB * inv255);
-                destA = destA * inv255;
+                destR[i] = Square(destR[i] * inv255);
+                destG[i] = Square(destG[i] * inv255);
+                destB[i] = Square(destB[i] * inv255);
+                destA[i] = destA[i] * inv255;
 
                 // Destination blend
                 f32 invTexelA{ 1.0f - texelA };
-                f32 blendedR{ (destR * invTexelA) + texelR };
-                f32 blendedG{ (destG * invTexelA) + texelG };
-                f32 blendedB{ (destB * invTexelA) + texelB };
-                f32 blendedA{ (destA * invTexelA) + texelA };
+                blendedR[i] = (destR[i] * invTexelA) + texelR;
+                blendedG[i] = (destG[i] * invTexelA) + texelG;
+                blendedB[i] = (destB[i] * invTexelA) + texelB;
+                blendedA[i] = (destA[i] * invTexelA) + texelA;
 
                 // Go from linear to sRGB
-                blendedR = Sqrt(blendedR) * one255;
-                blendedG = Sqrt(blendedG) * one255;
-                blendedB = Sqrt(blendedB) * one255;
-                blendedA = blendedA * one255;
-
-                *pixel = { (TruncateF32ToU32(blendedA + 0.5f) << 24) |
-                           (TruncateF32ToU32(blendedR + 0.5f) << 16) |
-                           (TruncateF32ToU32(blendedG + 0.5f) << 8) |
-                           (TruncateF32ToU32(blendedB + 0.5f) << 0) };
-
-                END_TIMED_BLOCK(FillPixel);
+                blendedR[i] = Sqrt(blendedR[i]) * one255;
+                blendedG[i] = Sqrt(blendedG[i]) * one255;
+                blendedB[i] = Sqrt(blendedB[i]) * one255;
+                blendedA[i] = blendedA[i] * one255;
             }
 
-            ++pixel;
+            for (i32 i{}; i < 4; ++i) {
+                if (shouldFill[i]) {
+                    *(pixel + i) = { (TruncateF32ToU32(blendedA[i] + 0.5f) << 24) |
+                                     (TruncateF32ToU32(blendedR[i] + 0.5f) << 16) |
+                                     (TruncateF32ToU32(blendedG[i] + 0.5f) << 8) |
+                                     (TruncateF32ToU32(blendedB[i] + 0.5f) << 0) };
+                }
+            }
+
+            pixel += 4;
 
             END_TIMED_BLOCK(TestPixel);
         }

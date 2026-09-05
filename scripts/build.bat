@@ -179,20 +179,20 @@ echo WAITING FOR PDB > lock.tmp
 rem compile the platform and the game as seperate to allow DLL tricks
 rem insert a random number to avoid name conflict when rebuilding
 
-set "cTimeNameGame=win32_handmade_msvc.ctm"
+set "cTimeNameGame=win32_game_msvc.ctm"
 set "cTimeNamePlatform=win32_platform_msvc.ctm"
 if %useCTime% == 1 (
     if "%mode%" == "release" (
-        set "cTimeNameGame=win32_handmade_msvc_rel.ctm"
+        set "cTimeNameGame=win32_game_msvc_rel.ctm"
         set "cTimeNamePlatform=win32_platform_msvc_rel.ctm"
     )
 
     if "%compiler%" == "clang" (
         if "%mode%" == "debug" (
-            set "cTimeNameGame=win32_handmade_clang.ctm"
+            set "cTimeNameGame=win32_game_clang.ctm"
             set "cTimeNamePlatform=win32_platform_clang.ctm"
         ) else (
-            set "cTimeNameGame=win32_handmade_clang_rel.ctm"
+            set "cTimeNameGame=win32_game_clang_rel.ctm"
             set "cTimeNamePlatform=win32_platform_clang_rel.ctm"
         )
     )

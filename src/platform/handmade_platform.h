@@ -17,6 +17,10 @@ extern "C" {
 
 /// Compilers
 
+// These can be specified from the command line also if one wants to, we do it here
+// If specifying from the command line they have to be defined as equal to other than 0 to work
+// -DCOMPILER_MSVC=1
+
 #ifndef COMPILER_MSVC
 #    define COMPILER_MSVC 0
 #endif
@@ -28,26 +32,30 @@ extern "C" {
 // TODO: more compilers, GCC at least
 // Determine the compiler if none set
 #if !COMPILER_MSVC && !COMPILER_LLVM
-#    if _MSC_VER
-#        undef COMPILER_MSVC
-#        define COMPILER_MSVC 1
-#    elif __clang__
+#    if defined(__clang__)
 #        undef COMPILER_LLVM
 #        define COMPILER_LLVM 1
+// Clang on windows also defines _MSC_VER this... it's a mess
+// On the other hand, the end result should be the same if clang pretends to be fully MSVC
+// compatible so it makes sense that way. However if we really want to fully exclusively know which
+// compiler we are using this just complicates things
+#    elif defined(_MSC_VER)
+#        undef COMPILER_MSVC
+#        define COMPILER_MSVC 1
 #    endif
 #endif
 
-// @Hack? figure out a better way
+// @Hack? figure out a better way to exclude debug cycle reads and inclusion of intrin.h
 #if HANDMADE_WEB
 #    undef COMPILER_LLVM
 #    define COMPILER_LLVM 0
 #endif
 
-#if COMPILER_MSVC
+#if COMPILER_MSVC || COMPILER_LLVM
 #    include <intrin.h>
 #endif
 
-// Typedefs for common types
+/// Typedefs for common types
 
 typedef int8_t i8;
 typedef int16_t i16;
@@ -72,6 +80,9 @@ typedef size_t memory_index;
 #    error FLT_MAX not defined!
 #endif
 
+// TODO: Wrap SIMD types???
+// typedef f32x4 __mm128;
+
 // A thread context passed to game code and is used when calling back to platform-specific code
 typedef struct ThreadContext {
     i32 placeHolder;
@@ -91,10 +102,9 @@ enum {
     DEBUGCycleCounter_RenderGroupToOutput,
 
     DEBUGCycleCounter_DrawRectSlowly,
+    DEBUGCycleCounter_DrawRectQuickly,
     DEBUGCycleCounter_TestPixel,
     DEBUGCycleCounter_FillPixel,
-
-    DEBUGCycleCounter_DrawRectQuickly,
 
     DEBUGCycleCounter_Count
 };
