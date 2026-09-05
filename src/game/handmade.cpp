@@ -598,7 +598,7 @@ FillGroundChunk(GameState* gameState, TransientState* tranState, GroundBuff* gro
         }
     }
 
-// Detail tufts on top of the "ground"
+    // Detail tufts on top of the "ground"
     for (i32 chunkOffsetY{ -1 }; chunkOffsetY <= 1; ++chunkOffsetY) {
         for (i32 chunkOffsetX{ -1 }; chunkOffsetX <= 1; ++chunkOffsetX) {
             const i32 chunkX{ chunkPos->chunkX + chunkOffsetX };

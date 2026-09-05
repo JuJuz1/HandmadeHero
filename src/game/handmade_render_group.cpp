@@ -705,6 +705,7 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     const __m128 inv255x4{ _mm_set_ps1(inv255) };
     const f32 one255{ 255.0f };
 
+    // Behold!
     __m128 mOne = _mm_set_ps1(1.0f);
     __m128 mOne255x4 = _mm_set_ps1(255.0f);
     __m128 mZero = _mm_set_ps1(0.0f);
@@ -767,19 +768,41 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 #define MM_SQUARE(a) _mm_mul_ps((a), (a))
 #define M(a, i) (reinterpret_cast<f32*>(&(a)))[(i)]
 
+            __m128 pixelPosX = _mm_set_ps(static_cast<f32>(x + 3), static_cast<f32>(x + 2),
+                                          static_cast<f32>(x + 1), static_cast<f32>(x + 0));
+            __m128 pixelPosY = _mm_set_ps1(static_cast<f32>(y));
+
+            __m128 dx = _mm_sub_ps(pixelPosX, originXx4);
+            __m128 dy = _mm_sub_ps(pixelPosY, originYx4);
+            __m128 u = _mm_add_ps(_mm_mul_ps(dx, nXAxisXx4), _mm_mul_ps(dy, nXAxisYx4));
+            __m128 v = _mm_add_ps(_mm_mul_ps(dx, nYAxisXx4), _mm_mul_ps(dy, nYAxisYx4));
+
             for (i32 i{}; i < 4; ++i) {
-                const Vec2 pixelPos{ x + i, y };
-                const Vec2 d{ pixelPos - origin };
+                // In a non-release build this way costs an additional ~80 cycles, ridicilous!
+                // In release mode there's no problem
+                //#if 1
+                //                const Vec2 pixelPos{ x + i, y };
+                //                const Vec2 d{ pixelPos - origin };
 
-                const f32 u{ Dot(d, nXAxis) };
-                const f32 v{ Dot(d, nYAxis) };
+                //                const f32 u{ Dot(d, nXAxis) };
+                //                const f32 v{ Dot(d, nYAxis) };
+                //#else
+                //                        const f32 pixelPosX = static_cast<f32>(x + i);
+                //                        const f32 pixelPosY = static_cast<f32>(y);
+                //                        const f32 dX{ pixelPosX - origin.x };
+                //                        const f32 dY{ pixelPosY - origin.y };
 
-                shouldFill[i] = ((u >= 0.0f) && (u <= 1.0f) && (v >= 0.0f) && (v <= 1.0f));
+                //                        const f32 u{ dX * nXAxis.x + dY * nXAxis.y };
+                //                        const f32 v{ dX * nYAxis.x + dY * nYAxis.y };
+                //#endif
+
+                shouldFill[i] = ((M(u, i) >= 0.0f) && (M(u, i) <= 1.0f) && (M(v, i) >= 0.0f) &&
+                                 (M(v, i) <= 1.0f));
 
                 if (shouldFill[i]) {
                     // Pretend the texture is 1 pixel smaller in both dimensions
-                    const f32 texelX{ u * static_cast<f32>(texture->width - 2) };
-                    const f32 texelY{ v * static_cast<f32>(texture->height - 2) };
+                    const f32 texelX{ M(u, i) * static_cast<f32>(texture->width - 2) };
+                    const f32 texelY{ M(v, i) * static_cast<f32>(texture->height - 2) };
 
                     const i32 roundedX{ static_cast<i32>(texelX) };
                     const i32 roundedY{ static_cast<i32>(texelY) };
@@ -881,33 +904,37 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
             texelB = _mm_mul_ps(texelB, colorBx4);
             texelA = _mm_mul_ps(texelA, colorAx4);
 
-            for (i32 i{}; i < 4; ++i) {
-                // Clamp colors
-                M(texelR, i) = Clamp01(M(texelR, i));
-                M(texelG, i) = Clamp01(M(texelG, i));
-                M(texelB, i) = Clamp01(M(texelB, i));
-                //texel.a = Clamp01(texel.a);
+            //for (i32 i{}; i < 4; ++i) {
+            //    // Clamp colors
+            //    M(texelR, i) = Clamp01(M(texelR, i));
+            //    M(texelG, i) = Clamp01(M(texelG, i));
+            //    M(texelB, i) = Clamp01(M(texelB, i));
+            //    //texel.a = Clamp01(texel.a);
+            //}
 
-                // Go from sRGB to linear
-                M(destR, i) = Square(M(destR, i) * inv255);
-                M(destG, i) = Square(M(destG, i) * inv255);
-                M(destB, i) = Square(M(destB, i) * inv255);
-                M(destA, i) = M(destA, i) * inv255;
+            texelR = _mm_min_ps(_mm_max_ps(texelR, mZero), mOne);
+            texelG = _mm_min_ps(_mm_max_ps(texelG, mZero), mOne);
+            texelB = _mm_min_ps(_mm_max_ps(texelB, mZero), mOne);
 
-                // Destination blend
-                __m128 invTexelA = _mm_sub_ps(mOne, texelA);
+            // Go from sRGB to linear
+            destR = MM_SQUARE(_mm_mul_ps(destR, inv255x4));
+            destG = MM_SQUARE(_mm_mul_ps(destG, inv255x4));
+            destB = MM_SQUARE(_mm_mul_ps(destB, inv255x4));
+            destA = _mm_mul_ps(destA, inv255x4);
 
-                blendedR = _mm_add_ps(_mm_mul_ps(invTexelA, destR), texelR);
-                blendedG = _mm_add_ps(_mm_mul_ps(invTexelA, destG), texelG);
-                blendedB = _mm_add_ps(_mm_mul_ps(invTexelA, destB), texelB);
-                blendedA = _mm_add_ps(_mm_mul_ps(invTexelA, destA), texelA);
+            // Destination blend
+            __m128 invTexelA = _mm_sub_ps(mOne, texelA);
 
-                // Go from linear to sRGB
-                blendedR = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedR));
-                blendedG = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedG));
-                blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
-                blendedA = _mm_mul_ps(mOne255x4, blendedA);
-            }
+            blendedR = _mm_add_ps(_mm_mul_ps(invTexelA, destR), texelR);
+            blendedG = _mm_add_ps(_mm_mul_ps(invTexelA, destG), texelG);
+            blendedB = _mm_add_ps(_mm_mul_ps(invTexelA, destB), texelB);
+            blendedA = _mm_add_ps(_mm_mul_ps(invTexelA, destA), texelA);
+
+            // Go from linear to sRGB
+            blendedR = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedR));
+            blendedG = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedG));
+            blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
+            blendedA = _mm_mul_ps(mOne255x4, blendedA);
 
             for (i32 i{}; i < 4; ++i) {
                 if (shouldFill[i]) {
