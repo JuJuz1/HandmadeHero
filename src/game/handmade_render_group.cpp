@@ -707,10 +707,10 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
 
+    BEGIN_TIMED_BLOCK(ProcessPixel);
     for (i32 y{ minY }; y <= maxY; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; x += 4) {
-            BEGIN_TIMED_BLOCK(TestPixel);
 
             // A bit nasty
             f32 texel1R[4];
@@ -898,13 +898,12 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
             }
 
             pixel += 4;
-
-            END_TIMED_BLOCK(TestPixel);
         }
 
         row += buff->pitch;
     }
 
+    END_TIMED_BLOCK_COUNTED(ProcessPixel, (maxX - minX + 1) * (maxY - minY + 1));
     END_TIMED_BLOCK(DrawRectQuickly);
 }
 

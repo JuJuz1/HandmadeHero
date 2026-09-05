@@ -125,12 +125,15 @@ typedef struct DEBUGFileReadResult {
 
 enum {
     DEBUGCycleCounter_UpdateAndRender = 0,
-    DEBUGCycleCounter_RenderGroupToOutput,
+    /* 1 */ DEBUGCycleCounter_RenderGroupToOutput,
 
-    DEBUGCycleCounter_DrawRectSlowly,
-    DEBUGCycleCounter_DrawRectQuickly,
-    DEBUGCycleCounter_TestPixel,
-    DEBUGCycleCounter_FillPixel,
+    /* 2 */ DEBUGCycleCounter_DrawRectSlowly,
+
+    /* 3 */ DEBUGCycleCounter_DrawRectQuickly,
+    /* 4 */ DEBUGCycleCounter_ProcessPixel,
+
+    /* 5 */ DEBUGCycleCounter_TestPixel,
+    /* 6 */ DEBUGCycleCounter_FillPixel,
 
     DEBUGCycleCounter_Count
 };
@@ -146,6 +149,10 @@ typedef struct DEBUGCycleCounter {
         gDebugMemory->counters[DEBUGCycleCounter_##id].cycleCount +=                               \
             __rdtsc() - startCycleCount##id;                                                       \
         ++gDebugMemory->counters[DEBUGCycleCounter_##id].hitCount;
+#    define END_TIMED_BLOCK_COUNTED(id, count)                                                     \
+        gDebugMemory->counters[DEBUGCycleCounter_##id].cycleCount +=                               \
+            __rdtsc() - startCycleCount##id;                                                       \
+        gDebugMemory->counters[DEBUGCycleCounter_##id].hitCount += (count);
 //#elif COMPILER_GCC
 //#    // TODO: make these work
 //#    define BEGIN_TIMED_BLOCK(id) u64 startCycleCount##id{ __rdtsc() };
