@@ -93,7 +93,7 @@ struct BitmapHeader {
     u32 redMask;
     u32 greenMask;
     u32 blueMask;
-    u32 alphaMask;
+    //u32 alphaMask;
 };
 
 #pragma pack(pop)
@@ -149,6 +149,22 @@ DEBUGLoadBMP(ThreadContext* threadContext, debug_read_file* readFile, const char
         u32* srcDest{ pixels };
         for (i32 y{}; y < bitMapHeader->height; ++y) {
             for (i32 x{}; x < bitMapHeader->width; ++x) {
+                // TODO: web build crashes here due to:
+                // A bit weird as we changed nothing here and it worked earlier
+
+                // clang-format off
+                /*
+                ../../src\game/handmade.cpp:153:32: runtime error: load of misaligned address
+                0x064726a2 for type 'u32 *' (aka 'unsigned int *'),
+                which requires 4 byte alignment <anonymous code>:1:145535
+                0x064726a2: note: pointer points here <anonymous code>:1:145535
+                00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 <anonymous code>:1:145535
+                             ^ <anonymous code>:1:145535
+                Aborted(alignment fault) <anonymous code>:1:145535
+                Uncaught RuntimeError: Aborted(alignment fault)
+                */
+                // clang-format on
+
                 const u32 color{ *srcDest };
 
                 Vec4 texel{ static_cast<f32>((color & redMask) >> redShiftDown),

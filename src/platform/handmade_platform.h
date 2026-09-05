@@ -190,14 +190,14 @@ typedef struct GameMemory {
     // TODO: because we target wasm32, better ways to do this? JUST TARGET 64???
     // Although most browser already support wasm64 at the time 26/6/2026
     // As an exercise it would be best to keep it 32-bit just to see how the code needs to change
-#if 0 // HANDMADE_WEB
+#if HANDMADE_WEB // 0
     u32 permanentStorageSize;
 #else
     u64 permanentStorageSize;
 #endif
 
     void* transientStorage;
-#if 0 // HANDMADE_WEB
+#if HANDMADE_WEB // 0
     u32 transientStorageSize;
 #else
     u64 transientStorageSize;

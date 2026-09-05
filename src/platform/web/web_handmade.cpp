@@ -40,7 +40,7 @@
 // Game! no DLL here
 #include "game/handmade.cpp"
 
-static_assert(sizeof(void*) == 4, "We are targeting 32-bit for now");
+//static_assert(sizeof(void*) == 4, "We are targeting 32-bit for now");
 
 GLOBAL SDL_Window* gWindow;
 GLOBAL SDL_Renderer* gRenderer;
