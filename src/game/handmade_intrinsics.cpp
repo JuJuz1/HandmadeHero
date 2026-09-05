@@ -12,7 +12,7 @@
 
 NODISCARD
 INTERNAL inline i32
-TruncateI64toI32(i64 value) {
+Trunc(i64 value) {
     ASSERT(value <= 2147483647LL);
     ASSERT(value >= -2147483648LL);
     const i32 result{ static_cast<i32>(value) };
@@ -21,7 +21,7 @@ TruncateI64toI32(i64 value) {
 
 NODISCARD
 INTERNAL inline u32
-TruncateU64toU32(u64 value) {
+Trunc(u64 value) {
     // TODO: U32_MAX and such...
     ASSERT(value <= 0xFFFFFFFFULL);
     const u32 result{ static_cast<u32>(value) };
@@ -30,7 +30,7 @@ TruncateU64toU32(u64 value) {
 
 NODISCARD
 INTERNAL inline f32
-TruncateF64toF32(f64 value) {
+Trunc(f64 value) {
     ASSERT(value <= 3.402823466e+38);
     ASSERT(value >= -3.402823466e+38);
     const f32 result{ static_cast<f32>(value) };
@@ -39,7 +39,7 @@ TruncateF64toF32(f64 value) {
 
 NODISCARD
 INTERNAL inline i32
-TruncateF32ToI32(f32 value) {
+TruncToI32(f32 value) {
     // NOTE: truncate always truncates towards 0, even when value is negative
     const i32 result{ static_cast<i32>(value) };
     return result;
@@ -47,7 +47,7 @@ TruncateF32ToI32(f32 value) {
 
 NODISCARD
 INTERNAL inline u32
-TruncateF32ToU32(f32 value) {
+TruncToU32(f32 value) {
     // TODO: disabled as of ep 74 for moving up and down via stairs
     // This was hit in DrawBitmap for the shadows?
     //ASSERT(value >= 0);
@@ -57,14 +57,14 @@ TruncateF32ToU32(f32 value) {
 
 NODISCARD
 INTERNAL inline i32
-FloorF32ToI32(f32 value) {
+FloorToI32(f32 value) {
     const i32 result{ static_cast<i32>(floorf(value)) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline u32
-FloorF32ToU32(f32 value) {
+FloorToU32(f32 value) {
     ASSERT(value >= 0);
     const u32 result{ static_cast<u32>(floorf(value)) };
     return result;
@@ -72,14 +72,14 @@ FloorF32ToU32(f32 value) {
 
 NODISCARD
 INTERNAL inline i32
-RoundF32ToI32(f32 value) {
+RoundToI32(f32 value) {
     const i32 result{ static_cast<i32>(roundf(value)) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline u32
-RoundF32ToU32(f32 value) {
+RoundToU32(f32 value) {
     ASSERT(value >= 0);
     const u32 result{ static_cast<u32>(roundf(value)) };
     return result;
@@ -87,14 +87,14 @@ RoundF32ToU32(f32 value) {
 
 NODISCARD
 INTERNAL inline i32
-CeilF32ToI32(f32 value) {
+CeilToI32(f32 value) {
     const i32 result{ static_cast<i32>(ceilf(value)) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline u32
-CeilF32ToU32(f32 value) {
+CeilToU32(f32 value) {
     ASSERT(value >= 0);
     const u32 result{ static_cast<u32>(ceilf(value)) };
     return result;
@@ -130,14 +130,14 @@ Sqrt(f32 value) {
 
 NODISCARD
 INTERNAL inline u32
-AbsI32(i32 value) {
+Abs(i32 value) {
     const u32 result{ static_cast<u32>(abs(value)) };
     return result;
 }
 
 NODISCARD
 INTERNAL inline f32
-AbsF32(f32 value) {
+Abs(f32 value) {
     const f32 result{ fabsf(value) };
     return result;
 }
@@ -147,7 +147,7 @@ AbsF32(f32 value) {
  */
 NODISCARD
 INTERNAL inline f32
-ExpF32(f32 value) {
+Exp(f32 value) {
     const f32 result{ expf(value) };
     return result;
 }

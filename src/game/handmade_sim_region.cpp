@@ -433,10 +433,10 @@ SpeculativeCollide(SimEntity* mover, SimEntity* region, Vec3 testPos) {
         const f32 ground{ GetStairGround(region, GetEntityGroundPoint(mover)) };
         const f32 stepHeight{ 0.1f };
 #if 0
-        result = (AbsF32(GetEntityGroundPoint(mover).z - ground) > stepHeight) ||
+        result = (Abs(GetEntityGroundPoint(mover).z - ground) > stepHeight) ||
                  ((bary.y > 0.1f) && (bary.y < 0.9f));
 #else
-        result = (AbsF32(GetEntityGroundPoint(mover, testPos).z - ground) > stepHeight);
+        result = (Abs(GetEntityGroundPoint(mover, testPos).z - ground) > stepHeight);
 #endif
     }
 
@@ -798,7 +798,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     // Delta independent friction using exponential decay: e^(-kt)
     //if (hitWall) {
     //    const f32 frictionModifier{ 2.0f };
-    //    const f32 friction{ ExpF32(-frictionModifier * delta) };
+    //    const f32 friction{ Exp(-frictionModifier * delta) };
     //    entity->velocity *= friction;
     //}
 
@@ -806,7 +806,7 @@ MoveEntity(GameState* gameState, SimRegion* simRegion, SimEntity* entity, MoveSp
     const Vec3 velocity{ entity->velocity };
     if (velocity == Vec3::ZERO) {
         // Keep previous
-    } else if (AbsF32(velocity.x) > AbsF32(velocity.y)) {
+    } else if (Abs(velocity.x) > Abs(velocity.y)) {
         if (velocity.x > 0) {
             entity->facingDir = 3;
         } else {

@@ -106,7 +106,7 @@ IsCanonical(const World* world, Vec3 offset) {
 
 INTERNAL void
 ReCanonicalizeCoordinate(f32 chunkDim, i32* tileIndex, f32* relPos) {
-    const i32 offset{ RoundF32ToI32(*relPos / chunkDim) };
+    const i32 offset{ RoundToI32(*relPos / chunkDim) };
     // NOTE: Wrapping is not allowed so all coordinates are assumed to be within the safe margins
     *tileIndex += offset;
 

@@ -4,30 +4,30 @@
 //#include "game/handmade.h"
 
 //NODISCARD
-//INTERNAL inline i32 TruncateI64toI32(i64 value);
+//INTERNAL inline i32 Trunc(i64 value);
 //NODISCARD
-//INTERNAL inline u32 TruncateU64toU32(u64 value);
+//INTERNAL inline u32 Trunc(u64 value);
 //NODISCARD
-//INTERNAL inline f32 TruncateF64toF32(f64 value);
+//INTERNAL inline f32 Trunc(f64 value);
 //NODISCARD
-//INTERNAL inline i32 TruncateF32ToI32(f32 value);
+//INTERNAL inline i32 Trunc(f32 value);
 //NODISCARD
-//INTERNAL inline u32 TruncateF32ToU32(f32 value);
+//INTERNAL inline u32 Trunc(f32 value);
 
 //NODISCARD
-//INTERNAL inline i32 FloorF32ToI32(f32 value);
+//INTERNAL inline i32 FloorToI32(f32 value);
 //NODISCARD
-//INTERNAL inline u32 FloorF32ToU32(f32 value);
+//INTERNAL inline u32 FloorToU32(f32 value);
 
 //NODISCARD
-//INTERNAL inline i32 RoundF32ToI32(f32 value);
+//INTERNAL inline i32 RoundToI32(f32 value);
 //NODISCARD
-//INTERNAL inline u32 RoundF32ToU32(f32 value);
+//INTERNAL inline u32 RoundToU32(f32 value);
 
 //NODISCARD
-//INTERNAL inline i32 CeilF32ToI32(f32 value);
+//INTERNAL inline i32 CeilToI32(f32 value);
 //NODISCARD
-//INTERNAL inline u32 CeilF32ToU32(f32 value);
+//INTERNAL inline u32 CeilToU32(f32 value);
 
 //NODISCARD
 //INTERNAL inline f32 Sin(f32 angle);
@@ -40,12 +40,12 @@
 //INTERNAL inline f32 Sqrt(f32 value);
 
 //NODISCARD
-//INTERNAL inline u32 AbsI32(i32 value);
+//INTERNAL inline u32 Abs(i32 value);
 //NODISCARD
-//INTERNAL inline f32 AbsF32(f32 value);
+//INTERNAL inline f32 Abs(f32 value);
 
 //NODISCARD
-//INTERNAL inline f32 ExpF32(f32 value);
+//INTERNAL inline f32 Exp(f32 value);
 
 struct BitscanResult {
     bool32 found;

@@ -133,7 +133,7 @@ NODISCARD
 INTERNAL inline bool32
 IsNormalized(Vec3 v) {
     const f32 eps{ 0.001f };
-    const bool32 result{ AbsF32(LengthSq(v) - 1.0f) < eps };
+    const bool32 result{ Abs(LengthSq(v) - 1.0f) < eps };
     return result;
 }
 

@@ -229,7 +229,7 @@ SampleEnvironmentMap(Vec2 screenSpaceUV, Vec3 sampleDir, f32 roughness, Environm
     // TODO: This is hit every time...
     //ASSERT(sampleDir.y > 0.0f);
 
-    const i32 lodIndex{ RoundF32ToI32(roughness * static_cast<f32>(map->lod.size - 1)) };
+    const i32 lodIndex{ RoundToI32(roughness * static_cast<f32>(map->lod.size - 1)) };
     ASSERT(lodIndex < map->lod.size);
 
     auto* lod{ &map->lod[lodIndex] };
@@ -283,10 +283,8 @@ ChangeSaturation(LoadedBitmapInfo* buff, f32 saturation) {
             Vec4 result{ Vec3{ avg, avg, avg } + (saturation * delta), dest.a };
             result = Linear1ToSRGB255(result);
 
-            *destPtr = { (TruncateF32ToU32(result.a + 0.5f) << 24) |
-                         (TruncateF32ToU32(result.r + 0.5f) << 16) |
-                         (TruncateF32ToU32(result.g + 0.5f) << 8) |
-                         (TruncateF32ToU32(result.b + 0.5f) << 0) };
+            *destPtr = { (TruncToU32(result.a + 0.5f) << 24) | (TruncToU32(result.r + 0.5f) << 16) |
+                         (TruncToU32(result.g + 0.5f) << 8) | (TruncToU32(result.b + 0.5f) << 0) };
 
             ++destPtr;
         }
@@ -303,8 +301,8 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
         return;
     }
 
-    i32 roundedMinX{ RoundF32ToI32(xPos) };
-    i32 roundedMinY{ RoundF32ToI32(yPos) };
+    i32 roundedMinX{ RoundToI32(xPos) };
+    i32 roundedMinY{ RoundToI32(yPos) };
     i32 roundedMaxX{ roundedMinX + bitmap->width };
     i32 roundedMaxY{ roundedMinY + bitmap->height };
 
@@ -354,10 +352,8 @@ DrawBitmap(LoadedBitmapInfo* buff, const LoadedBitmapInfo* bitmap, f32 xPos, f32
             Vec4 result{ (dest * (1.0f - texel.a)) + texel };
             result = Linear1ToSRGB255(result);
 
-            *destPtr = { (TruncateF32ToU32(result.a + 0.5f) << 24) |
-                         (TruncateF32ToU32(result.r + 0.5f) << 16) |
-                         (TruncateF32ToU32(result.g + 0.5f) << 8) |
-                         (TruncateF32ToU32(result.b + 0.5f) << 0) };
+            *destPtr = { (TruncToU32(result.a + 0.5f) << 24) | (TruncToU32(result.r + 0.5f) << 16) |
+                         (TruncToU32(result.g + 0.5f) << 8) | (TruncToU32(result.b + 0.5f) << 0) };
 
             ++destPtr;
             ++srcPtr;
@@ -376,10 +372,10 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec4 color) {
     f32 b{ color.b };
     f32 a{ color.a };
 
-    i32 roundedMinX{ RoundF32ToI32(min.x) };
-    i32 roundedMinY{ RoundF32ToI32(min.y) };
-    i32 roundedMaxX{ RoundF32ToI32(max.x) };
-    i32 roundedMaxY{ RoundF32ToI32(max.y) };
+    i32 roundedMinX{ RoundToI32(min.x) };
+    i32 roundedMinY{ RoundToI32(min.y) };
+    i32 roundedMaxX{ RoundToI32(max.x) };
+    i32 roundedMaxY{ RoundToI32(max.y) };
 
     if (roundedMinX < 0) {
         roundedMinX = 0;
@@ -396,8 +392,8 @@ DrawRect(const LoadedBitmapInfo* buff, Vec2 min, Vec2 max, Vec4 color) {
     }
 
     // AA RR GG BB
-    const i32 roundedColor{ (RoundF32ToI32(a * 255.0f) << 24) | (RoundF32ToI32(r * 255.0f) << 16) |
-                            (RoundF32ToI32(g * 255.0f) << 8) | (RoundF32ToI32(b * 255.0f) << 0) };
+    const i32 roundedColor{ (RoundToI32(a * 255.0f) << 24) | (RoundToI32(r * 255.0f) << 16) |
+                            (RoundToI32(g * 255.0f) << 8) | (RoundToI32(b * 255.0f) << 0) };
 
     u8* memory{ static_cast<u8*>(buff->memory) };
     u8* row{ memory + (roundedMinX * bitmap_Bytes_Per_Pixel) + (roundedMinY * buff->pitch) };
@@ -424,10 +420,8 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     // Premultiply color
     color.rgb *= color.a;
     // AA RR GG BB
-    u32 colorRounded{ (RoundF32ToU32(color.a * 255.0f) << 24) |
-                      (RoundF32ToU32(color.r * 255.0f) << 16) |
-                      (RoundF32ToU32(color.g * 255.0f) << 8) |
-                      (RoundF32ToU32(color.b * 255.0f) << 0) };
+    u32 colorRounded{ (RoundToU32(color.a * 255.0f) << 24) | (RoundToU32(color.r * 255.0f) << 16) |
+                      (RoundToU32(color.g * 255.0f) << 8) | (RoundToU32(color.b * 255.0f) << 0) };
 
     const i32 widthMax{ buff->width - 1 };
     const i32 heightMax{ buff->height - 1 };
@@ -442,10 +436,10 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
 #if 1
     Array<Vec2, 4> points{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
     for (i32 i{}; i < points.size; ++i) {
-        const i32 floorX{ FloorF32ToI32(points[i].x) };
-        const i32 ceilX{ CeilF32ToI32(points[i].x) };
-        const i32 floorY{ FloorF32ToI32(points[i].y) };
-        const i32 ceilY{ CeilF32ToI32(points[i].y) };
+        const i32 floorX{ FloorToI32(points[i].x) };
+        const i32 ceilX{ CeilToI32(points[i].x) };
+        const i32 floorY{ FloorToI32(points[i].y) };
+        const i32 ceilY{ CeilToI32(points[i].y) };
 
         if (floorX < minX) {
             minX = floorX;
@@ -604,10 +598,10 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                 Vec4 blended{ (dest * (1.0f - texel.a)) + texel };
                 blended = Linear1ToSRGB255(blended);
 
-                *pixel = { (TruncateF32ToU32(blended.a + 0.5f) << 24) |
-                           (TruncateF32ToU32(blended.r + 0.5f) << 16) |
-                           (TruncateF32ToU32(blended.g + 0.5f) << 8) |
-                           (TruncateF32ToU32(blended.b + 0.5f) << 0) };
+                *pixel = { (TruncToU32(blended.a + 0.5f) << 24) |
+                           (TruncToU32(blended.r + 0.5f) << 16) |
+                           (TruncToU32(blended.g + 0.5f) << 8) |
+                           (TruncToU32(blended.b + 0.5f) << 0) };
 
                 END_TIMED_BLOCK(FillPixel);
             }
@@ -641,10 +635,8 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     // Premultiply color
     color.rgb *= color.a;
     // AA RR GG BB
-    u32 colorRounded{ (RoundF32ToU32(color.a * 255.0f) << 24) |
-                      (RoundF32ToU32(color.r * 255.0f) << 16) |
-                      (RoundF32ToU32(color.g * 255.0f) << 8) |
-                      (RoundF32ToU32(color.b * 255.0f) << 0) };
+    u32 colorRounded{ (RoundToU32(color.a * 255.0f) << 24) | (RoundToU32(color.r * 255.0f) << 16) |
+                      (RoundToU32(color.g * 255.0f) << 8) | (RoundToU32(color.b * 255.0f) << 0) };
 
     // TODO: IMPORTATN: stop doing this once we have real row loading
     const i32 widthMax{ buff->width - 1 - 3 };
@@ -660,10 +652,10 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 #if 1
     Array<Vec2, 4> points{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
     for (i32 i{}; i < points.size; ++i) {
-        const i32 floorX{ FloorF32ToI32(points[i].x) };
-        const i32 ceilX{ CeilF32ToI32(points[i].x) };
-        const i32 floorY{ FloorF32ToI32(points[i].y) };
-        const i32 ceilY{ CeilF32ToI32(points[i].y) };
+        const i32 floorX{ FloorToI32(points[i].x) };
+        const i32 ceilX{ CeilToI32(points[i].x) };
+        const i32 floorY{ FloorToI32(points[i].y) };
+        const i32 ceilY{ CeilToI32(points[i].y) };
 
         if (floorX < minX) {
             minX = floorX;
@@ -898,10 +890,10 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
             for (i32 i{}; i < 4; ++i) {
                 if (shouldFill[i]) {
-                    *(pixel + i) = { (TruncateF32ToU32(blendedA[i] + 0.5f) << 24) |
-                                     (TruncateF32ToU32(blendedR[i] + 0.5f) << 16) |
-                                     (TruncateF32ToU32(blendedG[i] + 0.5f) << 8) |
-                                     (TruncateF32ToU32(blendedB[i] + 0.5f) << 0) };
+                    *(pixel + i) = { (TruncToU32(blendedA[i] + 0.5f) << 24) |
+                                     (TruncToU32(blendedR[i] + 0.5f) << 16) |
+                                     (TruncToU32(blendedG[i] + 0.5f) << 8) |
+                                     (TruncToU32(blendedB[i] + 0.5f) << 0) };
                 }
             }
 

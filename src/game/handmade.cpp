@@ -517,8 +517,8 @@ MakeSphereDiffuseMap(LoadedBitmapInfo* bitmap, f32 cx = 1.0f, f32 cy = 1.0f) {
             const Vec4 color{ alpha * baseColor.r, alpha * baseColor.g, alpha * baseColor.b,
                               alpha };
 
-            *pixel++ = (RoundF32ToU32(color.a) << 24) | (RoundF32ToU32(color.r) << 16) |
-                       (RoundF32ToU32(color.g) << 8) | (RoundF32ToU32(color.b) << 0);
+            *pixel++ = (RoundToU32(color.a) << 24) | (RoundToU32(color.r) << 16) |
+                       (RoundToU32(color.g) << 8) | (RoundToU32(color.b) << 0);
         }
 
         row += bitmap->pitch;
