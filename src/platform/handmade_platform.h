@@ -36,23 +36,49 @@ extern "C" {
 #        undef COMPILER_LLVM
 #        define COMPILER_LLVM 1
 // Clang on windows also defines _MSC_VER this... it's a mess
-// On the other hand, the end result should be the same if clang pretends to be fully MSVC
-// compatible so it makes sense that way. However if we really want to fully exclusively know which
-// compiler we are using this just complicates things
+// On the other hand, from the source code's point of view it should be the same if the code is
+// compiled using MSVC or clang. clang pretends to be fully MSVC compatible so it makes sense that
+// way. However if we really want to fully exclusively know which compiler we are using this just
+// complicates things
 #    elif defined(_MSC_VER)
 #        undef COMPILER_MSVC
 #        define COMPILER_MSVC 1
 #    endif
 #endif
 
-// @Hack? figure out a better way to exclude debug cycle reads and inclusion of intrin.h
+// @Hack TODO: figure out a better way to exclude debug cycle reads and inclusion of intrin.h
 #if HANDMADE_WEB
 #    undef COMPILER_LLVM
 #    define COMPILER_LLVM 0
 #endif
 
-#if COMPILER_MSVC || COMPILER_LLVM
-#    include <intrin.h>
+/// SIMD
+
+// TODO: ARM64?
+// TODO: make SIMD a switch for the build script?
+#if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
+#    define HANDMADE_SIMD 1
+#    define HANDMADE_WASM_SIMD 0
+#elif defined(__EMSCRIPTEN__)
+#    define HANDMADE_SIMD 0
+#    define HANDMADE_WASM_SIMD 1
+#else
+#    define HANDMADE_SIMD 0
+#    define HANDMADE_WASM_SIMD 0
+#endif
+
+// This iffing requires explicit knowledge of the compiler, not some compiler conforming to one
+// anothers' features
+#if HANDMADE_SIMD
+#    if COMPILER_MSVC
+#        include <intrin.h>
+#    elif COMPILER_LLVM // || COMPILER_GCC
+// Clang (Windows, Linux, Mac), GCC (Linux)
+#        include <x86intrin.h>
+#    endif
+#elif HANDMADE_WASM_SIMD
+// TODO:
+//#    include <wasm_simd128.h>
 #endif
 
 /// Typedefs for common types
