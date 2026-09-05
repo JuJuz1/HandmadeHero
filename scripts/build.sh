@@ -365,9 +365,11 @@ elif [[ "$platform" == "web" ]]; then
         "${commonWarnings[@]}"
 
         -sUSE_SDL=2
-        -sINITIAL_MEMORY=134217728
+        -sINITIAL_MEMORY=134217728 # 128 MB
 
-        # -sASSERTIONS=1 -sSAFE_HEAP=1 -sSTACK_OVERFLOW_CHECK=1 -sALLOW_MEMORY_GROWTH=1
+        -sASSERTIONS=1 -sSAFE_HEAP=1 -sSTACK_OVERFLOW_CHECK=1 -sALLOW_MEMORY_GROWTH=1
+
+        -fsanitize=undefined,alignment
 
         # -sEXPORTED_FUNCTIONS=_main,_ToggleFullscreen -sEXPORTED_RUNTIME_METHODS=ccall,cwrap
 

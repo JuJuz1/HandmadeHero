@@ -59,7 +59,7 @@ extern "C" {
 #if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
 #    define HANDMADE_SIMD 1
 #    define HANDMADE_WASM_SIMD 0
-#elif defined(__EMSCRIPTEN__)
+#elif HANDMADE_WEB //defined(__EMSCRIPTEN__)
 #    define HANDMADE_SIMD 0
 #    define HANDMADE_WASM_SIMD 1
 #else
