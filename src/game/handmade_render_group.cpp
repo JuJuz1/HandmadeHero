@@ -702,7 +702,22 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     const f32 fixedCastY{ originY * heightMaxInv };
 
     const f32 inv255{ 1.0f / 255.0f };
+    const __m128 inv255x4{ _mm_set_ps1(inv255) };
     const f32 one255{ 255.0f };
+
+    __m128 mOne = _mm_set_ps1(1.0f);
+    __m128 mOne255x4 = _mm_set_ps1(255.0f);
+    __m128 mZero = _mm_set_ps1(0.0f);
+    __m128 colorRx4 = _mm_set_ps1(color.r);
+    __m128 colorGx4 = _mm_set_ps1(color.g);
+    __m128 colorBx4 = _mm_set_ps1(color.b);
+    __m128 colorAx4 = _mm_set_ps1(color.a);
+    __m128 nXAxisXx4 = _mm_set_ps1(nXAxis.x);
+    __m128 nXAxisYx4 = _mm_set_ps1(nXAxis.y);
+    __m128 nYAxisXx4 = _mm_set_ps1(nYAxis.x);
+    __m128 nYAxisYx4 = _mm_set_ps1(nYAxis.y);
+    __m128 originXx4 = _mm_set_ps1(origin.x);
+    __m128 originYx4 = _mm_set_ps1(origin.y);
 
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
@@ -712,42 +727,45 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; x += 4) {
 
-            // A bit nasty
-            f32 texel1R[4];
-            f32 texel1G[4];
-            f32 texel1B[4];
-            f32 texel1A[4];
+            __m128 texel1R = _mm_set_ps1(0);
+            __m128 texel1G = _mm_set_ps1(0);
+            __m128 texel1B = _mm_set_ps1(0);
+            __m128 texel1A = _mm_set_ps1(0);
 
-            f32 texel2R[4];
-            f32 texel2G[4];
-            f32 texel2B[4];
-            f32 texel2A[4];
+            __m128 texel2R = _mm_set_ps1(0);
+            __m128 texel2G = _mm_set_ps1(0);
+            __m128 texel2B = _mm_set_ps1(0);
+            __m128 texel2A = _mm_set_ps1(0);
 
-            f32 texel3R[4];
-            f32 texel3G[4];
-            f32 texel3B[4];
-            f32 texel3A[4];
+            __m128 texel3R = _mm_set_ps1(0);
+            __m128 texel3G = _mm_set_ps1(0);
+            __m128 texel3B = _mm_set_ps1(0);
+            __m128 texel3A = _mm_set_ps1(0);
 
-            f32 texel4R[4];
-            f32 texel4G[4];
-            f32 texel4B[4];
-            f32 texel4A[4];
+            __m128 texel4R = _mm_set_ps1(0);
+            __m128 texel4G = _mm_set_ps1(0);
+            __m128 texel4B = _mm_set_ps1(0);
+            __m128 texel4A = _mm_set_ps1(0);
 
             // Load destination
-            f32 destR[4];
-            f32 destG[4];
-            f32 destB[4];
-            f32 destA[4];
+            __m128 destR = _mm_set_ps1(0);
+            __m128 destG = _mm_set_ps1(0);
+            __m128 destB = _mm_set_ps1(0);
+            __m128 destA = _mm_set_ps1(0);
 
-            f32 blendedR[4];
-            f32 blendedG[4];
-            f32 blendedB[4];
-            f32 blendedA[4];
+            __m128 blendedR = _mm_set_ps1(0);
+            __m128 blendedG = _mm_set_ps1(0);
+            __m128 blendedB = _mm_set_ps1(0);
+            __m128 blendedA = _mm_set_ps1(0);
 
-            f32 fX[4];
-            f32 fY[4];
+            __m128 fX = _mm_set_ps1(0);
+            __m128 fY = _mm_set_ps1(0);
 
             bool32 shouldFill[4];
+
+            // Helper macros for some cumbersome intrinsic syntax
+#define MM_SQUARE(a) _mm_mul_ps((a), (a))
+#define M(a, i) (reinterpret_cast<f32*>(&(a)))[(i)]
 
             for (i32 i{}; i < 4; ++i) {
                 const Vec2 pixelPos{ x + i, y };
@@ -768,8 +786,8 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                     ASSERT(roundedX >= 0 && roundedX < texture->width);
                     ASSERT(roundedY >= 0 && roundedY < texture->height);
 
-                    fX[i] = static_cast<f32>(texelX - roundedX);
-                    fY[i] = static_cast<f32>(texelY - roundedY);
+                    M(fX, i) = static_cast<f32>(texelX - roundedX);
+                    M(fY, i) = static_cast<f32>(texelY - roundedY);
 
                     // BilinearSampleFromTex
                     u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
@@ -780,120 +798,123 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                     u32 sample4{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
 
                     // SRGBBilinearBlend, unpacks
-                    texel1R[i] = static_cast<f32>((sample1 >> 16) & 0xFF);
-                    texel1G[i] = static_cast<f32>((sample1 >> 8) & 0xFF);
-                    texel1B[i] = static_cast<f32>((sample1 >> 0) & 0xFF);
-                    texel1A[i] = static_cast<f32>((sample1 >> 24) & 0xFF);
+                    M(texel1R, i) = static_cast<f32>((sample1 >> 16) & 0xFF);
+                    M(texel1G, i) = static_cast<f32>((sample1 >> 8) & 0xFF);
+                    M(texel1B, i) = static_cast<f32>((sample1 >> 0) & 0xFF);
+                    M(texel1A, i) = static_cast<f32>((sample1 >> 24) & 0xFF);
 
-                    texel2R[i] = static_cast<f32>((sample2 >> 16) & 0xFF);
-                    texel2G[i] = static_cast<f32>((sample2 >> 8) & 0xFF);
-                    texel2B[i] = static_cast<f32>((sample2 >> 0) & 0xFF);
-                    texel2A[i] = static_cast<f32>((sample2 >> 24) & 0xFF);
+                    M(texel2R, i) = static_cast<f32>((sample2 >> 16) & 0xFF);
+                    M(texel2G, i) = static_cast<f32>((sample2 >> 8) & 0xFF);
+                    M(texel2B, i) = static_cast<f32>((sample2 >> 0) & 0xFF);
+                    M(texel2A, i) = static_cast<f32>((sample2 >> 24) & 0xFF);
 
-                    texel3R[i] = static_cast<f32>((sample3 >> 16) & 0xFF);
-                    texel3G[i] = static_cast<f32>((sample3 >> 8) & 0xFF);
-                    texel3B[i] = static_cast<f32>((sample3 >> 0) & 0xFF);
-                    texel3A[i] = static_cast<f32>((sample3 >> 24) & 0xFF);
+                    M(texel3R, i) = static_cast<f32>((sample3 >> 16) & 0xFF);
+                    M(texel3G, i) = static_cast<f32>((sample3 >> 8) & 0xFF);
+                    M(texel3B, i) = static_cast<f32>((sample3 >> 0) & 0xFF);
+                    M(texel3A, i) = static_cast<f32>((sample3 >> 24) & 0xFF);
 
-                    texel4R[i] = static_cast<f32>((sample4 >> 16) & 0xFF);
-                    texel4G[i] = static_cast<f32>((sample4 >> 8) & 0xFF);
-                    texel4B[i] = static_cast<f32>((sample4 >> 0) & 0xFF);
-                    texel4A[i] = static_cast<f32>((sample4 >> 24) & 0xFF);
+                    M(texel4R, i) = static_cast<f32>((sample4 >> 16) & 0xFF);
+                    M(texel4G, i) = static_cast<f32>((sample4 >> 8) & 0xFF);
+                    M(texel4B, i) = static_cast<f32>((sample4 >> 0) & 0xFF);
+                    M(texel4A, i) = static_cast<f32>((sample4 >> 24) & 0xFF);
 
                     // Load destination
                     // Basically Unpack4x8, flattened
-                    destR[i] = static_cast<f32>((*(pixel + i) >> 16) & 0xFF);
-                    destG[i] = static_cast<f32>((*(pixel + i) >> 8) & 0xFF);
-                    destB[i] = static_cast<f32>((*(pixel + i) >> 0) & 0xFF);
-                    destA[i] = static_cast<f32>((*(pixel + i) >> 24) & 0xFF);
+                    M(destR, i) = static_cast<f32>((*(pixel + i) >> 16) & 0xFF);
+                    M(destG, i) = static_cast<f32>((*(pixel + i) >> 8) & 0xFF);
+                    M(destB, i) = static_cast<f32>((*(pixel + i) >> 0) & 0xFF);
+                    M(destA, i) = static_cast<f32>((*(pixel + i) >> 24) & 0xFF);
                 }
             }
 
+            // Convert texture from sRGB to linear
+            texel1R = MM_SQUARE(_mm_mul_ps(inv255x4, texel1R));
+            texel1G = MM_SQUARE(_mm_mul_ps(inv255x4, texel1G));
+            texel1B = MM_SQUARE(_mm_mul_ps(inv255x4, texel1B));
+            texel1A = _mm_mul_ps(inv255x4, texel1A);
+
+            texel2R = MM_SQUARE(_mm_mul_ps(inv255x4, texel2R));
+            texel2G = MM_SQUARE(_mm_mul_ps(inv255x4, texel2G));
+            texel2B = MM_SQUARE(_mm_mul_ps(inv255x4, texel2B));
+            texel2A = _mm_mul_ps(inv255x4, texel2A);
+
+            texel3R = MM_SQUARE(_mm_mul_ps(inv255x4, texel3R));
+            texel3G = MM_SQUARE(_mm_mul_ps(inv255x4, texel3G));
+            texel3B = MM_SQUARE(_mm_mul_ps(inv255x4, texel3B));
+            texel3A = _mm_mul_ps(inv255x4, texel3A);
+
+            texel4R = MM_SQUARE(_mm_mul_ps(inv255x4, texel4R));
+            texel4G = MM_SQUARE(_mm_mul_ps(inv255x4, texel4G));
+            texel4B = MM_SQUARE(_mm_mul_ps(inv255x4, texel4B));
+            texel4A = _mm_mul_ps(inv255x4, texel4A);
+
+            // Bilinear texture blend
+            __m128 invfX = _mm_sub_ps(mOne, fX);
+            __m128 invfY = _mm_sub_ps(mOne, fY);
+
+            // Coefficients for lerp
+            __m128 c0 = _mm_mul_ps(invfX, invfY);
+            __m128 c1 = _mm_mul_ps(invfY, fX);
+            __m128 c2 = _mm_mul_ps(fY, invfX);
+            __m128 c3 = _mm_mul_ps(fY, fX);
+
+            __m128 texelR =
+                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1R), _mm_mul_ps(c1, texel2R)),
+                                      _mm_mul_ps(c2, texel3R)),
+                           _mm_mul_ps(c3, texel4R));
+            __m128 texelG =
+                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1G), _mm_mul_ps(c1, texel2G)),
+                                      _mm_mul_ps(c2, texel3G)),
+                           _mm_mul_ps(c3, texel4G));
+            __m128 texelB =
+                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1B), _mm_mul_ps(c1, texel2B)),
+                                      _mm_mul_ps(c2, texel3B)),
+                           _mm_mul_ps(c3, texel4B));
+            __m128 texelA =
+                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1A), _mm_mul_ps(c1, texel2A)),
+                                      _mm_mul_ps(c2, texel3A)),
+                           _mm_mul_ps(c3, texel4A));
+
+            // Modulate by incoming color
+            texelR = _mm_mul_ps(texelR, colorRx4);
+            texelG = _mm_mul_ps(texelG, colorGx4);
+            texelB = _mm_mul_ps(texelB, colorBx4);
+            texelA = _mm_mul_ps(texelA, colorAx4);
+
             for (i32 i{}; i < 4; ++i) {
-                // Convert texture from sRGB to linear
-                //texel1R = Square(texel1R * inv255);
-                //texel1G = Square(texel1G * inv255);
-                //texel1B = Square(texel1B * inv255);
-                //texel1A = texel1A * inv255;
-
-                // Flattened
-                texel1R[i] = texel1R[i] * inv255;
-                texel1R[i] *= texel1R[i];
-                texel1G[i] = texel1G[i] * inv255;
-                texel1G[i] *= texel1G[i];
-                texel1B[i] = texel1B[i] * inv255;
-                texel1B[i] *= texel1B[i];
-                texel1A[i] = texel1A[i] * inv255;
-                //
-
-                texel2R[i] = Square(texel2R[i] * inv255);
-                texel2G[i] = Square(texel2G[i] * inv255);
-                texel2B[i] = Square(texel2B[i] * inv255);
-                texel2A[i] = texel2A[i] * inv255;
-
-                texel3R[i] = Square(texel3R[i] * inv255);
-                texel3G[i] = Square(texel3G[i] * inv255);
-                texel3B[i] = Square(texel3B[i] * inv255);
-                texel3A[i] = texel3A[i] * inv255;
-
-                texel4R[i] = Square(texel4R[i] * inv255);
-                texel4G[i] = Square(texel4G[i] * inv255);
-                texel4B[i] = Square(texel4B[i] * inv255);
-                texel4A[i] = texel4A[i] * inv255;
-
-                // Bilinear texture blend
-                f32 invfX{ 1.0f - fX[i] };
-                f32 invfY{ 1.0f - fY[i] };
-
-                // Coefficients for lerp
-                f32 c0{ invfY * invfX };
-                f32 c1{ invfY * fX[i] };
-                f32 c2{ fY[i] * invfX };
-                f32 c3{ fY[i] * fX[i] };
-
-                f32 texelR{ c0 * texel1R[i] + c1 * texel2R[i] + c2 * texel3R[i] + c3 * texel4R[i] };
-                f32 texelG{ c0 * texel1G[i] + c1 * texel2G[i] + c2 * texel3G[i] + c3 * texel4G[i] };
-                f32 texelB{ c0 * texel1B[i] + c1 * texel2B[i] + c2 * texel3B[i] + c3 * texel4B[i] };
-                f32 texelA{ c0 * texel1A[i] + c1 * texel2A[i] + c2 * texel3A[i] + c3 * texel4A[i] };
-
-                // Modulate by incoming color
-                texelR = texelR * color.r;
-                texelG = texelG * color.g;
-                texelB = texelB * color.b;
-                texelA = texelA * color.a;
-
                 // Clamp colors
-                texelR = Clamp01(texelR);
-                texelG = Clamp01(texelG);
-                texelB = Clamp01(texelB);
+                M(texelR, i) = Clamp01(M(texelR, i));
+                M(texelG, i) = Clamp01(M(texelG, i));
+                M(texelB, i) = Clamp01(M(texelB, i));
                 //texel.a = Clamp01(texel.a);
 
                 // Go from sRGB to linear
-                destR[i] = Square(destR[i] * inv255);
-                destG[i] = Square(destG[i] * inv255);
-                destB[i] = Square(destB[i] * inv255);
-                destA[i] = destA[i] * inv255;
+                M(destR, i) = Square(M(destR, i) * inv255);
+                M(destG, i) = Square(M(destG, i) * inv255);
+                M(destB, i) = Square(M(destB, i) * inv255);
+                M(destA, i) = M(destA, i) * inv255;
 
                 // Destination blend
-                f32 invTexelA{ 1.0f - texelA };
-                blendedR[i] = (destR[i] * invTexelA) + texelR;
-                blendedG[i] = (destG[i] * invTexelA) + texelG;
-                blendedB[i] = (destB[i] * invTexelA) + texelB;
-                blendedA[i] = (destA[i] * invTexelA) + texelA;
+                __m128 invTexelA = _mm_sub_ps(mOne, texelA);
+
+                blendedR = _mm_add_ps(_mm_mul_ps(invTexelA, destR), texelR);
+                blendedG = _mm_add_ps(_mm_mul_ps(invTexelA, destG), texelG);
+                blendedB = _mm_add_ps(_mm_mul_ps(invTexelA, destB), texelB);
+                blendedA = _mm_add_ps(_mm_mul_ps(invTexelA, destA), texelA);
 
                 // Go from linear to sRGB
-                blendedR[i] = Sqrt(blendedR[i]) * one255;
-                blendedG[i] = Sqrt(blendedG[i]) * one255;
-                blendedB[i] = Sqrt(blendedB[i]) * one255;
-                blendedA[i] = blendedA[i] * one255;
+                blendedR = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedR));
+                blendedG = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedG));
+                blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
+                blendedA = _mm_mul_ps(mOne255x4, blendedA);
             }
 
             for (i32 i{}; i < 4; ++i) {
                 if (shouldFill[i]) {
-                    *(pixel + i) = { (TruncToU32(blendedA[i] + 0.5f) << 24) |
-                                     (TruncToU32(blendedR[i] + 0.5f) << 16) |
-                                     (TruncToU32(blendedG[i] + 0.5f) << 8) |
-                                     (TruncToU32(blendedB[i] + 0.5f) << 0) };
+                    *(pixel + i) = { (TruncToU32(M(blendedA, i) + 0.5f) << 24) |
+                                     (TruncToU32(M(blendedR, i) + 0.5f) << 16) |
+                                     (TruncToU32(M(blendedG, i) + 0.5f) << 8) |
+                                     (TruncToU32(M(blendedB, i) + 0.5f) << 0) };
                 }
             }
 
