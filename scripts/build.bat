@@ -127,6 +127,8 @@ set "outExe=-Fe:win32_handmade.exe"
 
 if "%mode%" == "release" (
     set "modeFlags=-MT -O2"
+    rem check if we should use these
+    rem set "modeFlags=!modeFlags! -fp:fast -fp:except-"
     set "dllFlags=-LD"
 )
 

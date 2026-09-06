@@ -709,6 +709,7 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     __m128 mOne = _mm_set_ps1(1.0f);
     __m128 mOne255x4 = _mm_set_ps1(255.0f);
     __m128 mZero = _mm_set_ps1(0.0f);
+    __m128 mHalfx4 = _mm_set_ps1(0.5f);
     __m128 colorRx4 = _mm_set_ps1(color.r);
     __m128 colorGx4 = _mm_set_ps1(color.g);
     __m128 colorBx4 = _mm_set_ps1(color.b);
@@ -882,21 +883,17 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
             __m128 c3 = _mm_mul_ps(fY, fX);
 
             __m128 texelR =
-                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1R), _mm_mul_ps(c1, texel2R)),
-                                      _mm_mul_ps(c2, texel3R)),
-                           _mm_mul_ps(c3, texel4R));
+                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1R), _mm_mul_ps(c1, texel2R)),
+                           _mm_add_ps(_mm_mul_ps(c2, texel3R), _mm_mul_ps(c3, texel4R)));
             __m128 texelG =
-                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1G), _mm_mul_ps(c1, texel2G)),
-                                      _mm_mul_ps(c2, texel3G)),
-                           _mm_mul_ps(c3, texel4G));
+                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1G), _mm_mul_ps(c1, texel2G)),
+                           _mm_add_ps(_mm_mul_ps(c2, texel3G), _mm_mul_ps(c3, texel4G)));
             __m128 texelB =
-                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1B), _mm_mul_ps(c1, texel2B)),
-                                      _mm_mul_ps(c2, texel3B)),
-                           _mm_mul_ps(c3, texel4B));
+                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1B), _mm_mul_ps(c1, texel2B)),
+                           _mm_add_ps(_mm_mul_ps(c2, texel3B), _mm_mul_ps(c3, texel4B)));
             __m128 texelA =
-                _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1A), _mm_mul_ps(c1, texel2A)),
-                                      _mm_mul_ps(c2, texel3A)),
-                           _mm_mul_ps(c3, texel4A));
+                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1A), _mm_mul_ps(c1, texel2A)),
+                           _mm_add_ps(_mm_mul_ps(c2, texel3A), _mm_mul_ps(c3, texel4A)));
 
             // Modulate by incoming color
             texelR = _mm_mul_ps(texelR, colorRx4);
@@ -905,13 +902,13 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
             texelA = _mm_mul_ps(texelA, colorAx4);
 
             //for (i32 i{}; i < 4; ++i) {
-            //    // Clamp colors
             //    M(texelR, i) = Clamp01(M(texelR, i));
             //    M(texelG, i) = Clamp01(M(texelG, i));
             //    M(texelB, i) = Clamp01(M(texelB, i));
             //    //texel.a = Clamp01(texel.a);
             //}
 
+            // Clamp colors
             texelR = _mm_min_ps(_mm_max_ps(texelR, mZero), mOne);
             texelG = _mm_min_ps(_mm_max_ps(texelG, mZero), mOne);
             texelB = _mm_min_ps(_mm_max_ps(texelB, mZero), mOne);
@@ -936,15 +933,24 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
             blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
             blendedA = _mm_mul_ps(mOne255x4, blendedA);
 
-            for (i32 i{}; i < 4; ++i) {
-                if (shouldFill[i]) {
-                    *(pixel + i) = { (TruncToU32(M(blendedA, i) + 0.5f) << 24) |
-                                     (TruncToU32(M(blendedR, i) + 0.5f) << 16) |
-                                     (TruncToU32(M(blendedG, i) + 0.5f) << 8) |
-                                     (TruncToU32(M(blendedB, i) + 0.5f) << 0) };
-                }
-            }
+            // TODO: Set rounding mode to nearest?
+            __m128i intR = _mm_cvttps_epi32(_mm_add_ps(blendedR, mHalfx4));
+            __m128i intG = _mm_cvttps_epi32(_mm_add_ps(blendedG, mHalfx4));
+            __m128i intB = _mm_cvttps_epi32(_mm_add_ps(blendedB, mHalfx4));
+            __m128i intA = _mm_cvttps_epi32(_mm_add_ps(blendedA, mHalfx4));
 
+            // Shift properly and write to pixel
+            __m128i shiftedR = _mm_slli_epi32(intR, 16);
+            __m128i shiftedG = _mm_slli_epi32(intG, 8);
+            __m128i shiftedB = intB;
+            __m128i shiftedA = _mm_slli_epi32(intB, 24);
+
+            __m128i out =
+                _mm_or_si128(_mm_or_si128(shiftedR, shiftedG), _mm_or_si128(shiftedB, shiftedA));
+
+            // Alignment...
+            // TODO: Write only where shouldFill[i] == true
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(pixel), out);
             pixel += 4;
         }
 
