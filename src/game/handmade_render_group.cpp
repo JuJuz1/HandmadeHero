@@ -709,7 +709,7 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     __m128 mOne = _mm_set_ps1(1.0f);
     __m128 mOne255x4 = _mm_set_ps1(255.0f);
     __m128 mZero = _mm_set_ps1(0.0f);
-    __m128 mHalfx4 = _mm_set_ps1(0.5f);
+    __m128i maskFF = _mm_set1_epi32(0xFF);
     __m128 colorRx4 = _mm_set_ps1(color.r);
     __m128 colorGx4 = _mm_set_ps1(color.g);
     __m128 colorBx4 = _mm_set_ps1(color.b);
@@ -721,6 +721,9 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
     __m128 originXx4 = _mm_set_ps1(origin.x);
     __m128 originYx4 = _mm_set_ps1(origin.y);
 
+    __m128 widthM2 = _mm_set_ps1(static_cast<f32>(texture->width - 2));
+    __m128 heightM2 = _mm_set_ps1(static_cast<f32>(texture->height - 2));
+
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
 
@@ -729,45 +732,10 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; x += 4) {
 
-            __m128 texel1R = _mm_set_ps1(0);
-            __m128 texel1G = _mm_set_ps1(0);
-            __m128 texel1B = _mm_set_ps1(0);
-            __m128 texel1A = _mm_set_ps1(0);
-
-            __m128 texel2R = _mm_set_ps1(0);
-            __m128 texel2G = _mm_set_ps1(0);
-            __m128 texel2B = _mm_set_ps1(0);
-            __m128 texel2A = _mm_set_ps1(0);
-
-            __m128 texel3R = _mm_set_ps1(0);
-            __m128 texel3G = _mm_set_ps1(0);
-            __m128 texel3B = _mm_set_ps1(0);
-            __m128 texel3A = _mm_set_ps1(0);
-
-            __m128 texel4R = _mm_set_ps1(0);
-            __m128 texel4G = _mm_set_ps1(0);
-            __m128 texel4B = _mm_set_ps1(0);
-            __m128 texel4A = _mm_set_ps1(0);
-
-            // Load destination
-            __m128 destR = _mm_set_ps1(0);
-            __m128 destG = _mm_set_ps1(0);
-            __m128 destB = _mm_set_ps1(0);
-            __m128 destA = _mm_set_ps1(0);
-
-            __m128 blendedR = _mm_set_ps1(0);
-            __m128 blendedG = _mm_set_ps1(0);
-            __m128 blendedB = _mm_set_ps1(0);
-            __m128 blendedA = _mm_set_ps1(0);
-
-            __m128 fX = _mm_set_ps1(0);
-            __m128 fY = _mm_set_ps1(0);
-
-            bool32 shouldFill[4];
-
             // Helper macros for some cumbersome intrinsic syntax
 #define MM_SQUARE(a) _mm_mul_ps((a), (a))
 #define M(a, i) (reinterpret_cast<f32*>(&(a)))[(i)]
+#define Mi(a, i) (reinterpret_cast<u32*>(&(a)))[(i)]
 
             __m128 pixelPosX = _mm_set_ps(static_cast<f32>(x + 3), static_cast<f32>(x + 2),
                                           static_cast<f32>(x + 1), static_cast<f32>(x + 0));
@@ -777,180 +745,182 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
             __m128 dy = _mm_sub_ps(pixelPosY, originYx4);
             __m128 u = _mm_add_ps(_mm_mul_ps(dx, nXAxisXx4), _mm_mul_ps(dy, nXAxisYx4));
             __m128 v = _mm_add_ps(_mm_mul_ps(dx, nYAxisXx4), _mm_mul_ps(dy, nYAxisYx4));
+            __m128i writeMask = _mm_castps_si128(
+                _mm_and_ps(_mm_and_ps(_mm_cmpge_ps(u, mZero), _mm_cmple_ps(u, mOne)),
+                           _mm_and_ps(_mm_cmpge_ps(v, mZero), _mm_cmple_ps(v, mOne))));
 
-            for (i32 i{}; i < 4; ++i) {
-                // In a non-release build this way costs an additional ~80 cycles, ridicilous!
-                // In release mode there's no problem
-                //#if 1
-                //                const Vec2 pixelPos{ x + i, y };
-                //                const Vec2 d{ pixelPos - origin };
+            //if (_mm_movemask_epi8(writeMask))
+            {
+                __m128i originalDest = _mm_loadu_si128(reinterpret_cast<__m128i*>(pixel));
 
-                //                const f32 u{ Dot(d, nXAxis) };
-                //                const f32 v{ Dot(d, nYAxis) };
-                //#else
-                //                        const f32 pixelPosX = static_cast<f32>(x + i);
-                //                        const f32 pixelPosY = static_cast<f32>(y);
-                //                        const f32 dX{ pixelPosX - origin.x };
-                //                        const f32 dY{ pixelPosY - origin.y };
+                u = _mm_min_ps(_mm_max_ps(u, mZero), mOne);
+                v = _mm_min_ps(_mm_max_ps(v, mZero), mOne);
 
-                //                        const f32 u{ dX * nXAxis.x + dY * nXAxis.y };
-                //                        const f32 v{ dX * nYAxis.x + dY * nYAxis.y };
-                //#endif
+                __m128 texelX = _mm_mul_ps(u, widthM2);
+                __m128 texelY = _mm_mul_ps(v, heightM2);
 
-                shouldFill[i] = ((M(u, i) >= 0.0f) && (M(u, i) <= 1.0f) && (M(v, i) >= 0.0f) &&
-                                 (M(v, i) <= 1.0f));
+                __m128i fetchXx4 = _mm_cvttps_epi32(texelX);
+                __m128i fetchYx4 = _mm_cvttps_epi32(texelY);
 
-                if (shouldFill[i]) {
-                    // Pretend the texture is 1 pixel smaller in both dimensions
-                    const f32 texelX{ M(u, i) * static_cast<f32>(texture->width - 2) };
-                    const f32 texelY{ M(v, i) * static_cast<f32>(texture->height - 2) };
+                __m128 fX = _mm_sub_ps(texelX, _mm_cvtepi32_ps(fetchXx4));
+                __m128 fY = _mm_sub_ps(texelY, _mm_cvtepi32_ps(fetchYx4));
 
-                    const i32 roundedX{ static_cast<i32>(texelX) };
-                    const i32 roundedY{ static_cast<i32>(texelY) };
-                    ASSERT(roundedX >= 0 && roundedX < texture->width);
-                    ASSERT(roundedY >= 0 && roundedY < texture->height);
+                __m128i sample1;
+                __m128i sample2;
+                __m128i sample3;
+                __m128i sample4;
 
-                    M(fX, i) = static_cast<f32>(texelX - roundedX);
-                    M(fY, i) = static_cast<f32>(texelY - roundedY);
+                for (i32 i{}; i < 4; ++i) {
+                    const i32 fetchX = Mi(fetchXx4, i);
+                    const i32 fetchY = Mi(fetchYx4, i);
+                    ASSERT(fetchX >= 0 && fetchX < texture->width);
+                    ASSERT(fetchY >= 0 && fetchY < texture->height);
 
                     // BilinearSampleFromTex
-                    u8* texelPtr{ static_cast<u8*>(texture->memory) + roundedY * texture->pitch +
-                                  roundedX * sizeof(u32) };
-                    u32 sample1{ *reinterpret_cast<u32*>(texelPtr) };
-                    u32 sample2{ *reinterpret_cast<u32*>(texelPtr + sizeof(u32)) };
-                    u32 sample3{ *reinterpret_cast<u32*>(texelPtr + texture->pitch) };
-                    u32 sample4{ *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32)) };
-
-                    // SRGBBilinearBlend, unpacks
-                    M(texel1R, i) = static_cast<f32>((sample1 >> 16) & 0xFF);
-                    M(texel1G, i) = static_cast<f32>((sample1 >> 8) & 0xFF);
-                    M(texel1B, i) = static_cast<f32>((sample1 >> 0) & 0xFF);
-                    M(texel1A, i) = static_cast<f32>((sample1 >> 24) & 0xFF);
-
-                    M(texel2R, i) = static_cast<f32>((sample2 >> 16) & 0xFF);
-                    M(texel2G, i) = static_cast<f32>((sample2 >> 8) & 0xFF);
-                    M(texel2B, i) = static_cast<f32>((sample2 >> 0) & 0xFF);
-                    M(texel2A, i) = static_cast<f32>((sample2 >> 24) & 0xFF);
-
-                    M(texel3R, i) = static_cast<f32>((sample3 >> 16) & 0xFF);
-                    M(texel3G, i) = static_cast<f32>((sample3 >> 8) & 0xFF);
-                    M(texel3B, i) = static_cast<f32>((sample3 >> 0) & 0xFF);
-                    M(texel3A, i) = static_cast<f32>((sample3 >> 24) & 0xFF);
-
-                    M(texel4R, i) = static_cast<f32>((sample4 >> 16) & 0xFF);
-                    M(texel4G, i) = static_cast<f32>((sample4 >> 8) & 0xFF);
-                    M(texel4B, i) = static_cast<f32>((sample4 >> 0) & 0xFF);
-                    M(texel4A, i) = static_cast<f32>((sample4 >> 24) & 0xFF);
-
-                    // Load destination
-                    // Basically Unpack4x8, flattened
-                    M(destR, i) = static_cast<f32>((*(pixel + i) >> 16) & 0xFF);
-                    M(destG, i) = static_cast<f32>((*(pixel + i) >> 8) & 0xFF);
-                    M(destB, i) = static_cast<f32>((*(pixel + i) >> 0) & 0xFF);
-                    M(destA, i) = static_cast<f32>((*(pixel + i) >> 24) & 0xFF);
+                    u8* texelPtr{ static_cast<u8*>(texture->memory) + fetchY * texture->pitch +
+                                  fetchX * sizeof(u32) };
+                    Mi(sample1, i) = *reinterpret_cast<u32*>(texelPtr);
+                    Mi(sample2, i) = *reinterpret_cast<u32*>(texelPtr + sizeof(u32));
+                    Mi(sample3, i) = *reinterpret_cast<u32*>(texelPtr + texture->pitch);
+                    Mi(sample4, i) =
+                        *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32));
                 }
+
+                // Unpack bilinear samples
+                __m128 texel1B = _mm_cvtepi32_ps(_mm_and_si128(sample1, maskFF));
+                __m128 texel1G = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample1, 8), maskFF));
+                __m128 texel1R =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample1, 16), maskFF));
+                __m128 texel1A =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample1, 24), maskFF));
+
+                __m128 texel2B = _mm_cvtepi32_ps(_mm_and_si128(sample2, maskFF));
+                __m128 texel2G = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample2, 8), maskFF));
+                __m128 texel2R =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample2, 16), maskFF));
+                __m128 texel2A =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample2, 24), maskFF));
+
+                __m128 texel3B = _mm_cvtepi32_ps(_mm_and_si128(sample3, maskFF));
+                __m128 texel3G = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample3, 8), maskFF));
+                __m128 texel3R =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample3, 16), maskFF));
+                __m128 texel3A =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample3, 24), maskFF));
+
+                __m128 texel4B = _mm_cvtepi32_ps(_mm_and_si128(sample4, maskFF));
+                __m128 texel4G = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample4, 8), maskFF));
+                __m128 texel4R =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample4, 16), maskFF));
+                __m128 texel4A =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample4, 24), maskFF));
+
+                // Load destination
+                __m128 destB = _mm_cvtepi32_ps(_mm_and_si128(originalDest, maskFF));
+                __m128 destG =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(originalDest, 8), maskFF));
+                __m128 destR =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(originalDest, 16), maskFF));
+                __m128 destA =
+                    _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(originalDest, 24), maskFF));
+
+                // Convert texture from sRGB to linear
+                texel1R = MM_SQUARE(_mm_mul_ps(inv255x4, texel1R));
+                texel1G = MM_SQUARE(_mm_mul_ps(inv255x4, texel1G));
+                texel1B = MM_SQUARE(_mm_mul_ps(inv255x4, texel1B));
+                texel1A = _mm_mul_ps(inv255x4, texel1A);
+
+                texel2R = MM_SQUARE(_mm_mul_ps(inv255x4, texel2R));
+                texel2G = MM_SQUARE(_mm_mul_ps(inv255x4, texel2G));
+                texel2B = MM_SQUARE(_mm_mul_ps(inv255x4, texel2B));
+                texel2A = _mm_mul_ps(inv255x4, texel2A);
+
+                texel3R = MM_SQUARE(_mm_mul_ps(inv255x4, texel3R));
+                texel3G = MM_SQUARE(_mm_mul_ps(inv255x4, texel3G));
+                texel3B = MM_SQUARE(_mm_mul_ps(inv255x4, texel3B));
+                texel3A = _mm_mul_ps(inv255x4, texel3A);
+
+                texel4R = MM_SQUARE(_mm_mul_ps(inv255x4, texel4R));
+                texel4G = MM_SQUARE(_mm_mul_ps(inv255x4, texel4G));
+                texel4B = MM_SQUARE(_mm_mul_ps(inv255x4, texel4B));
+                texel4A = _mm_mul_ps(inv255x4, texel4A);
+
+                // Bilinear texture blend
+                __m128 invfX = _mm_sub_ps(mOne, fX);
+                __m128 invfY = _mm_sub_ps(mOne, fY);
+
+                // Coefficients for lerp
+                __m128 c0 = _mm_mul_ps(invfX, invfY);
+                __m128 c1 = _mm_mul_ps(invfY, fX);
+                __m128 c2 = _mm_mul_ps(fY, invfX);
+                __m128 c3 = _mm_mul_ps(fY, fX);
+
+                __m128 texelR =
+                    _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1R), _mm_mul_ps(c1, texel2R)),
+                               _mm_add_ps(_mm_mul_ps(c2, texel3R), _mm_mul_ps(c3, texel4R)));
+                __m128 texelG =
+                    _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1G), _mm_mul_ps(c1, texel2G)),
+                               _mm_add_ps(_mm_mul_ps(c2, texel3G), _mm_mul_ps(c3, texel4G)));
+                __m128 texelB =
+                    _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1B), _mm_mul_ps(c1, texel2B)),
+                               _mm_add_ps(_mm_mul_ps(c2, texel3B), _mm_mul_ps(c3, texel4B)));
+                __m128 texelA =
+                    _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1A), _mm_mul_ps(c1, texel2A)),
+                               _mm_add_ps(_mm_mul_ps(c2, texel3A), _mm_mul_ps(c3, texel4A)));
+
+                // Modulate by incoming color
+                texelR = _mm_mul_ps(texelR, colorRx4);
+                texelG = _mm_mul_ps(texelG, colorGx4);
+                texelB = _mm_mul_ps(texelB, colorBx4);
+                texelA = _mm_mul_ps(texelA, colorAx4);
+
+                // Clamp colors
+                texelR = _mm_min_ps(_mm_max_ps(texelR, mZero), mOne);
+                texelG = _mm_min_ps(_mm_max_ps(texelG, mZero), mOne);
+                texelB = _mm_min_ps(_mm_max_ps(texelB, mZero), mOne);
+
+                // Go from sRGB to linear
+                destR = MM_SQUARE(_mm_mul_ps(destR, inv255x4));
+                destG = MM_SQUARE(_mm_mul_ps(destG, inv255x4));
+                destB = MM_SQUARE(_mm_mul_ps(destB, inv255x4));
+                destA = _mm_mul_ps(destA, inv255x4);
+
+                // Destination blend
+                __m128 invTexelA = _mm_sub_ps(mOne, texelA);
+                __m128 blendedR = _mm_add_ps(_mm_mul_ps(invTexelA, destR), texelR);
+                __m128 blendedG = _mm_add_ps(_mm_mul_ps(invTexelA, destG), texelG);
+                __m128 blendedB = _mm_add_ps(_mm_mul_ps(invTexelA, destB), texelB);
+                __m128 blendedA = _mm_add_ps(_mm_mul_ps(invTexelA, destA), texelA);
+
+                // Go from linear to sRGB
+                blendedR = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedR));
+                blendedG = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedG));
+                blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
+                blendedA = _mm_mul_ps(mOne255x4, blendedA);
+
+                // TODO: Rounding mode is nearest by default
+                __m128i intR = _mm_cvttps_epi32(blendedR);
+                __m128i intG = _mm_cvttps_epi32(blendedG);
+                __m128i intB = _mm_cvttps_epi32(blendedB);
+                __m128i intA = _mm_cvttps_epi32(blendedA);
+
+                // Shift properly and write to pixel
+                __m128i shiftedR = _mm_slli_epi32(intR, 16);
+                __m128i shiftedG = _mm_slli_epi32(intG, 8);
+                __m128i shiftedB = intB;
+                __m128i shiftedA = _mm_slli_epi32(intB, 24);
+
+                __m128i out = _mm_or_si128(_mm_or_si128(shiftedR, shiftedG),
+                                           _mm_or_si128(shiftedB, shiftedA));
+
+                // Mask with the write mask
+                __m128i maskedOut = _mm_or_si128(_mm_and_si128(writeMask, out),
+                                                 _mm_andnot_si128(writeMask, originalDest));
+
+                // Alignment...
+                _mm_storeu_si128(reinterpret_cast<__m128i*>(pixel), maskedOut);
             }
 
-            // Convert texture from sRGB to linear
-            texel1R = MM_SQUARE(_mm_mul_ps(inv255x4, texel1R));
-            texel1G = MM_SQUARE(_mm_mul_ps(inv255x4, texel1G));
-            texel1B = MM_SQUARE(_mm_mul_ps(inv255x4, texel1B));
-            texel1A = _mm_mul_ps(inv255x4, texel1A);
-
-            texel2R = MM_SQUARE(_mm_mul_ps(inv255x4, texel2R));
-            texel2G = MM_SQUARE(_mm_mul_ps(inv255x4, texel2G));
-            texel2B = MM_SQUARE(_mm_mul_ps(inv255x4, texel2B));
-            texel2A = _mm_mul_ps(inv255x4, texel2A);
-
-            texel3R = MM_SQUARE(_mm_mul_ps(inv255x4, texel3R));
-            texel3G = MM_SQUARE(_mm_mul_ps(inv255x4, texel3G));
-            texel3B = MM_SQUARE(_mm_mul_ps(inv255x4, texel3B));
-            texel3A = _mm_mul_ps(inv255x4, texel3A);
-
-            texel4R = MM_SQUARE(_mm_mul_ps(inv255x4, texel4R));
-            texel4G = MM_SQUARE(_mm_mul_ps(inv255x4, texel4G));
-            texel4B = MM_SQUARE(_mm_mul_ps(inv255x4, texel4B));
-            texel4A = _mm_mul_ps(inv255x4, texel4A);
-
-            // Bilinear texture blend
-            __m128 invfX = _mm_sub_ps(mOne, fX);
-            __m128 invfY = _mm_sub_ps(mOne, fY);
-
-            // Coefficients for lerp
-            __m128 c0 = _mm_mul_ps(invfX, invfY);
-            __m128 c1 = _mm_mul_ps(invfY, fX);
-            __m128 c2 = _mm_mul_ps(fY, invfX);
-            __m128 c3 = _mm_mul_ps(fY, fX);
-
-            __m128 texelR =
-                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1R), _mm_mul_ps(c1, texel2R)),
-                           _mm_add_ps(_mm_mul_ps(c2, texel3R), _mm_mul_ps(c3, texel4R)));
-            __m128 texelG =
-                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1G), _mm_mul_ps(c1, texel2G)),
-                           _mm_add_ps(_mm_mul_ps(c2, texel3G), _mm_mul_ps(c3, texel4G)));
-            __m128 texelB =
-                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1B), _mm_mul_ps(c1, texel2B)),
-                           _mm_add_ps(_mm_mul_ps(c2, texel3B), _mm_mul_ps(c3, texel4B)));
-            __m128 texelA =
-                _mm_add_ps(_mm_add_ps(_mm_mul_ps(c0, texel1A), _mm_mul_ps(c1, texel2A)),
-                           _mm_add_ps(_mm_mul_ps(c2, texel3A), _mm_mul_ps(c3, texel4A)));
-
-            // Modulate by incoming color
-            texelR = _mm_mul_ps(texelR, colorRx4);
-            texelG = _mm_mul_ps(texelG, colorGx4);
-            texelB = _mm_mul_ps(texelB, colorBx4);
-            texelA = _mm_mul_ps(texelA, colorAx4);
-
-            //for (i32 i{}; i < 4; ++i) {
-            //    M(texelR, i) = Clamp01(M(texelR, i));
-            //    M(texelG, i) = Clamp01(M(texelG, i));
-            //    M(texelB, i) = Clamp01(M(texelB, i));
-            //    //texel.a = Clamp01(texel.a);
-            //}
-
-            // Clamp colors
-            texelR = _mm_min_ps(_mm_max_ps(texelR, mZero), mOne);
-            texelG = _mm_min_ps(_mm_max_ps(texelG, mZero), mOne);
-            texelB = _mm_min_ps(_mm_max_ps(texelB, mZero), mOne);
-
-            // Go from sRGB to linear
-            destR = MM_SQUARE(_mm_mul_ps(destR, inv255x4));
-            destG = MM_SQUARE(_mm_mul_ps(destG, inv255x4));
-            destB = MM_SQUARE(_mm_mul_ps(destB, inv255x4));
-            destA = _mm_mul_ps(destA, inv255x4);
-
-            // Destination blend
-            __m128 invTexelA = _mm_sub_ps(mOne, texelA);
-
-            blendedR = _mm_add_ps(_mm_mul_ps(invTexelA, destR), texelR);
-            blendedG = _mm_add_ps(_mm_mul_ps(invTexelA, destG), texelG);
-            blendedB = _mm_add_ps(_mm_mul_ps(invTexelA, destB), texelB);
-            blendedA = _mm_add_ps(_mm_mul_ps(invTexelA, destA), texelA);
-
-            // Go from linear to sRGB
-            blendedR = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedR));
-            blendedG = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedG));
-            blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
-            blendedA = _mm_mul_ps(mOne255x4, blendedA);
-
-            // TODO: Set rounding mode to nearest?
-            __m128i intR = _mm_cvttps_epi32(_mm_add_ps(blendedR, mHalfx4));
-            __m128i intG = _mm_cvttps_epi32(_mm_add_ps(blendedG, mHalfx4));
-            __m128i intB = _mm_cvttps_epi32(_mm_add_ps(blendedB, mHalfx4));
-            __m128i intA = _mm_cvttps_epi32(_mm_add_ps(blendedA, mHalfx4));
-
-            // Shift properly and write to pixel
-            __m128i shiftedR = _mm_slli_epi32(intR, 16);
-            __m128i shiftedG = _mm_slli_epi32(intG, 8);
-            __m128i shiftedB = intB;
-            __m128i shiftedA = _mm_slli_epi32(intB, 24);
-
-            __m128i out =
-                _mm_or_si128(_mm_or_si128(shiftedR, shiftedG), _mm_or_si128(shiftedB, shiftedA));
-
-            // Alignment...
-            // TODO: Write only where shouldFill[i] == true
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(pixel), out);
             pixel += 4;
         }
 
