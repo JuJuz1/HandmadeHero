@@ -769,7 +769,7 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 #define M(a, i) (reinterpret_cast<f32*>(&(a)))[(i)]
 #define Mi(a, i) (reinterpret_cast<u32*>(&(a)))[(i)]
 
-#define COUNT_CYCLES 1
+#define COUNT_CYCLES 0
 
             // clang-format off
 #if COUNT_CYCLES
@@ -801,6 +801,26 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 #define _mm_storeu_si128(a, b)
 #endif
             // clang-format on
+
+            // Using LLVM's machine code analyzer
+            // We start a region with a comment in asm
+            // This would not work in MSVC
+#if HANDMADE_MCA && !COMPILER_MSVC
+            asm volatile("# LLVM-MCA-BEGIN DrawRectQuickly" ::: "memory");
+#endif
+
+            // Iterations:        100
+            // Instructions:      29300
+            // Total Cycles:      8359
+            // Total uOps:        29700
+            // We get a Block RThroughput: 49.5 with my Zen 4 cpu
+            // Not quite there yet, as 8359 / 100 = 83.6 cycles/4 pixel block
+            // 83.6 / 4 = 20.9 cycles/pixel
+
+            // Actual measured ProcessPixel in release builds:
+            // MSVC:  37,500,548 / 901,420 ~= 41.6 cycles/hit
+            // Clang: 20,480,711 / 901,420 ~= 22.7 cycles/hit
+            // How is MSVC so much worse?
 
             __m128 u =
                 _mm_add_ps(_mm_mul_ps(pixelPosX, nXAxisXx4), _mm_mul_ps(pixelPosY, nXAxisYx4));
@@ -991,7 +1011,6 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
 #if COUNT_CYCLES
 #    undef _mm_add_ps
-
             f32 half = 1.0f / 2.0f;
             f32 third = 1.0f / 3.0f;
 
@@ -1023,6 +1042,11 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
             pixelPosX = _mm_add_ps(pixelPosX, mFour);
             pixel += 4;
+
+            // Make sure not to include these COUNT_CYCLES things withing the region
+#if HANDMADE_MCA && !COMPILER_MSVC
+            asm volatile("# LLVM-MCA-END DrawRectQuickly" ::: "memory");
+#endif
         }
 
         row += buff->pitch;
