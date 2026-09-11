@@ -128,7 +128,6 @@ enum {
     /* 1 */ DEBUGCycleCounter_RenderGroupToOutput,
 
     /* 2 */ DEBUGCycleCounter_DrawRectSlowly,
-
     /* 3 */ DEBUGCycleCounter_DrawRectQuickly,
     /* 4 */ DEBUGCycleCounter_ProcessPixel,
 

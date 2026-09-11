@@ -485,10 +485,11 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
     u8* row{ static_cast<u8*>(buff->memory) + (minX * bitmap_Bytes_Per_Pixel) +
              (minY * buff->pitch) };
 
+    BEGIN_TIMED_BLOCK(ProcessPixel);
     for (i32 y{ minY }; y <= maxY; ++y) {
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; ++x) {
-            BEGIN_TIMED_BLOCK(TestPixel);
+            //BEGIN_TIMED_BLOCK(TestPixel);
 
             const Vec2 pixelPos{ x, y };
             const Vec2 d{ pixelPos - origin };
@@ -498,7 +499,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
             const f32 edge2{ Dot(d - xAxis - yAxis, Perp(xAxis)) };
             const f32 edge3{ Dot(d - yAxis, Perp(yAxis)) };
             if ((edge0 < 0) && (edge1 < 0) && (edge2 < 0) && (edge3 < 0)) {
-                BEGIN_TIMED_BLOCK(FillPixel);
+                //BEGIN_TIMED_BLOCK(FillPixel);
 
                 // Lookup into texture
                 const Vec2 uv{ Dot(d, xAxis) * xAxisLenSqInv, Dot(d, yAxis) * yAxisLenSqInv };
@@ -603,7 +604,7 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
                            (TruncToU32(blended.g + 0.5f) << 8) |
                            (TruncToU32(blended.b + 0.5f) << 0) };
 
-                END_TIMED_BLOCK(FillPixel);
+                //END_TIMED_BLOCK(FillPixel);
             }
 #else
                     *pixel = colorRounded;
@@ -611,14 +612,36 @@ DrawRectSlowly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis
 
             ++pixel;
 
-            END_TIMED_BLOCK(TestPixel);
+            //END_TIMED_BLOCK(TestPixel);
         }
 
         row += buff->pitch;
     }
 
+    END_TIMED_BLOCK_COUNTED(ProcessPixel, (maxX - minX + 1) * (maxY - minY + 1));
     END_TIMED_BLOCK(DrawRectSlowly);
 }
+
+struct Counts {
+    int mm_add_ps;
+    int mm_sub_ps;
+    int mm_mul_ps;
+    int mm_castps_si128;
+    int mm_and_ps;
+    int mm_or_si128;
+    int mm_cmpge_ps;
+    int mm_cmple_ps;
+    int mm_min_ps;
+    int mm_max_ps;
+    int mm_cvttps_epi32;
+    int mm_cvtps_epi32;
+    int mm_cvtepi32_ps;
+    int mm_and_si128;
+    int mm_andnot_si128;
+    int mm_srli_epi32;
+    int mm_slli_epi32;
+    int mm_sqrt_ps;
+};
 
 INTERNAL void
 DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxis, Vec4 color,
@@ -707,8 +730,9 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
     // Behold!
     __m128 mOne = _mm_set_ps1(1.0f);
-    __m128 mOne255x4 = _mm_set_ps1(255.0f);
+    __m128 mOne255 = _mm_set_ps1(255.0f);
     __m128 mZero = _mm_set_ps1(0.0f);
+    __m128 mFour = _mm_set_ps1(4);
     __m128i maskFF = _mm_set1_epi32(0xFF);
     __m128 colorRx4 = _mm_set_ps1(color.r);
     __m128 colorGx4 = _mm_set_ps1(color.g);
@@ -729,6 +753,14 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 
     BEGIN_TIMED_BLOCK(ProcessPixel);
     for (i32 y{ minY }; y <= maxY; ++y) {
+        __m128 pixelPosY = _mm_set_ps1(static_cast<f32>(y));
+        pixelPosY = _mm_sub_ps(pixelPosY, originYx4);
+
+        // Incremented by 4 at the end of the loop of x
+        __m128 pixelPosX = _mm_set_ps(static_cast<f32>(minX + 3), static_cast<f32>(minX + 2),
+                                      static_cast<f32>(minX + 1), static_cast<f32>(minX + 0));
+        pixelPosX = _mm_sub_ps(pixelPosX, originXx4);
+
         u32* pixel{ reinterpret_cast<u32*>(row) };
         for (i32 x{ minX }; x <= maxX; x += 4) {
 
@@ -737,14 +769,43 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
 #define M(a, i) (reinterpret_cast<f32*>(&(a)))[(i)]
 #define Mi(a, i) (reinterpret_cast<u32*>(&(a)))[(i)]
 
-            __m128 pixelPosX = _mm_set_ps(static_cast<f32>(x + 3), static_cast<f32>(x + 2),
-                                          static_cast<f32>(x + 1), static_cast<f32>(x + 0));
-            __m128 pixelPosY = _mm_set_ps1(static_cast<f32>(y));
+#define COUNT_CYCLES 1
 
-            __m128 dx = _mm_sub_ps(pixelPosX, originXx4);
-            __m128 dy = _mm_sub_ps(pixelPosY, originYx4);
-            __m128 u = _mm_add_ps(_mm_mul_ps(dx, nXAxisXx4), _mm_mul_ps(dy, nXAxisYx4));
-            __m128 v = _mm_add_ps(_mm_mul_ps(dx, nYAxisXx4), _mm_mul_ps(dy, nYAxisYx4));
+            // clang-format off
+#if COUNT_CYCLES
+            Counts counts = {};
+#define _mm_add_ps(a, b) ++counts.mm_add_ps; a; b
+#define _mm_sub_ps(a, b) ++counts.mm_sub_ps; a; b
+#define _mm_mul_ps(a, b) ++counts.mm_mul_ps; a; b
+#define _mm_castps_si128(a) ++counts.mm_castps_si128; a
+#define _mm_and_ps(a, b) ++counts.mm_and_ps; a; b
+#define _mm_or_si128(a, b) ++counts.mm_or_si128; a; b
+#define _mm_cmpge_ps(a, b) ++counts.mm_cmpge_ps; a; b
+#define _mm_cmple_ps(a, b) ++counts.mm_cmple_ps; a; b
+#define _mm_min_ps(a, b) ++counts.mm_min_ps; a; b
+#define _mm_max_ps(a, b) ++counts.mm_max_ps; a; b
+#define _mm_cvttps_epi32(a) ++counts.mm_cvttps_epi32; a
+#define _mm_cvtps_epi32(a) ++counts.mm_cvtps_epi32; a
+#define _mm_cvtepi32_ps(a) ++counts.mm_cvtepi32_ps; a
+#define _mm_and_si128(a, b) ++counts.mm_and_si128; a; b
+#define _mm_andnot_si128(a, b) ++counts.mm_andnot_si128; a; b
+#define _mm_srli_epi32(a, b) ++counts.mm_srli_epi32; a
+#define _mm_slli_epi32(a, b) ++counts.mm_slli_epi32; a
+#define _mm_sqrt_ps(a) ++counts.mm_sqrt_ps; a
+#undef MM_SQUARE
+#define MM_SQUARE(a) ++counts.mm_mul_ps; a
+#define __m128 int
+#define __m128i int
+
+#define _mm_loadu_si128(a) 0
+#define _mm_storeu_si128(a, b)
+#endif
+            // clang-format on
+
+            __m128 u =
+                _mm_add_ps(_mm_mul_ps(pixelPosX, nXAxisXx4), _mm_mul_ps(pixelPosY, nXAxisYx4));
+            __m128 v =
+                _mm_add_ps(_mm_mul_ps(pixelPosX, nYAxisXx4), _mm_mul_ps(pixelPosY, nYAxisYx4));
             __m128i writeMask = _mm_castps_si128(
                 _mm_and_ps(_mm_and_ps(_mm_cmpge_ps(u, mZero), _mm_cmple_ps(u, mOne)),
                            _mm_and_ps(_mm_cmpge_ps(v, mZero), _mm_cmple_ps(v, mOne))));
@@ -770,23 +831,30 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                 __m128i sample3;
                 __m128i sample4;
 
-                for (i32 i{}; i < 4; ++i) {
-                    const i32 fetchX = Mi(fetchXx4, i);
-                    const i32 fetchY = Mi(fetchYx4, i);
-                    ASSERT(fetchX >= 0 && fetchX < texture->width);
-                    ASSERT(fetchY >= 0 && fetchY < texture->height);
+#if COUNT_CYCLES
+                sample1 = 0;
+                sample2 = 0;
+                sample3 = 0;
+                sample4 = 0;
+#else
+                        for (i32 i{}; i < 4; ++i) {
+                            const i32 fetchX = Mi(fetchXx4, i);
+                            const i32 fetchY = Mi(fetchYx4, i);
+                            ASSERT(fetchX >= 0 && fetchX < texture->width);
+                            ASSERT(fetchY >= 0 && fetchY < texture->height);
 
-                    // BilinearSampleFromTex
-                    u8* texelPtr{ static_cast<u8*>(texture->memory) + fetchY * texture->pitch +
-                                  fetchX * sizeof(u32) };
-                    Mi(sample1, i) = *reinterpret_cast<u32*>(texelPtr);
-                    Mi(sample2, i) = *reinterpret_cast<u32*>(texelPtr + sizeof(u32));
-                    Mi(sample3, i) = *reinterpret_cast<u32*>(texelPtr + texture->pitch);
-                    Mi(sample4, i) =
-                        *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32));
-                }
+                            // BilinearSampleFromTex
+                            u8* texelPtr{ static_cast<u8*>(texture->memory) +
+                                          fetchY * texture->pitch + fetchX * sizeof(u32) };
+                            Mi(sample1, i) = *reinterpret_cast<u32*>(texelPtr);
+                            Mi(sample2, i) = *reinterpret_cast<u32*>(texelPtr + sizeof(u32));
+                            Mi(sample3, i) = *reinterpret_cast<u32*>(texelPtr + texture->pitch);
+                            Mi(sample4, i) =
+                                *reinterpret_cast<u32*>(texelPtr + texture->pitch + sizeof(u32));
+                        }
+#endif
 
-                // Unpack bilinear samples
+                // Unpack bilinear samples, shuffling
                 __m128 texel1B = _mm_cvtepi32_ps(_mm_and_si128(sample1, maskFF));
                 __m128 texel1G = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi32(sample1, 8), maskFF));
                 __m128 texel1R =
@@ -893,10 +961,10 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                 __m128 blendedA = _mm_add_ps(_mm_mul_ps(invTexelA, destA), texelA);
 
                 // Go from linear to sRGB
-                blendedR = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedR));
-                blendedG = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedG));
-                blendedB = _mm_mul_ps(mOne255x4, _mm_sqrt_ps(blendedB));
-                blendedA = _mm_mul_ps(mOne255x4, blendedA);
+                blendedR = _mm_mul_ps(mOne255, _mm_sqrt_ps(blendedR));
+                blendedG = _mm_mul_ps(mOne255, _mm_sqrt_ps(blendedG));
+                blendedB = _mm_mul_ps(mOne255, _mm_sqrt_ps(blendedB));
+                blendedA = _mm_mul_ps(mOne255, blendedA);
 
                 // TODO: Rounding mode is nearest by default
                 __m128i intR = _mm_cvttps_epi32(blendedR);
@@ -921,6 +989,39 @@ DrawRectQuickly(const LoadedBitmapInfo* buff, Vec2 origin, Vec2 xAxis, Vec2 yAxi
                 _mm_storeu_si128(reinterpret_cast<__m128i*>(pixel), maskedOut);
             }
 
+#if COUNT_CYCLES
+#    undef _mm_add_ps
+
+            f32 half = 1.0f / 2.0f;
+            f32 third = 1.0f / 3.0f;
+
+            f32 total = 0.0f;
+            // clang-format off
+            #define Sum(throughput, count) (throughput * static_cast<f32>(count)); total += (throughput * static_cast<f32>(count));
+            // clang-format on
+
+            f32 mm_add_ps = Sum(half, counts.mm_add_ps);
+            f32 mm_sub_ps = Sum(half, counts.mm_sub_ps);
+            f32 mm_mul_ps = Sum(half, counts.mm_mul_ps);
+            f32 mm_and_ps = Sum(third, counts.mm_and_ps);
+            f32 mm_cmpge_ps = Sum(half, counts.mm_cmpge_ps);
+            f32 mm_cmple_ps = Sum(half, counts.mm_cmple_ps);
+            f32 mm_min_ps = Sum(half, counts.mm_min_ps);
+            f32 mm_max_ps = Sum(half, counts.mm_max_ps);
+            f32 mm_castps_si128 = Sum(0, 0);
+            f32 mm_or_si128 = Sum(third, counts.mm_or_si128);
+            f32 mm_cvttps_epi32 = Sum(half, counts.mm_cvttps_epi32);
+            f32 mm_cvtps_epi32 = Sum(half, counts.mm_cvtps_epi32);
+            f32 mm_cvtepi32_ps = Sum(half, counts.mm_cvtepi32_ps);
+            f32 mm_and_si128 = Sum(third, counts.mm_and_si128);
+            f32 mm_andnot_si128 = Sum(third, counts.mm_andnot_si128);
+            f32 mm_srli_epi32 = Sum(half, counts.mm_srli_epi32);
+            f32 mm_slli_epi32 = Sum(half, counts.mm_slli_epi32);
+            f32 mm_sqrt_ps = Sum(3, counts.mm_sqrt_ps);
+            // For newest values in the intrinsics guide: 96.6666641
+#endif
+
+            pixelPosX = _mm_add_ps(pixelPosX, mFour);
             pixel += 4;
         }
 
